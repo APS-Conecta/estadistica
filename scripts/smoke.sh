@@ -9,13 +9,16 @@
 #   - the delegated admin write: a member of a group the section is delegated
 #     to gets 200, a user outside it gets 403, and an out-of-range year gets
 #     the Spanish 422 — no group name lives in the app (a10, docs/adr/0003)
+#   - the REM job is registered by Nextcloud's cron (a18), the ingest state is
+#     delegated like every admin action, and the drop door resolves a path in
+#     the caller's own Files and refuses a non-zip in Spanish (a3, a4)
 #   - the icon serves, the .htaccess holes stay shut, the bundle matches src/,
 #     and openapi.json regenerates without drift once the OCS surface exists
 #
 # Output of every command is captured before it is matched, never piped into
 # `grep -q` (epidemiologia's SIGPIPE lesson), and every curl carries --max-time.
 # A body is matched on ASCII only: Nextcloud's JSON escapes the rest («año»
-# arrives as «año», measured on the nextcloud:34 image).
+# arrives as «a\u00f1o», measured on the nextcloud:34 image).
 #
 # Usage: scripts/smoke.sh     (override with ESTADISTICA_CONTAINER=…)
 set -uo pipefail
@@ -80,7 +83,8 @@ mint() {
 }
 
 # Everything this run made is removed however it leaves: the credentials, the
-# two throwaway users, the group and its delegation, and the window it moved.
+# two throwaway users (and with them the file the drop check put in Files), the
+# group and its delegation, and the window it moved.
 cleanup() {
 	[ -n "${ADMIN_TOKEN_ID:-}" ] && occ user:auth-tokens:delete admin "$ADMIN_TOKEN_ID" >/dev/null 2>&1
 	occ admin-delegation:remove "$SETTINGS_CLASS" "$GROUP" >/dev/null 2>&1
@@ -163,6 +167,48 @@ is "$CODE" '422' \
 expect "$BODY" 'debe estar entre 2009' \
 	"the refusal is the Spanish sentence" \
 	"the refusal does NOT carry the Spanish sentence"
+
+# --- the REM ingest: the job, the state, the drop door ----------------------
+# The job is Nextcloud's to schedule, from info.xml — never the host's (a18).
+expect "$(occ background-job:list --class='OCA\Estadistica\BackgroundJob\RemJob' 2>&1)" 'RemJob' \
+	"the REM job is registered with Nextcloud's cron from info.xml" \
+	"the REM job is NOT registered — check <background-jobs> in info.xml"
+
+INGESTS="$BASE/index.php/apps/$APP/admin/ingests"
+DROP="$BASE/index.php/apps/$APP/admin/drop"
+
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" "$INGESTS"
+is "$CODE" '200' \
+	"a delegate reads the ingest state (200)" \
+	"a delegate could NOT read the ingest state"
+expect "$BODY" '"ingests"' \
+	"the ingest state is the list the section renders" \
+	"the ingest state does NOT carry the ingests list"
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_code}' "$INGESTS")" '403' \
+	"a user outside the delegated group cannot read the ingest state (403)" \
+	"a user outside the delegated group was NOT refused the ingest state with 403"
+
+# The drop door, as the FilePicker drives it: a file in the delegate's OWN
+# Files, handed over by path. A text file must come back as a Spanish 422
+# from the zip check, which proves the path resolved in the caller's tree.
+is "$(web_as "$DELEGATE" "$DELEGATE_TOKEN" -o /dev/null -w '%{http_code}' \
+	-X PUT --data-binary 'esto no es un zip' "$BASE/remote.php/dav/files/$DELEGATE/nota.txt")" '201' \
+	"a file lands in the delegate's Files (WebDAV 201)" \
+	"could NOT put a file in the delegate's Files"
+
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" -X POST -d 'path=/nota.txt' "$DROP"
+is "$CODE" '422' \
+	"a dropped file that is not a zip is refused with 422" \
+	"a dropped file that is not a zip was NOT refused with 422"
+expect "$BODY" 'no es un ZIP' \
+	"the drop refusal is the Spanish sentence" \
+	"the drop refusal does NOT carry the Spanish sentence"
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_code}' \
+	-X POST -d 'path=/nota.txt' "$DROP")" '403' \
+	"a user outside the delegated group cannot drop a file (403)" \
+	"a user outside the delegated group was NOT refused the drop with 403"
 
 # --- the icon ----------------------------------------------------------------
 icon="$(web_as admin "$ADMIN_TOKEN" -o /dev/null -w '%{http_code} %{content_type} %{size_download}' \

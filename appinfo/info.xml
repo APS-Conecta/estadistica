@@ -6,7 +6,7 @@
     <description><![CDATA[Las cifras REM que el DEIS publica para todo el país, etiquetadas con su diccionario oficial, para comparar el establecimiento con el promedio nacional y con establecimientos parecidos; y el avance mes a mes de las Metas Sanitarias de Atención Primaria. Consultable por todo el personal.
 
 No contiene información de pacientes: guarda solo conteos agregados publicados por el DEIS y FONASA.]]></description>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
     <licence>AGPL-3.0-or-later</licence>
     <author>Daniel Espinoza</author>
     <namespace>Estadistica</namespace>
@@ -27,6 +27,11 @@ No contiene información de pacientes: guarda solo conteos agregados publicados 
         <database min-version="18">pgsql</database>
         <nextcloud min-version="34" max-version="34"/>
     </dependencies>
+    <!-- The app's only scheduled work, registered by Nextcloud's own cron:
+         nothing on the host's scheduler (acceptance a18, docs/adr/0004). -->
+    <background-jobs>
+        <job>OCA\Estadistica\BackgroundJob\RemJob</job>
+    </background-jobs>
     <!-- The section is IDelegatedSettings: an admin hands it to any group with
          occ admin-delegation:add or Administration privileges; no group name
          lives in this app (docs/adr/0003). -->
