@@ -174,6 +174,43 @@ class DictionaryParserTest extends TestCase {
 		self::assertSame('Segunda', $parsed['entries'][1]['prestacion'], 'the new header starts over: no group carries across it');
 	}
 
+	/** One hoja, one section: a header row, then $rows. */
+	private static function hoja(array $rows): array {
+		return [1 => ['B' => 'SECCIÓN A: PRIMERA'], 2 => ['B' => 'PRESTACIÓN', 'D' => 'Total'], ...$rows];
+	}
+
+	/**
+	 * A row with markers whose column A holds something that is not a código
+	 * is counted rather than dropped unseen. A row with no código at all is
+	 * DEIS's «reports nothing» row, and is not counted.
+	 */
+	public function testARowWhoseCodigoCannotBeReadIsCounted(): void {
+		$parsed = DictionaryParser::parse(XlsxReader::open(XlsxFixture::workbook(['A03' => self::hoja([
+			3 => ['A' => '02010420', 'B' => 'Evaluación', 'D' => 'COL01'],
+			4 => ['A' => '0201-0421', 'B' => 'Mal escrito', 'D' => 'COL01'],
+			5 => ['B' => 'Sin código', 'D' => 'COL01'],
+		])])));
+
+		self::assertSame(['02010420'], array_column($parsed['entries'], 'codigo'));
+		self::assertSame(1, $parsed['unreadable']);
+	}
+
+	/**
+	 * estadistica_code.hoja holds 16 characters. A sheet named like a hoja
+	 * but longer is skipped and counted, so its códigos read «sin
+	 * descripción» instead of the whole dictionary failing at the INSERT.
+	 */
+	public function testAHojaNameTooLongToStoreIsSkippedAndCounted(): void {
+		$parsed = DictionaryParser::parse(XlsxReader::open(XlsxFixture::workbook([
+			'A03' => self::hoja([3 => ['A' => '02010420', 'B' => 'Evaluación', 'D' => 'COL01']]),
+			'A04 versión anterior' => self::hoja([3 => ['A' => '03500366', 'B' => 'Consulta', 'D' => 'COL01']]),
+		])));
+
+		self::assertSame(['A03'], array_values(array_unique(array_column($parsed['entries'], 'hoja'))));
+		self::assertSame(['A03'], array_keys($parsed['hojas']));
+		self::assertSame(1, $parsed['skippedSheets']);
+	}
+
 	public function testAWorkbookWithoutCodigosIsRefusedInSpanish(): void {
 		$this->expectException(RefusedException::class);
 		$this->expectExceptionMessage('no tiene la forma de un DICCIONARIO CODIGOS');

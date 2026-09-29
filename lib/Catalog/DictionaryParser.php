@@ -51,7 +51,7 @@ use OCA\Estadistica\Xlsx\XlsxReader;
  * Serie P: 0). The catalogue counts those as «sin descripción».
  *
  * @psalm-type Entry = array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<int, string>}
- * @psalm-type Parsed = array{hojas: array<string, string>, entries: list<Entry>, duplicates: int}
+ * @psalm-type Parsed = array{hojas: array<string, string>, entries: list<Entry>, duplicates: int, unreadable: int, skippedSheets: int}
  */
 final class DictionaryParser {
 	/**
@@ -67,6 +67,9 @@ final class DictionaryParser {
 
 	/** A hoja of Serie A or P: A01, A11a, A19b, A30AR, P1, P13. NOMBRE, Control and MACROS are not. */
 	private const SHEET = '/^[AP]\d/i';
+
+	/** estadistica_code.hoja's length: a longer sheet name cannot be stored, so it is skipped and counted. */
+	public const HOJA_MAX = 16;
 
 	private const MARKER = '/^COL(\d{2})$/';
 
@@ -124,9 +127,15 @@ final class DictionaryParser {
 		$entries = [];
 		$seen = [];
 		$duplicates = 0;
+		$unreadable = 0;
+		$skippedSheets = 0;
 
 		foreach ($xlsx->sheets() as $hoja) {
 			if (preg_match(self::SHEET, $hoja) !== 1) {
+				continue;
+			}
+			if (mb_strlen($hoja) > self::HOJA_MAX) {
+				$skippedSheets++;
 				continue;
 			}
 
@@ -198,6 +207,11 @@ final class DictionaryParser {
 
 				$codigo = self::codigo($values[1] ?? '');
 				if ($codigo === null) {
+					// No código at all is DEIS's «reports nothing» row; text that
+					// is not one is counted, so the catalogue can say so.
+					if (trim($values[1] ?? '') !== '') {
+						$unreadable++;
+					}
 					continue;
 				}
 				if (isset($seen[$codigo])) {
@@ -232,7 +246,7 @@ final class DictionaryParser {
 			throw new RefusedException('El diccionario no trae ningún código con sus columnas: no tiene la forma de un DICCIONARIO CODIGOS del DEIS.');
 		}
 
-		return ['hojas' => $hojas, 'entries' => $entries, 'duplicates' => $duplicates];
+		return ['hojas' => $hojas, 'entries' => $entries, 'duplicates' => $duplicates, 'unreadable' => $unreadable, 'skippedSheets' => $skippedSheets];
 	}
 
 	/**

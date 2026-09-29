@@ -380,6 +380,12 @@ class Catalog {
 				return;
 			}
 
+			if ($parsed['unreadable'] > 0 || $parsed['skippedSheets'] > 0) {
+				// Their códigos read «sin descripción»; the log says why.
+				$this->logger->warning('The REM {anio} Serie {serie} dictionary {name} skipped {rows} rows whose código is unreadable and {sheets} sheets whose name is too long to store', [
+					'anio' => $anio, 'serie' => $serie, 'name' => $name, 'rows' => $parsed['unreadable'], 'sheets' => $parsed['skippedSheets'],
+				]);
+			}
 			$this->replace($anio, $serie, $member, $parsed);
 		} finally {
 			if (is_file($path)) {
