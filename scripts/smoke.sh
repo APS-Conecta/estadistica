@@ -15,6 +15,8 @@
 #   - the OCS surface answers every user, attribute routes and all: the
 #     fuentes list, a Spanish 400 for a year DEIS never published, a 404 for
 #     a fuente that does not exist (a14)
+#   - a consulta posted as JSON is answered in the OCS envelope, and a
+#     tampered spec or DEIS code is a Spanish 422, never a SQL error (a14, a16)
 #   - the icon serves, the .htaccess holes stay shut, the bundle matches src/,
 #     and openapi.json regenerates without drift once the OCS surface exists
 #
@@ -242,6 +244,49 @@ expect "$BODY" 'debe estar entre 2009' \
 is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -o /dev/null -w '%{http_code}' "$FUENTES/nada")" '404' \
 	"a fuente that does not exist is 404" \
 	"a fuente that does not exist was NOT 404"
+
+# --- consultas: one spec, answered or refused in Spanish (a14, a16) ----------
+# Posted as JSON, the way a suite app or M3 sends it. The spec reaches the
+# controller only if the attribute registered the route AND Nextcloud mapped
+# the JSON object onto its array parameter: the wiring no unit test can see.
+# The dev instance holds no establishment and maybe no REM, so the local
+# series is null and the national one may be empty; both are answers.
+CONSULTAS="$BASE/ocs/v2.php/apps/$APP/api/v1/consultas"
+CTYPE='Content-Type: application/json'
+SPEC="{\"fuente\":\"rem-a\",\"periodo\":{\"desde\":\"$YEAR-01\",\"hasta\":\"$YEAR-01\"},\"filtros\":{\"codigos\":[\"02010420\"],\"columnas\":[\"col01\"]},\"comparar\":{\"nacional\":true}}"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X POST --data "{\"consulta\":$SPEC}" "$CONSULTAS"
+is "$CODE" '200' \
+	"any user's consulta is answered (200)" \
+	"a consulta was NOT answered with 200 — is the route registered, and the JSON body mapped?"
+expect "$BODY" '"status":"ok"' \
+	"the consulta answers in the OCS envelope with status ok" \
+	"the consulta answer does NOT carry status ok"
+expect "$BODY" '"local":null,"nacional":[' \
+	"the series are local (none configured) and nacional" \
+	"the consulta answer does NOT carry the local and nacional series"
+
+for tampering in '"sql":"DROP TABLE x"|no admite' '"metrica":"max"|no existe'; do
+	key="${tampering%%|*}"
+	sentence="${tampering#*|}"
+	fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X POST \
+		--data "{\"consulta\":${SPEC%\}},$key}}" "$CONSULTAS"
+	is "$CODE" '422' \
+		"a tampered spec ($key) is refused with 422" \
+		"a tampered spec ($key) was NOT refused with 422"
+	expect "$BODY" "$sentence" \
+		"the refusal is the Spanish sentence, not a SQL error" \
+		"the refusal does NOT carry the Spanish sentence"
+done
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X POST \
+	--data "{\"consulta\":$SPEC,\"establecimiento\":\"12\"}" "$CONSULTAS"
+is "$CODE" '422' \
+	"a DEIS code that is not one is refused with 422" \
+	"a DEIS code that is not one was NOT refused with 422"
+expect "$BODY" 'se esperan seis' \
+	"the DEIS code refusal is the Spanish sentence" \
+	"the DEIS code refusal does NOT carry the Spanish sentence"
 
 # --- the icon ----------------------------------------------------------------
 icon="$(web_as admin "$ADMIN_TOKEN" -o /dev/null -w '%{http_code} %{content_type} %{size_download}' \

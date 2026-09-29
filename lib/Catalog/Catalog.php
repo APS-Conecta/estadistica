@@ -183,7 +183,7 @@ class Catalog {
 	 * @return array{anio: int, etiquetas_de: ?int, diccionario: ?string, hojas: list<array{hoja: string, titulo: string, secciones: list<array{seccion: string, columnas: list<array{col: string, etiqueta: string}>, prestaciones: list<array{codigo: string, etiqueta: string}>}>}>}
 	 */
 	public function tree(int $anio, string $serie): array {
-		$from = $this->hasLabels($anio, $serie) ? $anio : $this->nearestLater($anio, $serie);
+		$from = $this->labelYear($anio, $serie);
 		if ($from === null) {
 			return ['anio' => $anio, 'etiquetas_de' => null, 'diccionario' => null, 'hojas' => []];
 		}
@@ -230,6 +230,47 @@ class Catalog {
 				}, $hoja['secciones'])),
 			], $hojas)),
 		];
+	}
+
+	/**
+	 * The códigos a consulta's hoja filter (and sección, when named) covers
+	 * over a periodo. They are the ones that the dictionaries the periodo
+	 * reads put there: each year's own or, for a year without one, the
+	 * nearest later year's (tree()'s rule). The list is empty when none does,
+	 * and the caller refuses that.
+	 *
+	 * ponytail: the union over the periodo's dictionaries, not year by year.
+	 * A código that a later dictionary moved to another hoja is counted in
+	 * every year of the periodo. Binding (año, código) pairs instead measured
+	 * 2–3× slower (design, Slice 5); that is the upgrade if DEIS is ever seen
+	 * moving one.
+	 *
+	 * @return list<string>
+	 */
+	public function scope(string $serie, int $desde, int $hasta, string $hoja, ?string $seccion): array {
+		$years = [];
+		for ($anio = $desde; $anio <= $hasta; $anio++) {
+			$from = $this->labelYear($anio, $serie);
+			if ($from !== null) {
+				$years[$from] = $from;
+			}
+		}
+		if ($years === []) {
+			return [];
+		}
+
+		$sql = 'SELECT DISTINCT codigo FROM *PREFIX*estadistica_code WHERE serie = ? AND hoja = ? '
+			. 'AND anio IN (SELECT CAST(jsonb_array_elements_text(CAST(? AS jsonb)) AS smallint))';
+		$params = [$serie, $hoja, json_encode(array_values($years), JSON_THROW_ON_ERROR)];
+		if ($seccion !== null) {
+			$sql .= ' AND seccion = ?';
+			$params[] = $seccion;
+		}
+		$result = $this->db->executeQuery($sql . ' ORDER BY codigo', $params);
+		$codigos = array_map('strval', $result->fetchFirstColumn());
+		$result->closeCursor();
+
+		return $codigos;
 	}
 
 	/**
@@ -468,6 +509,11 @@ class Catalog {
 			'UPDATE *PREFIX*estadistica_dictionary SET unmapped = ? WHERE anio = ? AND serie = ?',
 			[self::unmapped($this->labels($anio, $serie, $codigos)), $anio, $serie],
 		);
+	}
+
+	/** The year whose dictionary labels $anio: its own, else the nearest later one's, else none. */
+	private function labelYear(int $anio, string $serie): ?int {
+		return $this->hasLabels($anio, $serie) ? $anio : $this->nearestLater($anio, $serie);
 	}
 
 	private function hasLabels(int $anio, string $serie): bool {

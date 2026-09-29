@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Register;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Query\QuerySpec;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
@@ -95,6 +96,25 @@ class Register {
 			'loadedAt' => isset($stored['loadedAt']) ? (int)$stored['loadedAt'] : null,
 			'rows' => (int)($stored['rows'] ?? 0),
 		];
+	}
+
+	/**
+	 * One establishment's traits, the ones a peer group is chosen by, or null
+	 * when the register does not have that establishment. A consulta reads
+	 * them for pares «like ours» (QueryExecutor).
+	 *
+	 * @return ?array<string, ?string> trait → value, QuerySpec::TRAITS
+	 */
+	public function traits(int $estab): ?array {
+		// The traits are fixed names (QuerySpec::TRAITS), never input.
+		$result = $this->db->executeQuery(
+			'SELECT ' . implode(', ', QuerySpec::TRAITS) . ' FROM *PREFIX*estadistica_establishment WHERE estab = ?',
+			[$estab],
+		);
+		$row = $result->fetch();
+		$result->closeCursor();
+
+		return $row === false ? null : $row;
 	}
 
 	/**

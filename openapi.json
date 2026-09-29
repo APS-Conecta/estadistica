@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "estadistica",
-        "version": "0.0.4",
+        "version": "0.0.5",
         "description": "Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias",
         "license": {
             "name": "AGPL-3.0-or-later"
@@ -464,6 +464,423 @@
                     }
                 }
             }
+        },
+        "/ocs/v2.php/apps/estadistica/api/v1/consultas": {
+            "post": {
+                "operationId": "api-consultas",
+                "summary": "Answers one consulta: the local establishment's series and, when the spec asks to compare, the national and the peer group's. Each is summed and grouped as the spec says, and comes with the labels of what was summed and the fuente it came from. The builder asks through here, so the API returns the UI's numbers (a15).",
+                "description": "The spec is refused in Spanish, before any SQL, when it names anything it may not: an unknown key, a column outside col01…col50, a metric that is not suma or promedio_establecimiento (a16). A consulta that runs past 10 s is cancelled and refused the same way.\nThe local series is this install's establishment (app config), unless the request names another DEIS code: a parameter, not an implicit «ours» (gestion ADR-0013). The app's own pages never send one, because a clinic selector is a governance decision nobody has taken.\nIt is a POST because the spec is a JSON document, and it spends the read limit because it writes nothing.",
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "bearer_auth": []
+                    },
+                    {
+                        "basic_auth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "consulta"
+                                ],
+                                "properties": {
+                                    "consulta": {
+                                        "type": "object",
+                                        "description": "the spec: fuente, periodo, filtros, agrupar, metrica and comparar (docs/adr/0006)",
+                                        "additionalProperties": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "establecimiento": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "default": null,
+                                        "description": "the six-digit DEIS code of the local series; this install's when omitted"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "OCS-APIRequest",
+                        "in": "header",
+                        "description": "Required to be true for the API request to pass",
+                        "required": true,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The series (null where not asked for, or no establishment is configured), their labels and their fuente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "series",
+                                                        "etiquetas",
+                                                        "fuente"
+                                                    ],
+                                                    "properties": {
+                                                        "series": {
+                                                            "type": "object",
+                                                            "required": [
+                                                                "local",
+                                                                "nacional",
+                                                                "pares"
+                                                            ],
+                                                            "properties": {
+                                                                "local": {
+                                                                    "type": "array",
+                                                                    "nullable": true,
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "required": [
+                                                                            "grupo",
+                                                                            "valor",
+                                                                            "informantes"
+                                                                        ],
+                                                                        "properties": {
+                                                                            "grupo": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                    "nullable": true,
+                                                                                    "oneOf": [
+                                                                                        {
+                                                                                            "type": "integer",
+                                                                                            "format": "int64"
+                                                                                        },
+                                                                                        {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "valor": {
+                                                                                "type": "number",
+                                                                                "format": "double"
+                                                                            },
+                                                                            "informantes": {
+                                                                                "type": "integer",
+                                                                                "format": "int64"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "nacional": {
+                                                                    "type": "array",
+                                                                    "nullable": true,
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "required": [
+                                                                            "grupo",
+                                                                            "valor",
+                                                                            "informantes"
+                                                                        ],
+                                                                        "properties": {
+                                                                            "grupo": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                    "nullable": true,
+                                                                                    "oneOf": [
+                                                                                        {
+                                                                                            "type": "integer",
+                                                                                            "format": "int64"
+                                                                                        },
+                                                                                        {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "valor": {
+                                                                                "type": "number",
+                                                                                "format": "double"
+                                                                            },
+                                                                            "informantes": {
+                                                                                "type": "integer",
+                                                                                "format": "int64"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "pares": {
+                                                                    "type": "array",
+                                                                    "nullable": true,
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "required": [
+                                                                            "grupo",
+                                                                            "valor",
+                                                                            "informantes"
+                                                                        ],
+                                                                        "properties": {
+                                                                            "grupo": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                    "nullable": true,
+                                                                                    "oneOf": [
+                                                                                        {
+                                                                                            "type": "integer",
+                                                                                            "format": "int64"
+                                                                                        },
+                                                                                        {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "valor": {
+                                                                                "type": "number",
+                                                                                "format": "double"
+                                                                            },
+                                                                            "informantes": {
+                                                                                "type": "integer",
+                                                                                "format": "int64"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "etiquetas": {
+                                                            "type": "object",
+                                                            "required": [
+                                                                "local",
+                                                                "pares",
+                                                                "codigos"
+                                                            ],
+                                                            "properties": {
+                                                                "local": {
+                                                                    "type": "string",
+                                                                    "nullable": true
+                                                                },
+                                                                "pares": {
+                                                                    "type": "object",
+                                                                    "nullable": true,
+                                                                    "additionalProperties": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "codigos": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "required": [
+                                                                            "codigo",
+                                                                            "hoja",
+                                                                            "seccion",
+                                                                            "prestacion",
+                                                                            "columnas",
+                                                                            "nota"
+                                                                        ],
+                                                                        "properties": {
+                                                                            "codigo": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "hoja": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "seccion": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "prestacion": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "columnas": {
+                                                                                "type": "object",
+                                                                                "additionalProperties": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "nota": {
+                                                                                "type": "string",
+                                                                                "nullable": true
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "fuente": {
+                                                            "type": "object",
+                                                            "required": [
+                                                                "id",
+                                                                "nombre",
+                                                                "origen",
+                                                                "fecha_corte",
+                                                                "filas",
+                                                                "estado",
+                                                                "anios"
+                                                            ],
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "nombre": {
+                                                                    "type": "string"
+                                                                },
+                                                                "origen": {
+                                                                    "type": "string"
+                                                                },
+                                                                "fecha_corte": {
+                                                                    "type": "string",
+                                                                    "nullable": true
+                                                                },
+                                                                "filas": {
+                                                                    "type": "integer",
+                                                                    "format": "int64"
+                                                                },
+                                                                "estado": {
+                                                                    "type": "string"
+                                                                },
+                                                                "anios": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "required": [
+                                                                            "anio",
+                                                                            "fecha_corte",
+                                                                            "filas",
+                                                                            "estado",
+                                                                            "sin_descripcion",
+                                                                            "etiquetas_de"
+                                                                        ],
+                                                                        "properties": {
+                                                                            "anio": {
+                                                                                "type": "integer",
+                                                                                "format": "int64"
+                                                                            },
+                                                                            "fecha_corte": {
+                                                                                "type": "string",
+                                                                                "nullable": true
+                                                                            },
+                                                                            "filas": {
+                                                                                "type": "integer",
+                                                                                "format": "int64"
+                                                                            },
+                                                                            "estado": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "sin_descripcion": {
+                                                                                "type": "integer",
+                                                                                "format": "int64"
+                                                                            },
+                                                                            "etiquetas_de": {
+                                                                                "type": "integer",
+                                                                                "format": "int64",
+                                                                                "nullable": true
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Understood and refused — {message: the Spanish sentence}",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "message"
+                                                    ],
+                                                    "properties": {
+                                                        "message": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Current user is not logged in",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "tags": [
@@ -473,7 +890,7 @@
         },
         {
             "name": "api",
-            "description": "Estadística over OCS: the contract suite apps and M3 read (gestion docs/CONTRACTS.md, Slice 10). farmacia's resource-per-endpoint shape (the OCS decision), under Spanish resource names, starting with the fuentes. Consumers send `OCS-APIRequest: true`, which is also the CSRF protection (Request::passesCSRFCheck), and get the OCS envelope back: GET /ocs/v2.php/apps/estadistica/api/v1/fuentes { \"ocs\": { \"meta\": {…}, \"data\": [ …the fuentes… ] } } Everyone reads everything published (D6), so every route is #[NoAdminRequired], and every one carries a #[UserRateLimit] (MetadataTest holds both)."
+            "description": "Estadística over OCS: the contract suite apps and M3 read (gestion docs/CONTRACTS.md, Slice 10). farmacia's resource-per-endpoint shape (the OCS decision), under Spanish resource names: fuentes and consultas. Consumers send `OCS-APIRequest: true`, which is also the CSRF protection (Request::passesCSRFCheck), and get the OCS envelope back: GET /ocs/v2.php/apps/estadistica/api/v1/fuentes { \"ocs\": { \"meta\": {…}, \"data\": [ …the fuentes… ] } } Everyone reads everything published (D6), so every route is #[NoAdminRequired], and every one carries a #[UserRateLimit] (MetadataTest holds both)."
         }
     ]
 }
