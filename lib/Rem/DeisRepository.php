@@ -183,7 +183,7 @@ class DeisRepository {
 	}
 
 	/**
-	 * A year the window let go. Its kept ETag goes with its rows (RemJob), so
+	 * A year the window let go. Its kept ETag goes before its rows (RemJob), so
 	 * if the year comes back it is read afresh rather than answered by a 304.
 	 */
 	public function forget(int $year): void {

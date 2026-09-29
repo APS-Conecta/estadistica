@@ -70,9 +70,12 @@ class RemJob extends TimedJob {
 	protected function run($argument): void {
 		$outside = $this->oldestOutsideTheWindow();
 		if ($outside !== null) {
-			$this->importer->forget($outside);
+			// The rows go last: they are what makes the year «outside», so a tick
+			// that dies part-way finds it again and forgets it whole. Rows first
+			// stranded the kept ETag, and a year widened back read as unchanged.
 			$this->deis->forget($outside);
 			$this->drops->remove($outside);
+			$this->importer->forget($outside);
 			return;
 		}
 

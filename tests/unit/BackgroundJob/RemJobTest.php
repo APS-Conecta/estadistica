@@ -90,6 +90,42 @@ class RemJobTest extends TestCase {
 		$this->tick();
 	}
 
+	/**
+	 * The rows go last: they are what makes the year «outside the window», so
+	 * while they stand the next tick forgets it again, whole.
+	 */
+	public function testAForgottenYearLosesItsEtagAndItsDropBeforeItsRows(): void {
+		$calls = [];
+		$this->states->method('findAll')->willReturn([self::state(2020, 'P')]);
+		$this->deis->method('forget')->willReturnCallback(function () use (&$calls): void {
+			$calls[] = 'etag';
+		});
+		$this->drops->method('remove')->willReturnCallback(function () use (&$calls): void {
+			$calls[] = 'drop';
+		});
+		$this->importer->method('forget')->willReturnCallback(function () use (&$calls): void {
+			$calls[] = 'rows';
+		});
+
+		$this->tick();
+
+		self::assertSame(['etag', 'drop', 'rows'], $calls);
+	}
+
+	/**
+	 * A tick that dies part-way keeps the rows, so the year is still outside
+	 * the window next time. Forgetting the rows first stranded the kept ETag:
+	 * nothing offered the year again, and widened back it read as unchanged.
+	 */
+	public function testAForgetThatFailsPartWayKeepsTheRowsSoTheNextTickRetriesIt(): void {
+		$this->states->method('findAll')->willReturn([self::state(2020, 'P')]);
+		$this->drops->method('remove')->willThrowException(new \RuntimeException('storage unavailable'));
+		$this->importer->expects(self::never())->method('forget');
+
+		$this->expectException(\RuntimeException::class);
+		$this->tick();
+	}
+
 	public function testAQueuedPairWithADropIsLoadedFromTheDrop(): void {
 		$this->queue();
 		$local = (string)tempnam(sys_get_temp_dir(), 'estadistica-');
