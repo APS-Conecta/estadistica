@@ -171,8 +171,9 @@ final class XlsxFixture {
 	 *
 	 * @param list<array<string, string|int|null>> $establishments XlsxFixture::establishment()
 	 * @param list<string> $leaveOut row keys whose column the file lacks
+	 * @param bool $headerOnlyFirst a sheet before it with the same header and no rows (a summary tab)
 	 */
-	public static function register(array $establishments, array $leaveOut = []): string {
+	public static function register(array $establishments, array $leaveOut = [], bool $headerOnlyFirst = false): string {
 		$keys = array_values(array_diff(array_reverse(array_keys(RegisterParser::COLUMNS)), $leaveOut));
 		$letters = array_map(static fn (int $i): string => chr(ord('B') + $i), array_keys($keys));
 
@@ -187,7 +188,7 @@ final class XlsxFixture {
 			$rows[$i + 2] = $cells;
 		}
 
-		return self::workbook(['Base de Establecimientos' => $rows]);
+		return self::workbook([...($headerOnlyFirst ? ['Resumen' => [1 => $rows[1]]] : []), 'Base de Establecimientos' => $rows]);
 	}
 
 	/** Removes every file this class wrote. Called from tearDown(). */

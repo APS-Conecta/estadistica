@@ -96,6 +96,13 @@ class RegisterParserTest extends TestCase {
 		RegisterParser::parse(XlsxReader::open($path));
 	}
 
+	/** A header with no rows under it (a summary tab) is not the register: the next sheet is read. */
+	public function testASheetWithTheHeaderButNoRowsGivesWayToTheNextSheet(): void {
+		$parsed = RegisterParser::parse(XlsxReader::open(XlsxFixture::register([XlsxFixture::establishment(900001)], headerOnlyFirst: true)));
+
+		self::assertSame([900001], array_column($parsed['rows'], 'estab'));
+	}
+
 	public function testARegisterWithNoEstablishmentsIsRefused(): void {
 		$this->expectException(RefusedException::class);
 		$this->expectExceptionMessage('no trae establecimientos');

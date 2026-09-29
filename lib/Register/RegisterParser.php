@@ -56,6 +56,7 @@ final class RegisterParser {
 	 * @throws RefusedException
 	 */
 	public static function parse(XlsxReader $xlsx): array {
+		$headerOnly = false;
 		foreach ($xlsx->sheets() as $sheet) {
 			$positions = null;
 			$rows = [];
@@ -84,12 +85,18 @@ final class RegisterParser {
 				continue;
 			}
 			if ($rows === []) {
-				throw new RefusedException('La Base de Establecimientos no trae establecimientos.');
+				// The header with nothing under it (a summary tab): the register
+				// may be the next sheet.
+				$headerOnly = true;
+				continue;
 			}
 
 			return ['rows' => $rows, 'skipped' => $skipped];
 		}
 
+		if ($headerOnly) {
+			throw new RefusedException('La Base de Establecimientos no trae establecimientos.');
+		}
 		throw new RefusedException(sprintf(
 			'La planilla no es la Base de Establecimientos del DEIS: ninguna hoja trae la columna %s.',
 			self::COLUMNS['estab'],
