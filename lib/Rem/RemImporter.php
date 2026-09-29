@@ -50,7 +50,7 @@ class RemImporter {
 	 */
 	public const UNFINISHED = 'La carga empezó y no ha terminado; si sigue así pasados 15 minutos, se interrumpió.';
 
-	private const INTERNAL = 'La carga falló por un error interno; el detalle quedó en el registro del servidor.';
+	public const INTERNAL = 'La carga falló por un error interno; el detalle quedó en el registro del servidor.';
 
 	public function __construct(
 		private IDBConnection $db,
@@ -137,6 +137,15 @@ class RemImporter {
 	 * install does not consult DEIS. Recorded like any other failure, so the
 	 * queued row does not wait forever.
 	 */
+	/**
+	 * Whether the last attempt on this row ended on our side (an internal error,
+	 * or a process that died mid-load) rather than with a refusal of the file.
+	 * The file itself may be fine, so the job keeps a dropped one for a retry.
+	 */
+	public static function brokeOnOurSide(IngestState $state): bool {
+		return in_array($state->getLastError(), [self::INTERNAL, self::UNFINISHED], true);
+	}
+
 	public function fail(int $year, string $serie, string $message): IngestState {
 		$state = $this->begin($year, $serie);
 		$state->setLastError($message);

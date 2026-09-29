@@ -121,10 +121,22 @@ class RemJob extends TimedJob {
 		}
 
 		// The drop served every series it queued once none of its year is still
-		// waiting. A pair a newer drop re-queued keeps its file for the next tick.
-		if (!$this->states->hasPending($year)) {
+		// waiting. A pair a newer drop re-queued keeps its file for the next tick,
+		// and so does a serie whose load broke on our side: the next queue of the
+		// year retries the admin's file instead of falling back to DEIS's copy.
+		if (!$this->states->hasPending($year) && !$this->brokeOnOurSide($year)) {
 			$this->drops->remove($year);
 		}
+	}
+
+	private function brokeOnOurSide(int $year): bool {
+		foreach ($this->states->findAll() as $state) {
+			if ($state->getAnio() === $year && RemImporter::brokeOnOurSide($state)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function fromDeis(int $year, string $serie): void {

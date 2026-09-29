@@ -141,6 +141,63 @@ class RemJobTest extends TestCase {
 		self::assertFileDoesNotExist($local, 'the local copy is deleted after the load');
 	}
 
+	private static function failed(int $anio, string $serie, string $error): IngestState {
+		$state = self::state($anio, $serie);
+		$state->setLastError($error);
+
+		return $state;
+	}
+
+	/** @return array<string, array{string}> */
+	public static function brokeOnOurSide(): array {
+		return [
+			'an internal error' => [RemImporter::INTERNAL],
+			'a load that never finished' => [RemImporter::UNFINISHED],
+		];
+	}
+
+	/**
+	 * A load that broke on our side keeps the admin's file, so the next queue
+	 * of its year retries it rather than falling back to DEIS's copy.
+	 *
+	 * @dataProvider brokeOnOurSide
+	 */
+	public function testADropWhoseLoadBrokeOnOurSideIsKeptForTheRetry(string $error): void {
+		$this->states->method('findAll')->willReturn([self::failed(2026, 'A', $error)]);
+		$this->states->method('nextPending')->willReturn(self::state(2026, 'A'));
+		$this->drops->method('localCopyOf')->willReturn((string)tempnam(sys_get_temp_dir(), 'estadistica-'));
+		$this->states->method('hasPending')->willReturn(false);
+		$this->importer->method('import')->willReturn(self::failed(2026, 'A', $error));
+		$this->drops->expects(self::never())->method('remove');
+
+		$this->tick();
+	}
+
+	/** The other serie of the year loading cleanly does not take the file its broken sibling needs. */
+	public function testASiblingThatBrokeKeepsTheDropWhenTheOtherSerieLoads(): void {
+		$this->states->method('findAll')->willReturn([self::failed(2026, 'A', RemImporter::INTERNAL), self::state(2026, 'P')]);
+		$this->states->method('nextPending')->willReturn(self::state(2026, 'P'));
+		$this->drops->method('localCopyOf')->willReturn((string)tempnam(sys_get_temp_dir(), 'estadistica-'));
+		$this->states->method('hasPending')->willReturn(false);
+		$this->importer->method('import')->willReturn(self::state(2026, 'P'));
+		$this->drops->expects(self::never())->method('remove');
+
+		$this->tick();
+	}
+
+	/** A file the importer refused is no use again: it goes, as a loaded one does. */
+	public function testARefusedDropIsRemoved(): void {
+		$refusal = 'El archivo no es un zip, o está dañado.';
+		$this->states->method('findAll')->willReturn([self::failed(2026, 'A', $refusal)]);
+		$this->states->method('nextPending')->willReturn(self::state(2026, 'A'));
+		$this->drops->method('localCopyOf')->willReturn((string)tempnam(sys_get_temp_dir(), 'estadistica-'));
+		$this->states->method('hasPending')->willReturn(false);
+		$this->importer->method('import')->willReturn(self::failed(2026, 'A', $refusal));
+		$this->drops->expects(self::once())->method('remove')->with(2026);
+
+		$this->tick();
+	}
+
 	/** a3: the same importer the drop uses, over DEIS's zip. */
 	public function testAQueuedPairWithNoDropIsLoadedFromDeis(): void {
 		$this->queue();
