@@ -237,6 +237,8 @@ export default {
 			state: null,
 			catalogo: null,
 			catalogFailed: '',
+			/** Which loadCatalog() is the latest: an earlier one answering late is dropped. */
+			catalogAsked: 0,
 			register: {},
 			asking: false,
 			asked: null,
@@ -321,11 +323,19 @@ export default {
 			if (this.state.datos.fuente === null || hasta === null) {
 				return
 			}
+			const asked = ++this.catalogAsked
 			this.catalogFailed = ''
 			try {
-				this.catalogo = (await loadSource(this.state.datos.fuente, Number(hasta.slice(0, 4)))).catalogo
+				const catalogo = (await loadSource(this.state.datos.fuente, Number(hasta.slice(0, 4)))).catalogo
+				if (asked !== this.catalogAsked) {
+					return
+				}
+				this.catalogo = catalogo
 				this.keepWhatStillExists()
 			} catch (error) {
+				if (asked !== this.catalogAsked) {
+					return
+				}
 				warnError('could not read the catálogo', error)
 				this.catalogFailed = await ocsMessageFrom(error, 'No se pudieron leer las hojas del REM. Inténtelo de nuevo.')
 			}

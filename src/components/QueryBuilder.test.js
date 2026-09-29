@@ -157,6 +157,22 @@ describe('QueryBuilder — Datos → Filtrar → Resumir → Visualizar (a7, a22
 		wrapper.unmount()
 	})
 
+	it('keeps the catálogo of the last choice when an earlier one answers late', async () => {
+		const wrapper = await builder()
+		let late
+		axios.get.mockReturnValueOnce(new Promise((resolve) => { late = resolve }))
+		wrapper.vm.choosePeriod('hasta', '2025-12')
+		wrapper.vm.choosePeriod('hasta', '2024-12')
+		await flushPromises()
+		expect(wrapper.vm.catalogo.anio).toBe(2024)
+
+		late({ data: { ocs: { meta: { status: 'ok' }, data: { ...FUENTES[0], catalogo: catalogo(2025) } } } })
+		await flushPromises()
+
+		expect(wrapper.vm.catalogo.anio).toBe(2024)
+		wrapper.unmount()
+	})
+
 	it('replaces the last answer with the server\'s Spanish refusal', async () => {
 		const wrapper = await builder()
 		wrapper.vm.chooseHoja('A03')
