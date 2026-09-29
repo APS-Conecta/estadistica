@@ -6,12 +6,12 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Migration;
 
-use JsonException;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\Goals;
 use OCP\IDBConnection;
 use OCP\Migration\IOutput;
 use OCP\Migration\IRepairStep;
+use Throwable;
 
 /**
  * Loads the Metas Sanitarias the app ships (seeds/metas-<año>.json) into
@@ -27,8 +27,9 @@ use OCP\Migration\IRepairStep;
  * the door with a version as high or higher is theirs, and stays. The
  * commitments are never touched.
  *
- * A shipped file that GoalSeed refuses is reported and skipped. It would be a
- * bug in the release, and it must not stop the app from enabling.
+ * A shipped file that cannot be loaded, whatever refuses it (GoalSeed or the
+ * database), is reported and skipped. It would be a bug in the release, and it
+ * must not stop the other seeds, nor the app from enabling.
  */
 class EnsureSeedData implements IRepairStep {
 	private const SEEDS = __DIR__ . '/../../seeds';
@@ -62,7 +63,9 @@ class EnsureSeedData implements IRepairStep {
 				}
 				$loaded = $this->goals->store($raw);
 				$output->info(sprintf('Estadística: loaded the %d Metas Sanitarias, version %d (%d metas)', $loaded['anio'], $loaded['version'], $loaded['indicadores']));
-			} catch (JsonException|RefusedException $e) {
+			} catch (Throwable $e) {
+				// Any failure, the database's too: one seed must not stop the others,
+				// nor the app from enabling.
 				$output->warning(sprintf('Estadística: %s was not loaded: %s', basename($file), $e->getMessage()));
 			}
 		}
