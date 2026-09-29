@@ -15,11 +15,11 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
- * The one importer (acceptance a3). The job calls it for an admin's dropped
- * zip (LocalRange), and from Slice 3 for a member DEIS published (HttpRange)
- * alike. Given a zip's bytes, a year and a serie, it replaces that
- * (año, serie) in one transaction and records the outcome on its state row,
- * which the admin section lists (a4):
+ * The one importer (acceptance a3). The job calls it for a member DEIS
+ * published (HttpRange) and for an admin's dropped zip (LocalRange) alike. Given a zip's
+ * bytes, a year and a serie, it replaces that (año, serie) in one transaction
+ * and records the outcome on its state row, which the admin section lists
+ * (a4):
  *
  * - **Loaded.** The rows and the state commit together.
  * - **Incomplete** (Completeness). The member is loaded and flagged
@@ -88,8 +88,8 @@ class RemImporter {
 			$findings = Completeness::of($summary, $neighbour);
 
 			// Either way below, the member was judged on its content. The daily
-			// upstream check (Slice 3) compares against this identity, so the
-			// same bytes are not read again.
+			// upstream check (DeisRepository::check) compares against this
+			// identity, so the same bytes are not read again.
 			if ($findings !== [] && $keepComplete) {
 				$this->db->rollBack();
 				$state->setMemberCrc($member['crc']);
@@ -124,14 +124,33 @@ class RemImporter {
 	}
 
 	/**
-	 * An attempt that could not start: the job found nothing to read. Recorded
-	 * like any other failure, so the queued row does not wait forever.
+	 * An attempt that could not start: the job found nothing to read, or the
+	 * install does not consult DEIS. Recorded like any other failure, so the
+	 * queued row does not wait forever.
 	 */
 	public function fail(int $year, string $serie, string $message): IngestState {
 		$state = $this->begin($year, $serie);
 		$state->setLastError($message);
 
 		return $this->states->save($state);
+	}
+
+	/**
+	 * Lets go of a year the window no longer keeps: its rows and its state rows,
+	 * in one transaction, so no state row ever describes rows that are gone.
+	 * The job calls it, one year per tick (the Window decision: narrowing
+	 * happens in the job, never in the request).
+	 */
+	public function forget(int $year): void {
+		$this->db->beginTransaction();
+		try {
+			$this->loader->forget($year);
+			$this->states->forget($year);
+			$this->db->commit();
+		} catch (Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 	}
 
 	/**

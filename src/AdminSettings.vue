@@ -31,9 +31,20 @@
 		</NcSettingsSection>
 
 		<NcSettingsSection name="Cifras REM cargadas"
-			description="Cada año y serie del REM se carga completo y en segundo plano, desde un ZIP del
-				DEIS elegido en Archivos. Si una carga falla, se sigue mostrando la anterior y aquí queda
-				escrito por qué.">
+			description="Cada año y serie del REM se carga completo y en segundo plano, desde el DEIS o
+				desde un ZIP elegido en Archivos. Si una carga falla, se sigue mostrando la anterior y aquí
+				queda escrito por qué.">
+			<p v-if="deis" class="estadistica-admin__hint">
+				{{ deisText }}
+			</p>
+
+			<NcNoteCard v-if="deis && deis.errors" type="warning">
+				<p>La última revisión del DEIS no pudo revisar todos los años. Lo ya cargado se sigue mostrando.</p>
+				<p class="estadistica-admin__detail">
+					{{ deis.errors }}
+				</p>
+			</NcNoteCard>
+
 			<NcNoteCard v-if="ingestsFailed" type="error">
 				{{ ingestsFailed }}
 			</NcNoteCard>
@@ -130,6 +141,7 @@ export default {
 			saved: false,
 			failed: '',
 			ingests: [],
+			deis: null,
 			ingestsLoading: true,
 			ingestsFailed: '',
 			dropping: false,
@@ -148,6 +160,15 @@ export default {
 		},
 		gigabytes() {
 			return (this.years * GB_PER_YEAR).toLocaleString('es-CL', { maximumFractionDigits: 1 })
+		},
+		deisText() {
+			if (!this.deis.online) {
+				return 'Esta instalación está configurada sin acceso a internet, así que no consulta el DEIS: las cifras se cargan solo desde un ZIP elegido aquí.'
+			}
+			const cadence = 'El DEIS se revisa una vez al día, y cada año nuevo o modificado se carga en segundo plano.'
+			return this.deis.checkedAt
+				? `Última revisión del DEIS: ${this.when(this.deis.checkedAt)}. ${cadence}`
+				: `El DEIS se revisará dentro de la próxima hora. ${cadence}`
 		},
 	},
 
@@ -168,6 +189,8 @@ export default {
 				this.yearWindow = data
 				this.firstYear = String(data.firstYear)
 				this.saved = true
+				// The save moved the next DEIS check up to the coming hour.
+				await this.loadIngests()
 			} catch (error) {
 				warnError('could not save the year window', error)
 				this.failed = await messageFrom(error, 'No se pudo guardar. Revise la conexión e inténtelo de nuevo.')
@@ -181,6 +204,7 @@ export default {
 			try {
 				const { data } = await axios.get(generateUrl('/apps/estadistica/admin/ingests'))
 				this.ingests = data.ingests
+				this.deis = data.deis
 			} catch (error) {
 				warnError('could not read the ingest state', error)
 				this.ingestsFailed = await messageFrom(error, 'No se pudo leer el estado de las cargas. Recargue la página.')

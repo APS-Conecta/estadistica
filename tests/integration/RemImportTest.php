@@ -30,8 +30,10 @@ use ReflectionMethod;
 /**
  * The importer and the drop door against the instance's real PostgreSQL:
  * acceptance a3 (the drop half), a4 and a5, with the #74 negatives first
- * (epidemiologia 3f07b81). Nothing here reaches DEIS: the job only ever runs
- * with a pair queued from a drop.
+ * (epidemiologia 3f07b81), and a year the window lets go. Nothing here
+ * reaches DEIS: the job only ever runs with a pair queued from a drop, so it
+ * never gets as far as its daily check (DeisRepositoryTest covers that, over
+ * a fake server).
  *
  * The years 2097–2099 belong to these tests. DEIS will not publish them in
  * this app's lifetime, so no real load is ever touched. The drop cases need a
@@ -265,6 +267,26 @@ class RemImportTest extends IntegrationTestCase {
 
 		self::assertSame($before, $this->snapshot(2098));
 		self::assertStringContainsString('no trae filas de datos', (string)$state->getLastError());
+	}
+
+	/**
+	 * The Window decision: a year the window let go leaves with its state, in
+	 * one transaction, and no other year is touched.
+	 */
+	public function testForgettingAYearDropsItsRowsAndItsStateAndNothingElse(): void {
+		$this->import(ZipFixture::zip(['SerieA2097.csv' => ZipFixture::member(2097, ZipFixture::establishments(2))]), 2097);
+		$this->import(ZipFixture::zip(['SerieP2097.csv' => ZipFixture::member(2097, ZipFixture::establishments(2), ['P1206010'], 1)]), 2097, 'P');
+		self::assertSame(8, $this->snapshot(2097)['rows'], 'the year to forget was loaded');
+		$kept = $this->loadComplete2098();
+
+		Server::get(RemImporter::class)->forget(2097);
+
+		self::assertSame(0, $this->snapshot(2097)['rows']);
+		self::assertSame(0, $this->snapshot(2097, 'P')['rows']);
+		self::assertNull($this->state(2097)->getId(), 'no state row still says 2097 Serie A is loaded');
+		self::assertNull($this->state(2097, 'P')->getId(), 'nor Serie P');
+		self::assertSame($kept, $this->snapshot(2098), 'another year is untouched');
+		self::assertSame($kept['rows'], $this->state(2098)->getRowCount());
 	}
 
 	/**

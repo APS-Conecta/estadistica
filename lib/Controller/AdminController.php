@@ -10,6 +10,7 @@ use APS\Common\Refuses;
 use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Service\DroppedFiles;
 use OCA\Estadistica\Service\YearWindow;
 use OCA\Estadistica\Settings\AdminSettings;
@@ -41,6 +42,7 @@ class AdminController extends Controller {
 		private YearWindow $window,
 		private DroppedFiles $drops,
 		private IngestStateMapper $states,
+		private DeisRepository $deis,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -56,6 +58,7 @@ class AdminController extends Controller {
 	public function window(int $firstYear = 0): JSONResponse {
 		return $this->attempt(function () use ($firstYear): array {
 			$this->window->choose($firstYear);
+			$this->deis->recheck();
 			return $this->window->toArray();
 		});
 	}
@@ -75,12 +78,15 @@ class AdminController extends Controller {
 	/**
 	 * Every (año, serie) this install knows about: what is loaded, its fecha de
 	 * corte and row count, whether it is incompleto, and what the last attempt
-	 * did. A failure is never silent (a4).
+	 * did. Also when DEIS was last checked, and what that check could not do.
+	 * A failure is never silent (a4): a check that cannot reach DEIS must not
+	 * read as a quiet day (docs/adr/0005).
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function ingests(): JSONResponse {
 		return $this->attempt(fn (): array => [
 			'ingests' => array_map(static fn (IngestState $state): array => $state->toClient(), $this->states->findAll()),
+			'deis' => $this->deis->status(),
 		]);
 	}
 }

@@ -97,6 +97,11 @@ class IngestStateMapper extends QBMapper {
 		);
 	}
 
+	/** $anio's rows, both series: a year the window let go (RemImporter::forget, inside its transaction). */
+	public function forget(int $anio): void {
+		$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_ingest WHERE anio = ?', [$anio]);
+	}
+
 	/**
 	 * Inserts or updates, then forgets what was written. The next save then
 	 * carries only what changed after this one, which is what lets

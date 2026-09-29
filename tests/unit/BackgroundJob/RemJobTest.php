@@ -1,0 +1,148 @@
+<?php
+
+declare(strict_types=1);
+
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+namespace OCA\Estadistica\Tests\Unit\BackgroundJob;
+
+use OCA\Estadistica\BackgroundJob\RemJob;
+use OCA\Estadistica\Db\IngestState;
+use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Rem\DeisRepository;
+use OCA\Estadistica\Rem\HttpRange;
+use OCA\Estadistica\Rem\LocalRange;
+use OCA\Estadistica\Rem\RemImporter;
+use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\YearWindow;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Http\Client\IClient;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use ReflectionMethod;
+
+/**
+ * What one hourly tick does: forget a year the window let go, else load one
+ * queued pair (from its drop, else from DEIS), else run the daily check when
+ * it is due. Each test pins one branch, and that nothing after it ran.
+ */
+class RemJobTest extends TestCase {
+	private IngestStateMapper&MockObject $states;
+
+	private DroppedFiles&MockObject $drops;
+
+	private RemImporter&MockObject $importer;
+
+	private DeisRepository&MockObject $deis;
+
+	protected function setUp(): void {
+		$this->states = $this->createMock(IngestStateMapper::class);
+		$this->drops = $this->createMock(DroppedFiles::class);
+		$this->importer = $this->createMock(RemImporter::class);
+		$this->deis = $this->createMock(DeisRepository::class);
+	}
+
+	private function job(): RemJob {
+		$window = $this->createMock(YearWindow::class);
+		$window->method('firstYear')->willReturn(2023);
+
+		return new RemJob($this->createMock(ITimeFactory::class), $this->states, $this->drops, $this->importer, $this->deis, $window);
+	}
+
+	private function tick(): void {
+		$job = $this->job();
+		(new ReflectionMethod($job, 'run'))->invoke($job, null);
+	}
+
+	private static function state(int $anio, string $serie): IngestState {
+		$state = new IngestState();
+		$state->setAnio($anio);
+		$state->setSerie($serie);
+
+		return $state;
+	}
+
+	/** One queued pair, 2026 Serie A, inside the 2023–2026 window. */
+	private function queue(): void {
+		$this->states->method('findAll')->willReturn([self::state(2026, 'A')]);
+		$this->states->method('nextPending')->willReturn(self::state(2026, 'A'));
+	}
+
+	public function testTheJobIsHourlyTimeSensitiveAndNeverRunsTwiceAtOnce(): void {
+		$job = $this->job();
+
+		self::assertSame(3600, $job->getInterval());
+		self::assertTrue($job->isTimeSensitive(), 'decided at the class\'s creation: Nextcloud ratchets it');
+		self::assertFalse($job->getAllowParallelRuns());
+	}
+
+	public function testAYearTheWindowLetGoIsForgottenBeforeAnythingElse(): void {
+		$this->states->method('findAll')->willReturn([self::state(2026, 'A'), self::state(2021, 'A'), self::state(2020, 'P')]);
+		$this->importer->expects(self::once())->method('forget')->with(2020);
+		$this->deis->expects(self::once())->method('forget')->with(2020);
+		$this->drops->expects(self::once())->method('remove')->with(2020);
+		$this->states->expects(self::never())->method('nextPending');
+		$this->importer->expects(self::never())->method('import');
+		$this->deis->expects(self::never())->method('check');
+
+		$this->tick();
+	}
+
+	public function testAQueuedPairWithADropIsLoadedFromTheDrop(): void {
+		$this->queue();
+		$local = (string)tempnam(sys_get_temp_dir(), 'estadistica-');
+		$this->drops->method('localCopyOf')->with(2026)->willReturn($local);
+		$this->states->method('hasPending')->with(2026)->willReturn(false);
+		$this->importer->expects(self::once())->method('import')
+			->with(self::isInstanceOf(LocalRange::class), 2026, 'A', IngestState::ORIGIN_FILE);
+		$this->deis->expects(self::never())->method('zip');
+		$this->drops->expects(self::once())->method('remove')->with(2026);
+
+		$this->tick();
+
+		self::assertFileDoesNotExist($local, 'the local copy is deleted after the load');
+	}
+
+	/** a3: the same importer the drop uses, over DEIS's zip. */
+	public function testAQueuedPairWithNoDropIsLoadedFromDeis(): void {
+		$this->queue();
+		$this->drops->method('localCopyOf')->willReturn(null);
+		$zip = new HttpRange($this->createMock(IClient::class), 'https://repositoriodeis.minsal.cl/DatosAbiertos/REM/SERIE_REM_2026.zip', DeisRepository::USER_AGENT, new NullLogger());
+		$this->deis->method('zip')->with(2026)->willReturn($zip);
+		$this->importer->expects(self::once())->method('import')
+			->with(self::identicalTo($zip), 2026, 'A', IngestState::ORIGIN_DEIS);
+		$this->importer->expects(self::never())->method('fail');
+		$this->drops->expects(self::never())->method('remove');
+
+		$this->tick();
+	}
+
+	public function testAPairThatCannotReachDeisSaysWhyOnItsRow(): void {
+		$this->queue();
+		$this->drops->method('localCopyOf')->willReturn(null);
+		$this->deis->method('zip')->willThrowException(new RefusedException('Esta instalación está configurada sin acceso a internet, así que no consulta el DEIS.'));
+		$this->importer->expects(self::once())->method('fail')->with(2026, 'A', self::stringContains('sin acceso a internet'));
+		$this->importer->expects(self::never())->method('import');
+
+		$this->tick();
+	}
+
+	/** @return array<string, array{bool}> */
+	public static function due(): array {
+		return ['the day is up' => [true], 'checked today' => [false]];
+	}
+
+	/** @dataProvider due */
+	public function testAnIdleTickChecksDeisOnlyWhenTheDayIsUp(bool $due): void {
+		$this->states->method('findAll')->willReturn([]);
+		$this->states->method('nextPending')->willReturn(null);
+		$this->deis->method('checkDue')->willReturn($due);
+		$this->drops->expects(self::once())->method('removeStale');
+		$this->deis->expects($due ? self::once() : self::never())->method('check');
+		$this->importer->expects(self::never())->method('import');
+
+		$this->tick();
+	}
+}

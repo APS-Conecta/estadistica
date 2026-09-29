@@ -71,6 +71,11 @@ class RemLoader {
 		return $inserted;
 	}
 
+	/** Every row of $year, both series: a year the window let go (RemImporter::forget). */
+	public function forget(int $year): void {
+		$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_rem WHERE anio = ?', [$year]);
+	}
+
 	/**
 	 * One array literal per column. Their elements are safe unquoted, or quoted
 	 * without escaping, because RemReader lets through only integers, is_numeric()
