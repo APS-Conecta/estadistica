@@ -1,0 +1,61 @@
+# Throwaway Nextcloud instance for developing this app — farmacia's, on 8092.
+#
+# NOT the gestion instance: it shares none of its .env, provisioning or data.
+# Throw it away whenever it gets in the way (`make instance-clean`).
+#
+# Same images as gestion/compose.yaml. Loopback only, on 8092, clear of the
+# other dev stacks (8083 territorio, 8090 farmacia, 8091 in use — run plan
+# evidence). The memory ceilings are the shared box's rule (no container
+# without one): the database's is sized for the manual a21 run, where one real
+# Serie A member (≈ 6.5M rows) loads in a single transaction.
+name: estadistica-dev
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: "no"
+    mem_limit: 2g
+    volumes:
+      # postgres:18+ stores data in a major-version subdir, so mount the parent.
+      - dev_postgres:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextcloud -d nextcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nextcloud:
+    image: nextcloud:34-apache
+    restart: "no"
+    mem_limit: 1536m
+    ports:
+      - "127.0.0.1:8092:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - dev_nextcloud:/var/www/html
+      # The repo itself mounted as the app: edit here, see it live.
+      - .:/var/www/html/custom_apps/estadistica
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: dev
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: admin
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  dev_postgres:
+  dev_nextcloud:

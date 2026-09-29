@@ -1,0 +1,19 @@
+/node_modules/
+# vendor/ is built per-machine EXCEPT aps-common's src/, which is committed:
+# release tarballs are `git archive` of the tracked tree (farmacia's fence).
+/vendor/*
+!/vendor/aps/
+/vendor/aps/*
+!/vendor/aps/common/
+/vendor/aps/common/*
+!/vendor/aps/common/src/
+/.phpunit.cache/
+/composer.phar
+# tools/ holds tracked code (browser-check.py, Slice 7) beside fetched dev tools,
+# so only the fetched parts are ignored — farmacia ignores the whole directory.
+/tools/composer.phar
+/tools/openapi/
+/tools/.browser-check/
+*.js.map
+.phpunit.result.cache
+graphify-out/

@@ -1,0 +1,48 @@
+{
+    "name": "estadistica",
+    "version": "0.0.1",
+    "description": "Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias",
+    "license": "AGPL-3.0-or-later",
+    "private": true,
+    "scripts": {
+        "build": "webpack --node-env production --progress",
+        "dev": "webpack --node-env development --progress",
+        "watch": "webpack --node-env development --progress --watch",
+        "test": "vitest run",
+        "lint-js": "eslint src"
+    },
+    "dependencies": {
+        "@nextcloud/axios": "^2.5.0",
+        "@nextcloud/initial-state": "^3.0.0",
+        "@nextcloud/router": "^3.0.1",
+        "@nextcloud/vue": "~9.9.0",
+        "vue": "^3.5.0"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.22.9",
+        "@nextcloud/browserslist-config": "^3.0.0",
+        "@nextcloud/webpack-vue-config": "^6.3.2",
+        "@vitejs/plugin-vue": "^6.0.9",
+        "@vue/test-utils": "^2.5.1",
+        "babel-loader": "^10.0.0",
+        "css-loader": "^7.1.1",
+        "eslint": "^10.8.0",
+        "eslint-plugin-vue": "^10.10.0",
+        "jsdom": "^30.1.1",
+        "node-polyfill-webpack-plugin": "4.0.0",
+        "sass": "^1.64.2",
+        "sass-loader": "^16.0.2",
+        "style-loader": "^4.0.0",
+        "terser-webpack-plugin": "^5.3.10",
+        "vitest": "^4.1.10",
+        "vue-loader": "^17.4.2",
+        "webpack": "^5.88.2",
+        "webpack-cli": "^6.0.1"
+    },
+    "browserslist": [
+        "extends @nextcloud/browserslist-config"
+    ],
+    "engines": {
+        "node": "^20.0.0 || ^22.0.0 || ^24.0.0"
+    }
+}
