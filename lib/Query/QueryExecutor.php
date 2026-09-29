@@ -27,9 +27,10 @@ use Throwable;
  * set locally. set_config(…, true) is the SET LOCAL that a bound value can
  * reach. So a write that got this far fails in PostgreSQL, whoever built it,
  * and a statement past the timeout is cancelled and answered as a Spanish
- * refusal. REPEATABLE READ gives the series one snapshot: a load that commits
- * mid-request cannot put the local series and the national one on different
- * data.
+ * refusal. REPEATABLE READ gives the whole answer one snapshot: a load or a
+ * dictionary that commits mid-request cannot put the local series and the
+ * national one on different data, nor the labels on another dictionary than
+ * the códigos they label.
  *
  * Nextcloud issues nothing between BEGIN and the transaction's first statement
  * (lib/private/DB/Connection.php; design, Key Discoveries), so SET TRANSACTION
@@ -65,27 +66,30 @@ class QueryExecutor {
 	 * @throws RefusedException
 	 */
 	public function answer(QuerySpec $spec, Establishment $local): array {
-		$codigos = $this->codes($spec);
-		$pares = $spec->pares === [] ? null : $this->peers($spec->pares, $local);
 		$estab = $local->isConfigured() ? (int)$local->deisCode : null;
-		if ($estab === null && !$spec->nacional && $pares === null) {
+		if ($estab === null && !$spec->nacional && $spec->pares === []) {
 			throw new RefusedException('La consulta no tiene ninguna serie que calcular: no hay establecimiento configurado, y no se compara con el país ni con pares.');
 		}
 
-		[$mine, $country, $peers] = $this->readOnly(fn (): array => [
-			$estab === null ? null : $this->series($spec, $codigos, ['estab' => $estab]),
-			$spec->nacional ? $this->series($spec, $codigos, []) : null,
-			$pares === null ? null : $this->series($spec, $codigos, $pares),
-		]);
+		// Everything the answer reads, in the one snapshot: the códigos, the
+		// peers, the series, the labels and the fuente all describe the same
+		// dictionary and the same loads.
+		return $this->readOnly(function () use ($spec, $local, $estab): array {
+			$codigos = $this->codes($spec);
+			$pares = $spec->pares === [] ? null : $this->peers($spec->pares, $local);
+			$mine = $estab === null ? null : $this->series($spec, $codigos, ['estab' => $estab]);
+			$country = $spec->nacional ? $this->series($spec, $codigos, []) : null;
+			$peers = $pares === null ? null : $this->series($spec, $codigos, $pares);
 
-		$anio = $spec->lastYear();
-		$labels = array_map(
-			static fn (array $label): array => self::label($label, $anio, $spec->columnas),
-			array_values($this->catalog->labels($anio, $spec->serie, $codigos)),
-		);
+			$anio = $spec->lastYear();
+			$labels = array_map(
+				static fn (array $label): array => self::label($label, $anio, $spec->columnas),
+				array_values($this->catalog->labels($anio, $spec->serie, $codigos)),
+			);
 
-		return self::response($mine, $country, $peers, $estab === null ? null : $local->deisCode, $pares, $labels,
-			array_column($this->sources->all(), null, 'id')[$spec->fuente]);
+			return self::response($mine, $country, $peers, $estab === null ? null : $local->deisCode, $pares, $labels,
+				array_column($this->sources->all(), null, 'id')[$spec->fuente]);
+		});
 	}
 
 	/**
