@@ -215,6 +215,7 @@ export default {
 			if (!saved) {
 				this.cards = before
 			}
+			return saved
 		},
 
 		move(index, step) {
@@ -233,8 +234,10 @@ export default {
 		},
 
 		async add() {
-			await this.saveCards([...this.cards, { pregunta: this.adding, ancho: 1, key: nextKey++ }])
-			this.adding = null
+			// A refused add keeps the choice, for another try.
+			if (await this.saveCards([...this.cards, { pregunta: this.adding, ancho: 1, key: nextKey++ }])) {
+				this.adding = null
+			}
 		},
 
 		rename() {

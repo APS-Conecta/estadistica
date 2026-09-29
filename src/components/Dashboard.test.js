@@ -182,6 +182,19 @@ describe('Dashboard — its creator or an administrator arranges it', () => {
 		wrapper.unmount()
 	})
 
+	it('keeps the chosen pregunta when adding its card is refused, for another try', async () => {
+		const wrapper = await opened()
+		axios.put.mockReturnValueOnce(refused('No se pudo guardar el tablero.'))
+
+		wrapper.vm.adding = 3
+		await wrapper.find('form.estadistica-dashboards__add').trigger('submit')
+		await flushPromises()
+
+		expect(wrapper.vm.adding).toBe(3)
+		expect(wrapper.findAllComponents(QuestionCard)).toHaveLength(TABLERO.tarjetas.length)
+		wrapper.unmount()
+	})
+
 	it('shows no controls on someone else\'s tablero', async () => {
 		const wrapper = await opened({ tableros: [{ ...TABLERO, editable: false }] })
 
