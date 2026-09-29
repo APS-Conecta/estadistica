@@ -63,7 +63,7 @@ final class QueryExecutorTest extends TestCase {
 			'filtros' => ['hoja' => 'A03', 'columnas' => ['col01']],
 			'comparar' => ['pares' => ['tipo' => true]],
 		], 2026);
-		(new QueryExecutor($db, $catalog, $register, $sources))->answer($spec, Establishment::of('123456'));
+		(new QueryExecutor($db, $catalog, $register, $sources))->answer($spec, Establishment::of('900001'));
 
 		self::assertSame(['begin', 'códigos', 'traits', 'labels', 'fuente', 'commit'], $log);
 	}
