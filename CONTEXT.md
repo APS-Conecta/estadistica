@@ -16,7 +16,8 @@ nothing in.
 that date, not during the month. BS, BM and D are not read.
 
 **Hoja, sección, prestación, columna** — how a REM figure is addressed: a hoja (`A03`), a sección of it, a prestación
-by its código (eight characters, `02010420`), and a columna (`col01`…`col50`). A figure is the sum of the chosen
+by its código (six to sixteen characters; REM's have at least eight, `02010420`), and a columna (`col01`…`col50`). A
+figure is the sum of the chosen
 prestaciones × columnas.
 
 **Diccionario** — DEIS's DICCIONARIO CODIGOS for one year and serie. It labels each (año, código, columna) with its

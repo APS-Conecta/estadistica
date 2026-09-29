@@ -55,7 +55,7 @@
   and the peers among FONASA's.
 - **The band rule** (`Population::count`). A band counts count × the years it shares with the range ÷ 10, and
   `80 a más` counts as 80–89. The sum stays whole until one division, so the result is deterministic. A band that
-  was cut marks the value «prorrateado», and the metas label it «estimado por prorrateo».
+  was cut marks the value «prorrateado», and the metas label it «estimada por prorrateo de los tramos de edad».
 - **Committed denominators sit above all of this** (Slice 9, ADR-0008): a value the center committed to wins.
 - **The PIV is a fuente** (`piv`, origen «FONASA»), dated by its newest corte, with its cortes as its catálogo. It
   is not a consulta fuente: the consulta engine compiles REM only (docs/adr/0006).

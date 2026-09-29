@@ -30,7 +30,8 @@ The first version: M1, the REM pillar. The 0.0.x versions before it were its sli
   with the gaps to the meta comprometida and the meta nacional, and the national and peer %. A later year loads as a
   file ([ADR-0008](docs/adr/0008-metas-are-a-yearly-seed.md)).
 - **The admin section**, delegable to any group, every write declared with `#[AuthorizedAdminSetting]`
-  ([ADR-0003](docs/adr/0003-every-admin-write-declares-its-delegation.md)).
+  ([ADR-0003](docs/adr/0003-every-admin-write-declares-its-delegation.md)). It shows where each REM year came from,
+  and asks before a later first year lets loaded or waiting years go.
 - **The OCS API**: `fuentes`, `consultas`, `preguntas`, `tableros` and `indicadores`, with a generated
   `openapi.json`.
 - The establishment is read from config (`deis_code`, `establishment_type`, `comuna_cut`), which gestion's phase 16
