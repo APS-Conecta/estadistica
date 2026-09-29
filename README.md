@@ -35,11 +35,11 @@ Not done yet:
 
 - It is a **lab app** in gestion ([`dev/lab-apps.sh`](https://github.com/APS-Conecta/gestion/blob/main/dev/lab-apps.sh)),
   installed on the lab since 2026-09-29, in no release. 0.1.0 is not tagged: the tag waits for the owner's
-  real-data check ([`ROADMAP.md`](ROADMAP.md) § *Next*). Promotion is its own change: a tarball, `OWN_APPS`,
+  check of the metas ([`ROADMAP.md`](ROADMAP.md) § *Next*). Promotion is its own change: a tarball, `OWN_APPS`,
   gestion's CI clone and org-drift check, and a `docs/LICENSING.md` row.
-- Real data has not been run through it yet. The full DEIS window and a real FONASA export are the dev instance's
-  next check, and the owner compares one real month of Metas I–VII in production before staff are told
-  ([`ROADMAP.md`](ROADMAP.md)).
+- Real data went through it on the lab on 2026-09-29: DEIS's default window (27.3 million rows) and the owner's
+  FONASA export. What it found is B-030 to B-032 in [`BUGS.md`](BUGS.md). The owner still compares June 2026's
+  Metas I–VII with the Estadística-REM unit's own calculation before staff are told ([`ROADMAP.md`](ROADMAP.md)).
 - Staff files (CSV, XLSX) as a fuente are M2 ([`ROADMAP.md`](ROADMAP.md)).
 
 ## Quickstart
@@ -72,8 +72,8 @@ checkout:
 Phase 12 enables a lab app when `apps/<id>/.git` exists, and phase 16 writes the establishment (below).
 
 Nextcloud 34, PHP 8.2–8.5, **PostgreSQL only**: `info.xml` declares it, so an install on another engine is refused at
-enable time ([ADR-0002](docs/adr/0002-postgresql-only.md)). The default window of four years takes about 4.3 GB of
-database, and the same in each backup.
+enable time ([ADR-0002](docs/adr/0002-postgresql-only.md)). The default window of four years takes about 4.9 GB of
+database (27.3 million rows, measured on gestion's lab on 2026-09-29), and the same in each backup.
 
 ## Configuration
 

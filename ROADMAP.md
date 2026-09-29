@@ -13,23 +13,23 @@ It went through a code review on 2026-09-29: its fixes are in, and what it defer
 On 2026-09-29 it merged to `main`, together with its gestion side (APS-Conecta/gestion#196), and was installed on
 gestion's lab: its migrations applied, Administración → Estadística names the site file's DEIS code, and
 `make divergence` catches a hand-set one until the next seed puts it back. 0.1.0 is not tagged: the tag waits for
-the owner's real-data check (items 1 and 2 below).
+the owner's check of the metas (item 1 below).
+
+The real-data run (acceptance a21) was on gestion's lab rather than the dev instance, on 2026-09-29. The default
+window's eight members loaded, 27.3 million rows in 4.9 GB, each checked against DEIS's own zips, and the owner's FONASA
+export loaded 2,091 centers. What it found is B-030 to B-032 in [`BUGS.md`](BUGS.md), for M2; none blocks the tag
+(owner). The metas of June 2026 for the lab's center, hand-summed in SQL, equal what the app serves.
 
 ## Next
 
-1. **Real data on the dev instance.** Run the job over the default window and load the owner's FONASA export
-   through the admin section, then check:
-   - more than one establishment per loaded year;
-   - the configured center's Serie A row count equals the extract's, recomputed from the zip for `SITE_DEIS`;
-   - 2026's A and P códigos with no label: none, or an explicit list;
-   - a national consulta with no year filter answers inside the 10 s timeout;
-   - FONASA's corte of 31-12-2025 holds every center of the export.
-2. **The owner's check in production.** One real month of Metas I–VII against the Estadística-REM unit's own
-   calculation, recorded, before staff are told.
-3. **Owner questions the 2026 metas file leaves open**, each written in its notes:
+1. **The owner's check in production** (gestion's lab, the only deployment). June 2026's Metas I–VII against the
+   Estadística-REM unit's own calculation, recorded, before staff are told.
+2. **Owner questions the 2026 metas file leaves open**, each written in its notes:
    - the pesos are 2025's, because the 2026 OOTT restate none;
    - Meta II's denominator counts mujeres only, while its numerador also counts col02's transmasculine people;
    - Meta VI's numerador is counted in 2026, where the OOTT's text says 2025.
+3. **What the real-data run found** (BUGS B-030 to B-032): a fecha de corte one establishment can move, labels
+   borrowed from an earlier year's dictionary, and whole-hoja national consultas at the 10 s timeout. The M2 lap.
 4. **Promotion to `OWN_APPS`**, a gestion change: a release tag and its tarball, the CI clone,
    `check-org-drift.sh`, and the `docs/LICENSING.md` row.
 5. **What the code review left to the farmacia template** (BUGS B-015 to B-019): the webpack-vue-config major,
