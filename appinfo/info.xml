@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>estadistica</id>
+    <name>Estadística</name>
+    <summary>Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias</summary>
+    <description><![CDATA[Las cifras REM que el DEIS publica para todo el país, etiquetadas con su diccionario oficial, para comparar el establecimiento con el promedio nacional y con establecimientos parecidos; y el avance mes a mes de las Metas Sanitarias de Atención Primaria. Consultable por todo el personal.
+
+No contiene información de pacientes: guarda solo conteos agregados publicados por el DEIS y FONASA.]]></description>
+    <version>0.0.1</version>
+    <licence>AGPL-3.0-or-later</licence>
+    <author>Daniel Espinoza</author>
+    <namespace>Estadistica</namespace>
+    <category>tools</category>
+    <dependencies>
+        <php min-version="8.2" max-version="8.5"/>
+        <!-- PostgreSQL only, by construction (docs/adr/0002): the loader binds
+             PostgreSQL arrays to unnest(), and every consulta runs inside
+             SET TRANSACTION READ ONLY + SET LOCAL statement_timeout. Declaring
+             it refuses the install on another engine at enable time, instead
+             of at the first consulta, and turns off the Oracle naming checks
+             (MigrationService::__construct). The attribute is load-bearing:
+             without one, InfoParser hands MigrationService the bare string
+             "pgsql" and its foreach over it warns on every migration run;
+             with one it is the {@attributes, @value} array both
+             MigrationService and DependencyAnalyzer expect (measured on the
+             nextcloud:34 image, 2026-09-28). 18 is the suite's PostgreSQL. -->
+        <database min-version="18">pgsql</database>
+        <nextcloud min-version="34" max-version="34"/>
+    </dependencies>
+    <!-- The section is IDelegatedSettings: an admin hands it to any group with
+         occ admin-delegation:add or Administration privileges; no group name
+         lives in this app (docs/adr/0003). -->
+    <settings>
+        <admin>OCA\Estadistica\Settings\AdminSettings</admin>
+        <admin-section>OCA\Estadistica\Settings\AdminSection</admin-section>
+    </settings>
+    <navigations>
+        <navigation>
+            <name>Estadística</name>
+            <route>estadistica.page.index</route>
+        </navigation>
+    </navigations>
+</info>
