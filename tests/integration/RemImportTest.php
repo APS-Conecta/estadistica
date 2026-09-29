@@ -259,6 +259,20 @@ class RemImportTest extends IntegrationTestCase {
 		self::assertSame($kept['rows'], $this->state(2098)->getRowCount());
 	}
 
+	/** A drop's series are queued in one upsert: over a row that exists and one that does not. */
+	public function testSeveralSeriesAreQueuedInOneUpsert(): void {
+		$states = Server::get(IngestStateMapper::class);
+		$states->markPending(2099, 'A');
+		$loaded = $this->state(2099);
+		$loaded->setPending(false);
+		$states->save($loaded);
+
+		$states->markPending(2099, 'A', 'P');
+
+		self::assertTrue($this->state(2099)->getPending(), 'the existing row is queued again');
+		self::assertTrue($this->state(2099, 'P')->getPending(), 'the new row is created queued');
+	}
+
 	/**
 	 * a3, the drop half: a zip in the admin's Files, picked by path, lands in
 	 * IAppData, and the job loads it with the importer the job always calls,

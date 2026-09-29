@@ -81,19 +81,21 @@ class IngestStateMapper extends QBMapper {
 	}
 
 	/**
-	 * Queues (año, serie) for one attempt, creating its row if this is the first
-	 * anyone has heard of it.
+	 * Queues each (año, serie) for one attempt, creating its row if this is the
+	 * first anyone has heard of it.
 	 *
-	 * It is one statement, PostgreSQL's upsert (docs/adr/0002). A drop that
-	 * arrives while the job is loading the same (año, serie) is therefore
-	 * queued, not lost: the job consumed the flag when its attempt began
-	 * (RemImporter::begin).
+	 * It is one statement, PostgreSQL's upsert (docs/adr/0002), so a drop's
+	 * series are queued together or not at all. A drop that arrives while the
+	 * job is loading the same (año, serie) is therefore queued, not lost: the
+	 * job consumed the flag when its attempt began (RemImporter::begin).
 	 */
-	public function markPending(int $anio, string $serie): void {
+	public function markPending(int $anio, string $serie, string ...$more): void {
+		$series = [$serie, ...$more];
 		$this->db->executeStatement(
-			'INSERT INTO *PREFIX*estadistica_ingest (anio, serie, pending) VALUES (?, ?, true) '
-			. 'ON CONFLICT (anio, serie) DO UPDATE SET pending = true',
-			[$anio, $serie],
+			'INSERT INTO *PREFIX*estadistica_ingest (anio, serie, pending) VALUES '
+			. implode(', ', array_fill(0, count($series), '(?, ?, true)'))
+			. ' ON CONFLICT (anio, serie) DO UPDATE SET pending = true',
+			array_merge(...array_map(static fn (string $one): array => [$anio, $one], $series)),
 		);
 	}
 

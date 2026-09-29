@@ -66,7 +66,8 @@ use OCP\Lock\LockedException;
  * lock refuses, in Spanish, anything that is not FONASA's CSV.
  *
  * A drop queues its (año, serie) pairs only AFTER it is stored, so the job
- * never meets a queued pair whose file has not arrived.
+ * never meets a queued pair whose file has not arrived, and all of them in one
+ * statement, so none is left unqueued beside a file the job will remove.
  */
 class DroppedFiles {
 	private const FOLDER = 'drops';
@@ -143,9 +144,7 @@ class DroppedFiles {
 			}
 		}
 
-		foreach ($series as $serie) {
-			$this->states->markPending($year, $serie);
-		}
+		$this->states->markPending($year, ...$series);
 
 		return ['anio' => $year, 'series' => $series];
 	}
@@ -320,13 +319,9 @@ class DroppedFiles {
 		}
 
 		try {
-			$folder = $this->folder();
-			$name = $year . '.zip';
-			if ($folder->fileExists($name)) {
-				$folder->getFile($name)->putContent($source);
-			} else {
-				$folder->newFile($name, $source);
-			}
+			// newFile writes over a zip already there, so there is no gap between
+			// a look and a write for the job's remove() to fall into.
+			$this->folder()->newFile($year . '.zip', $source);
 		} catch (NotPermittedException|LockedException) {
 			throw new RefusedException('No se pudo guardar el archivo en el almacenamiento de la aplicación.');
 		} finally {
@@ -341,7 +336,13 @@ class DroppedFiles {
 		try {
 			return $this->appData->getFolder(self::FOLDER);
 		} catch (NotFoundException) {
+		}
+
+		try {
 			return $this->appData->newFolder(self::FOLDER);
+		} catch (NotPermittedException) {
+			// Another request created it between the look and the create.
+			return $this->appData->getFolder(self::FOLDER);
 		}
 	}
 }
