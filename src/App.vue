@@ -15,8 +15,10 @@
 						cifras nacionales y de pares, pero no las propias.
 					</NcNoteCard>
 
-					<NcEmptyContent name="Todavía no hay cifras REM"
-						description="Aparecerán aquí cuando se carguen los datos públicos del DEIS." />
+					<!-- ponytail: one view, the builder; Slice 7 adds the navigation
+					     between views. The «Todavía no hay cifras REM» empty state is
+					     the builder's, shown while no REM fuente holds figures. -->
+					<QueryBuilder :establishment="establishment" />
 				</template>
 			</div>
 		</NcAppContent>
@@ -27,14 +29,14 @@
 import { loadState } from '@nextcloud/initial-state'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcContent from '@nextcloud/vue/components/NcContent'
-import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import QueryBuilder from './components/QueryBuilder.vue'
 import { safeError } from './api.js'
 
 export default {
 	name: 'App',
 
-	components: { NcAppContent, NcContent, NcEmptyContent, NcNoteCard },
+	components: { NcAppContent, NcContent, NcNoteCard, QueryBuilder },
 
 	data() {
 		try {
