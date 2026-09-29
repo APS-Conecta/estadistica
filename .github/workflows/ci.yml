@@ -1,0 +1,68 @@
+# estadistica's CI — farmacia's three jobs (the org template), cloned: the unit
+# suite in the bare-PHP container behind aps-drift, the js suite + the
+# committed-bundle no-drift arm, and the smoke suite against a REAL provisioned
+# instance. The doc gate is repo-docs' docs.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: aps-common sibling
+        run: git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common
+      # Drift BEFORE the tests: `make test` runs in a root container whose composer
+      # install copies aps-common into vendor/aps/common root-owned, and aps-sync's
+      # rm -rf then dies with "Permission denied" (farmacia 773d0bf).
+      - run: make aps-drift
+      - run: make test
+
+  js:
+    name: Frontend tests, lint and bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - run: npm run lint-js
+      - run: npm test
+      # js/ is committed — the bundle IS the deployment.
+      - name: The committed bundle is the deployment — rebuild and require no drift
+        run: |
+          npm run build
+          git diff --exit-code js/ || { echo "::error::js/ drifted from src/ — rebuild and commit (the bundle IS the deployment)"; exit 1; }
+
+  smoke:
+    name: Smoke — the wiring no unit test can see (compose instance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: aps-common sibling
+        run: git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - name: The throwaway instance (Nextcloud 34 + PostgreSQL 18, compose.dev.yaml)
+        run: make instance-up
+      - name: Smoke (pages, delegation, refusals, icon, .htaccess, bundle, openapi regen)
+        run: make smoke
+      - name: Tear down
+        if: always()
+        run: make instance-clean

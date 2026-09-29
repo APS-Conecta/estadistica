@@ -1,0 +1,44 @@
+{
+    "name": "aps-conecta/estadistica",
+    "description": "Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias",
+    "license": "AGPL-3.0-or-later",
+    "type": "project",
+    "require": {
+        "php": "^8.2",
+        "aps/common": "^1.0"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../aps-common",
+            "options": {
+                "symlink": false
+            }
+        }
+    ],
+    "require-dev": {
+        "nextcloud/ocp": "^34.0",
+        "phpunit/phpunit": "^10.0",
+        "doctrine/dbal": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OCA\\Estadistica\\": "lib/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "OCA\\Estadistica\\Tests\\Unit\\": "tests/unit/",
+            "OCA\\Estadistica\\Tests\\Integration\\": "tests/integration/",
+            "OCP\\": "vendor/nextcloud/ocp/OCP/",
+            "NCU\\": "vendor/nextcloud/ocp/NCU/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.2"
+        },
+        "sort-packages": true,
+        "optimize-autoloader": true
+    }
+}

@@ -1,0 +1,15 @@
+# Local test image: PHP 8.2 CLI + composer, nothing else.
+#
+# The unit suite runs against OCP interfaces from nextcloud/ocp; anything that
+# must touch a live server runs against compose.dev.yaml instead.
+FROM php:8.2-cli
+# zip is composer's as much as ours: it cannot unpack a dist archive without
+# it, and falling back to git sources makes installs slow and network-shaped.
+# intl is ours, and it is here so that this image can be wrong about production
+# in one fewer way: Nextcloud requires intl, the vocabulary's slug folding uses
+# Normalizer, and without it here the accent tests pass by not running
+# (territorio's comment, copied because the lesson is not territorio's alone).
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/
+RUN install-php-extensions zip intl
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+WORKDIR /app
