@@ -17,6 +17,7 @@ use OCA\Estadistica\Register\RegisterParser;
 use OCA\Estadistica\Rem\LocalRange;
 use OCA\Estadistica\Rem\RemImporter;
 use OCA\Estadistica\Service\EstablishmentConfig;
+use OCA\Estadistica\Service\SavedContent;
 use OCA\Estadistica\Service\Sources;
 use OCA\Estadistica\Service\YearWindow;
 use OCA\Estadistica\Tests\Unit\Rem\ZipFixture;
@@ -287,6 +288,7 @@ class QueryExecutorTest extends IntegrationTestCase {
 			$this->executor,
 			Server::get(EstablishmentConfig::class),
 			new YearWindow(Server::get(IAppConfig::class), $time),
+			Server::get(SavedContent::class),
 		);
 
 		$answered = $controller->consultas(['fuente' => 'rem-a', 'periodo' => ['desde' => '2099-01', 'hasta' => '2099-01'], 'filtros' => ['codigos' => ['02010420'], 'columnas' => ['col04']]]);

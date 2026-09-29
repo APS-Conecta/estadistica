@@ -1,6 +1,6 @@
 {
     "name": "estadistica",
-    "version": "0.0.6",
+    "version": "0.0.7",
     "description": "Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias",
     "license": "AGPL-3.0-or-later",
     "private": true,

@@ -1,8 +1,8 @@
 /**
  * The builder's half of the consulta (docs/adr/0006): its four steps, Datos →
  * Filtrar → Resumir → Visualizar, and the one spec they become. The builder
- * posts that spec to the OCS route, so the page shows exactly what the API
- * answers (a15).
+ * and the tableros (Slice 7) post that spec to the same OCS route, so the page
+ * shows exactly what the API answers (a15).
  *
  * Everything here but the three calls at the bottom is pure, so the spec the
  * builder emits is pinned in node (query.test.js, a7). The server's
@@ -42,12 +42,15 @@ export const TRAITS = [
 	{ id: 'comuna', valores: null },
 ]
 
-/** How an answer is drawn. */
+/** How an answer is drawn, which a pregunta keeps beside its spec (SavedContent::CHART_TYPES). */
 export const CHART_TYPES = [
 	{ id: 'barra', nombre: 'Barras' },
 	{ id: 'linea', nombre: 'Líneas' },
 	{ id: 'tabla', nombre: 'Solo tabla' },
 ]
+
+/** A pregunta's or a tablero's title, at most (SavedContent::MAX_TITLE). */
+export const MAX_TITLE = 200
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
 	'septiembre', 'octubre', 'noviembre', 'diciembre']

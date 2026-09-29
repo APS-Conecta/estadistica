@@ -17,6 +17,9 @@
 #     a fuente that does not exist (a14)
 #   - a consulta posted as JSON is answered in the OCS envelope, and a
 #     tampered spec or DEIS code is a Spanish 422, never a SQL error (a14, a16)
+#   - preguntas and tableros: any user saves one, a second user reads it and
+#     is refused a change (403), a delegate of the section and an admin change
+#     it, and its creator deletes it (a8, a14)
 #   - the icon serves, the .htaccess holes stay shut, the bundle matches src/,
 #     and openapi.json regenerates without drift once the OCS surface exists
 #
@@ -35,6 +38,7 @@ RUN="smoke$(date +%s)"
 GROUP="estadistica-$RUN"
 DELEGATE="delegado-$RUN"
 OUTSIDER="ajeno-$RUN"
+READER="lector-$RUN"
 SETTINGS_CLASS='OCA\Estadistica\Settings\AdminSettings'
 
 # stderr is KEPT (epidemiologia B-003: a container that is down must not read
@@ -87,14 +91,20 @@ mint() {
 	printf '%s %s' "$token" "$id"
 }
 
-# Everything this run made is removed however it leaves: the credentials, the
-# two throwaway users (and with them the file the drop check put in Files), the
-# group and its delegation, and the window it moved.
+# Everything this run made is removed however it leaves: what it saved, the
+# credentials, the three throwaway users (and with them the file the drop
+# check put in Files), the group and its delegation, and the window it moved.
 cleanup() {
+	# A run that died halfway leaves what it saved: the admin deletes it first.
+	[ -n "${TABLERO_ID:-}" ] && web_as admin "$ADMIN_TOKEN" -H 'OCS-APIRequest: true' -o /dev/null \
+		-X DELETE "$BASE/ocs/v2.php/apps/$APP/api/v1/tableros/$TABLERO_ID"
+	[ -n "${PREGUNTA_ID:-}" ] && web_as admin "$ADMIN_TOKEN" -H 'OCS-APIRequest: true' -o /dev/null \
+		-X DELETE "$BASE/ocs/v2.php/apps/$APP/api/v1/preguntas/$PREGUNTA_ID"
 	[ -n "${ADMIN_TOKEN_ID:-}" ] && occ user:auth-tokens:delete admin "$ADMIN_TOKEN_ID" >/dev/null 2>&1
 	occ admin-delegation:remove "$SETTINGS_CLASS" "$GROUP" >/dev/null 2>&1
 	occ user:delete "$DELEGATE" >/dev/null 2>&1
 	occ user:delete "$OUTSIDER" >/dev/null 2>&1
+	occ user:delete "$READER" >/dev/null 2>&1
 	occ group:delete "$GROUP" >/dev/null 2>&1
 	occ config:app:delete "$APP" first_year >/dev/null 2>&1
 	return 0
@@ -287,6 +297,88 @@ is "$CODE" '422' \
 expect "$BODY" 'se esperan seis' \
 	"the DEIS code refusal is the Spanish sentence" \
 	"the DEIS code refusal does NOT carry the Spanish sentence"
+
+# --- preguntas y tableros: everyone reads, the creator or an administrator changes (a8, a14)
+# The outsider saves; the reader, in no delegated group, reads and is refused a
+# change; the delegate moderates, which only a real instance can prove (core
+# answers «may this person administer Estadística» from its own delegations,
+# owner decision, Slice 7); the admin and the creator delete. The sentences
+# are matched on their ASCII part: Nextcloud escapes «creó».
+docker exec -e OC_PASS="$PASSWORD" -u www-data "$CONTAINER" php occ user:add --password-from-env "$READER" >/dev/null
+read -r READER_TOKEN _ <<< "$(mint "$READER")"
+PREGUNTAS="$BASE/ocs/v2.php/apps/$APP/api/v1/preguntas"
+TABLEROS="$BASE/ocs/v2.php/apps/$APP/api/v1/tableros"
+# The id from `"data":{"id":N,` — the first key of a pregunta and a tablero.
+id_of() { printf '%s' "$1" | sed -n 's/.*"data":{"id":\([0-9][0-9]*\),.*/\1/p'; }
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X POST \
+	--data "{\"titulo\":\"Smoke $RUN\",\"consulta\":$SPEC,\"tipo\":\"linea\"}" "$PREGUNTAS"
+is "$CODE" '201' \
+	"any user saves a pregunta, posted as JSON (201)" \
+	"a pregunta was NOT saved with 201 — is the route registered, and the JSON body mapped?"
+expect "$BODY" '"editable":true' \
+	"its creator may change it" \
+	"the saved pregunta does NOT say its creator may change it"
+PREGUNTA_ID="$(id_of "$BODY")"
+
+fetch "$READER" "$READER_TOKEN" -H "$OCSH" -H "$JSONH" "$PREGUNTAS/$PREGUNTA_ID"
+is "$CODE" '200' \
+	"a second user reads it (200)" \
+	"a second user could NOT read the pregunta"
+expect "$BODY" '"editable":false' \
+	"and may not change it" \
+	"the pregunta does NOT tell a second user they may not change it"
+
+fetch "$READER" "$READER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X PUT --data '{"titulo":"Otro"}' "$PREGUNTAS/$PREGUNTA_ID"
+is "$CODE" '403' \
+	"the second user's edit is refused (403)" \
+	"the second user's edit was NOT refused with 403"
+expect "$BODY" 'Solo quien cre' \
+	"the refusal is the Spanish sentence" \
+	"the 403 does NOT carry the Spanish sentence"
+
+is "$(web_as "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -o /dev/null -w '%{http_code}' \
+	-X PUT --data '{"tipo":"tabla"}' "$PREGUNTAS/$PREGUNTA_ID")" '200' \
+	"a delegate of the section changes someone else's pregunta (200)" \
+	"a delegate of the section was NOT let change the pregunta"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X POST \
+	--data "{\"titulo\":\"Smoke $RUN\",\"consulta\":${SPEC%\}},\"sql\":\"x\"}}" "$PREGUNTAS"
+is "$CODE" '422' \
+	"a pregunta whose consulta is tampered with is refused (422)" \
+	"a tampered pregunta was NOT refused with 422"
+expect "$BODY" 'no admite' \
+	"the refusal is QuerySpec's Spanish sentence" \
+	"the tampered pregunta's refusal does NOT carry the Spanish sentence"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -H "$CTYPE" -X POST \
+	--data "{\"titulo\":\"Smoke $RUN\",\"tarjetas\":[{\"pregunta\":$PREGUNTA_ID,\"ancho\":2}]}" "$TABLEROS"
+is "$CODE" '201' \
+	"any user saves a tablero with the pregunta on it (201)" \
+	"a tablero was NOT saved with 201"
+TABLERO_ID="$(id_of "$BODY")"
+
+fetch "$READER" "$READER_TOKEN" -H "$OCSH" -H "$JSONH" "$TABLEROS/$TABLERO_ID"
+expect "$BODY" "\"tarjetas\":[{\"pregunta\":$PREGUNTA_ID,\"ancho\":2}]" \
+	"a second user reads the tablero and its card" \
+	"a second user does NOT read the tablero's card"
+
+is "$(web_as "$READER" "$READER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_code}' -X DELETE "$TABLEROS/$TABLERO_ID")" '403' \
+	"the second user's delete is refused (403)" \
+	"the second user's delete was NOT refused with 403"
+
+is "$(web_as admin "$ADMIN_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_code}' -X DELETE "$TABLEROS/$TABLERO_ID")" '200' \
+	"an admin deletes someone else's tablero (200)" \
+	"an admin could NOT delete the tablero"
+TABLERO_ID=''
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_code}' -X DELETE "$PREGUNTAS/$PREGUNTA_ID")" '200' \
+	"the creator deletes their pregunta (200)" \
+	"the creator could NOT delete their pregunta"
+is "$(web_as "$READER" "$READER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_code}' "$PREGUNTAS/$PREGUNTA_ID")" '404' \
+	"a deleted pregunta is 404" \
+	"a deleted pregunta is NOT 404"
+PREGUNTA_ID=''
 
 # --- the icon ----------------------------------------------------------------
 icon="$(web_as admin "$ADMIN_TOKEN" -o /dev/null -w '%{http_code} %{content_type} %{size_download}' \

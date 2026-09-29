@@ -25,6 +25,16 @@ export async function ocsPost(path, body) {
 	return data.ocs.data
 }
 
+export async function ocsPut(path, body) {
+	const { data } = await axios.put(ocsUrl(path), body)
+	return data.ocs.data
+}
+
+export async function ocsDelete(path) {
+	const { data } = await axios.delete(ocsUrl(path))
+	return data.ocs.data
+}
+
 /**
  * messageFrom, one envelope deeper: an OCS refusal carries its Spanish
  * sentence at ocs.data.message (ApiController::refuse).

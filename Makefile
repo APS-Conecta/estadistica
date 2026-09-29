@@ -12,7 +12,7 @@ DOCKER := docker run --rm -v "$(CURDIR)":/app -v "$(APS)":/aps-common -w /app $(
 COMPOSE := docker compose -f compose.dev.yaml
 OCC := $(COMPOSE) exec --user www-data nextcloud php occ
 
-.PHONY: test build-test-image deps test-integration integration instance-up instance-occ instance-down instance-clean openapi smoke clean aps-sync aps-drift
+.PHONY: test build-test-image deps test-integration integration test-browser instance-up instance-occ instance-down instance-clean openapi smoke clean aps-sync aps-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -32,6 +32,13 @@ test-integration:
 # farmacia's short name, on its own line: repo-docs reads a Makefile target only
 # where a line starts with it, and `test-integration integration:` hid both.
 integration: test-integration
+
+# A tablero card's figures against the API's, in a real browser (a15), and a
+# second user reading the tablero (a8): territorio's tools/browser-check.py
+# pattern, Playwright for Python on the host. Needs `make instance-up` and a
+# built bundle; it seeds and removes its own synthetic rows.
+test-browser:
+	python3 tools/browser-check.py
 
 # The enable is the point: it runs the migrations exactly as a clinic's occ app:enable does.
 instance-up:

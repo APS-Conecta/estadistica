@@ -58,3 +58,15 @@ statement.
   Measured on 5.76M synthetic rows, a national series takes ≈ 2 s and a local one ≈ 20 ms.
 - M2's file fuentes add a second compiler branch under the same spec and the same executor. A fuente interface is
   extracted then, not before (epidemiologia ADR-0010/0011).
+
+## Amendment (2026-09-29, Slice 7): a pregunta keeps its consulta as sent
+
+- **Judged, then stored as sent.** `POST /api/v1/preguntas` stores the consulta only if `QuerySpec::from()` accepts
+  it. What is stored is the document that came in, re-encoded with its keys and values unchanged. It is never the
+  normalized form: a consulta sent without `metrica` stays without one, and still reads as suma. So a stored spec
+  says exactly what its author asked, in the contract's own words, and the key-freeze above protects it.
+- **Judged again every time it runs.** A tablero card and an opened pregunta post the stored consulta to
+  `POST /api/v1/consultas` like any other caller. A consulta the dictionaries no longer resolve (a hoja gone from
+  every dictionary of its periodo) answers its own Spanish 422, in its own card, and the cards beside it still draw.
+- **The chart type is not part of the spec.** A pregunta keeps it beside the consulta (`tipo`: barra, linea or
+  tabla), because it says how an answer is drawn, not what is asked.

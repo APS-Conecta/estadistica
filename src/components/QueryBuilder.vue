@@ -7,6 +7,10 @@
 	app config (gestion ADR-0013), and «pares» are chosen by register traits.
 	A consulta runs on «Consultar», never on every change: a national series
 	costs about two seconds, and the route spends the read limit.
+
+	An answer can be saved as a pregunta, under a title, for all the staff
+	(a8, a22): what is saved is the spec that was asked and the chart it is
+	shown as, not the steps as they now stand.
 -->
 <template>
 	<div class="estadistica-builder">
@@ -171,10 +175,30 @@
 				{{ askFailed }}
 			</NcNoteCard>
 
-			<Visualization v-else-if="answer"
-				:answer="answer"
-				:spec="asked"
-				:tipo="state.visualizar.tipo" />
+			<template v-else-if="answer">
+				<Visualization :answer="answer"
+					:spec="asked"
+					:tipo="state.visualizar.tipo" />
+
+				<form class="estadistica-builder__save" @submit.prevent="save">
+					<label class="estadistica-field">
+						<span>Título de la pregunta</span>
+						<input v-model="title" type="text" :maxlength="MAX_TITLE">
+					</label>
+					<NcButton type="submit" :disabled="title.trim() === '' || saving">
+						Guardar como pregunta
+					</NcButton>
+					<p class="estadistica-builder__hint">
+						Lo que guarde queda visible para todo el personal.
+					</p>
+				</form>
+				<NcNoteCard v-if="saved" type="success">
+					«{{ saved }}» quedó guardada en Preguntas.
+				</NcNoteCard>
+				<NcNoteCard v-if="saveFailed" type="error">
+					{{ saveFailed }}
+				</NcNoteCard>
+			</template>
 		</template>
 	</div>
 </template>
@@ -188,10 +212,10 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import SourcesPanel from './SourcesPanel.vue'
 import Visualization from './Visualization.vue'
 import { formatValue } from '../charts.js'
-import { ocsMessageFrom, warnError } from '../api.js'
+import { ocsMessageFrom, ocsPost, warnError } from '../api.js'
 import {
 	CHART_TYPES, consult, DIMENSIONS, dimensionName, freshFilters, hojaOf, initialState, loadSource, loadSources,
-	MAX_DIMENSIONS, metricFor, missing, monthsOf, seccionOf, seriesCount, specFrom, TRAITS,
+	MAX_DIMENSIONS, MAX_TITLE, metricFor, missing, monthsOf, seccionOf, seriesCount, specFrom, TRAITS,
 } from '../query.js'
 
 export default {
@@ -218,6 +242,11 @@ export default {
 			asked: null,
 			answer: null,
 			askFailed: '',
+			MAX_TITLE,
+			title: '',
+			saving: false,
+			saved: '',
+			saveFailed: '',
 		}
 	},
 
@@ -368,6 +397,8 @@ export default {
 			const spec = specFrom(this.state, { configured: this.configured, catalogo: this.catalogo })
 			this.asking = true
 			this.askFailed = ''
+			this.saved = ''
+			this.saveFailed = ''
 			try {
 				this.answer = await consult(spec)
 				this.asked = spec
@@ -376,6 +407,23 @@ export default {
 				this.askFailed = await ocsMessageFrom(error, 'No se pudo hacer la consulta. Revise la conexión e inténtelo de nuevo.')
 			} finally {
 				this.asking = false
+			}
+		},
+
+		/** The answer on screen as a pregunta: the spec that was asked, drawn as it is now shown. */
+		async save() {
+			this.saving = true
+			this.saved = ''
+			this.saveFailed = ''
+			try {
+				const pregunta = await ocsPost('preguntas', { titulo: this.title, consulta: this.asked, tipo: this.state.visualizar.tipo })
+				this.saved = pregunta.titulo
+				this.title = ''
+			} catch (error) {
+				warnError('could not save the pregunta', error)
+				this.saveFailed = await ocsMessageFrom(error, 'No se pudo guardar la pregunta. Inténtelo de nuevo.')
+			} finally {
+				this.saving = false
 			}
 		},
 	},
@@ -418,6 +466,13 @@ export default {
 
 .estadistica-builder__hint {
 	color: var(--color-text-maxcontrast);
+}
+
+.estadistica-builder__save {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
 }
 
 .estadistica-builder__ask {

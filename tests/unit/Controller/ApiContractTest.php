@@ -7,7 +7,9 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Tests\Unit\Controller;
 
 use OCA\Estadistica\Controller\ApiController;
+use OCA\Estadistica\Db\Dashboard;
 use OCA\Estadistica\Db\IngestState;
+use OCA\Estadistica\Db\Question;
 use OCA\Estadistica\Query\QueryCompiler;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
@@ -17,12 +19,13 @@ use ReflectionMethod;
 use ReflectionParameter;
 
 /**
- * The schema↔served-payload drift test (farmacia's L2-10), for the fuentes
- * and the consultas (acceptance a14): openapi.json names exactly the keys the
- * routes serve. The spec is generated from ApiController's @return docblocks
- * and the served shape is read from the shapers that build it (Sources,
- * QueryCompiler::points, QueryExecutor::label and ::response), so this test
- * holds the two together without either copying the other.
+ * The schema↔served-payload drift test (farmacia's L2-10), for the fuentes,
+ * the consultas, the preguntas and the tableros (acceptance a14): openapi.json
+ * names exactly the keys the routes serve. The spec is generated from
+ * ApiController's @return docblocks and the served shape is read from the
+ * shapers that build it (Sources, QueryCompiler::points, QueryExecutor::label
+ * and ::response, Question::toClient, Dashboard::toClient), so this test holds
+ * the two together without either copying the other.
  */
 final class ApiContractTest extends TestCase {
 	private const FUENTE = ['id', 'nombre', 'origen', 'fecha_corte', 'filas', 'estado', 'anios'];
@@ -39,9 +42,19 @@ final class ApiContractTest extends TestCase {
 
 	private const ETIQUETA = ['codigo', 'hoja', 'seccion', 'prestacion', 'columnas', 'nota'];
 
+	private const PREGUNTA = ['id', 'titulo', 'consulta', 'tipo', 'autor', 'autor_nombre', 'actualizada', 'editable'];
+
+	private const TABLERO = ['id', 'titulo', 'tarjetas', 'autor', 'autor_nombre', 'actualizado', 'editable'];
+
+	private const TARJETA = ['pregunta', 'ancho'];
+
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 
 	private const CONSULTAS = '/ocs/v2.php/apps/estadistica/api/v1/consultas';
+
+	private const PREGUNTAS = '/ocs/v2.php/apps/estadistica/api/v1/preguntas';
+
+	private const TABLEROS = '/ocs/v2.php/apps/estadistica/api/v1/tableros';
 
 	/** @return array<string, mixed> */
 	private static function spec(): array {
@@ -57,6 +70,27 @@ final class ApiContractTest extends TestCase {
 		self::assertIsArray($data, "the $path " . strtoupper($verb) . " $status response is gone from the spec");
 
 		return $data;
+	}
+
+	/** @return array{0: list<string>, 1: list<string>} the body parameters a route's spec names, in order, and the required ones */
+	private static function body(string $path, string $verb): array {
+		$body = self::spec()['paths'][$path][$verb]['requestBody']['content']['application/json']['schema'] ?? null;
+		self::assertIsArray($body, "the $path " . strtoupper($verb) . ' request body is gone from the spec');
+
+		return [array_keys($body['properties']), $body['required'] ?? []];
+	}
+
+	/**
+	 * @param list<string> $path the parameters the route takes from its path
+	 * @return list<string> a controller method's parameters, less those in the path
+	 */
+	private static function parameters(string $method, array $path = []): array {
+		$names = array_map(
+			static fn (ReflectionParameter $parameter): string => $parameter->getName(),
+			(new ReflectionMethod(ApiController::class, $method))->getParameters(),
+		);
+
+		return array_values(array_diff($names, $path));
 	}
 
 	public function testEveryFuenteServesTheSameKeys(): void {
@@ -138,5 +172,52 @@ final class ApiContractTest extends TestCase {
 		self::assertSame(['consulta', 'establecimiento'], $parameters);
 		self::assertSame($parameters, array_keys($body['properties']));
 		self::assertSame(['consulta'], $body['required']);
+	}
+
+	public function testPreguntasAndTablerosServeTheSameKeys(): void {
+		$question = new Question();
+		$question->setId(7);
+		$question->setTitle('Controles');
+		$question->setSpec('{"fuente":"rem-a"}');
+		$question->setChart('barra');
+		$question->setOwner('ana');
+		$question->setUpdatedAt(1);
+		$dashboard = new Dashboard();
+		$dashboard->setId(3);
+		$dashboard->setTitle('Metas');
+		$dashboard->setLayout('[{"pregunta":7,"ancho":2}]');
+		$dashboard->setOwner('ana');
+		$dashboard->setUpdatedAt(1);
+
+		$pregunta = $question->toClient('Ana', true);
+		$tablero = $dashboard->toClient('Ana', false);
+
+		self::assertSame(self::PREGUNTA, array_keys($pregunta), 'the served key set moved — update the @return docblock and regenerate the spec');
+		self::assertSame(['fuente' => 'rem-a'], $pregunta['consulta'], 'the consulta is served as the object it was sent as');
+		self::assertSame(self::TABLERO, array_keys($tablero));
+		self::assertSame(self::TARJETA, array_keys($tablero['tarjetas'][0]));
+	}
+
+	public function testTheSpecNamesExactlyThePreguntaAndTableroKeys(): void {
+		foreach ([[self::PREGUNTAS, self::PREGUNTA], [self::TABLEROS, self::TABLERO]] as [$path, $keys]) {
+			self::assertSame($keys, array_keys(self::data($path)['items']['properties']), "GET $path");
+			self::assertSame($keys, array_keys(self::data($path . '/{id}')['properties']), "GET $path/{id}");
+			self::assertSame($keys, array_keys(self::data($path, 'post', '201')['properties']), "POST $path");
+			self::assertSame($keys, array_keys(self::data($path . '/{id}', 'put')['properties']), "PUT $path/{id}");
+		}
+		self::assertSame(self::TARJETA, array_keys(self::data(self::TABLEROS)['items']['properties']['tarjetas']['items']['properties']));
+	}
+
+	/** The bodies a consumer sends are exactly the controllers' parameters, the path's id aside. */
+	public function testThePreguntaAndTableroBodiesAreTheControllersParameters(): void {
+		self::assertSame([['titulo', 'consulta', 'tipo'], ['titulo', 'consulta']], self::body(self::PREGUNTAS, 'post'));
+		self::assertSame(self::parameters('crearPregunta'), self::body(self::PREGUNTAS, 'post')[0]);
+		self::assertSame([['titulo', 'consulta', 'tipo'], []], self::body(self::PREGUNTAS . '/{id}', 'put'));
+		self::assertSame(self::parameters('editarPregunta', ['id']), self::body(self::PREGUNTAS . '/{id}', 'put')[0]);
+
+		self::assertSame([['titulo', 'tarjetas'], ['titulo']], self::body(self::TABLEROS, 'post'));
+		self::assertSame(self::parameters('crearTablero'), self::body(self::TABLEROS, 'post')[0]);
+		self::assertSame([['titulo', 'tarjetas'], []], self::body(self::TABLEROS . '/{id}', 'put'));
+		self::assertSame(self::parameters('editarTablero', ['id']), self::body(self::TABLEROS . '/{id}', 'put')[0]);
 	}
 }

@@ -178,6 +178,30 @@ describe('QueryBuilder — Datos → Filtrar → Resumir → Visualizar (a7, a22
 		wrapper.unmount()
 	})
 
+	it('saves the answer on screen as a pregunta, warning it is visible to all the staff (a8, a22)', async () => {
+		const wrapper = await builder()
+		wrapper.vm.chooseHoja('A03')
+		wrapper.vm.state.filtrar.columnas = ['col08']
+		axios.post.mockReturnValueOnce(ok({ series: { local: [], nacional: [], pares: null }, etiquetas: { local: '900001', pares: null, codigos: [] }, fuente: FUENTES[0] }))
+		await wrapper.vm.ask()
+		await flushPromises()
+		const asked = axios.post.mock.calls[0][1].consulta
+		expect(wrapper.text()).toContain('Lo que guarde queda visible para todo el personal.')
+
+		// What was asked is saved, even if a step changed since.
+		wrapper.vm.state.filtrar.columnas = ['col09']
+		wrapper.vm.state.visualizar.tipo = 'tabla'
+		await wrapper.find('form.estadistica-builder__save input[type="text"]').setValue('Evaluaciones de 20 a 24 años')
+		axios.post.mockImplementationOnce((url, body) => ok({ id: 5, titulo: body.titulo, consulta: body.consulta, tipo: body.tipo }))
+		await wrapper.find('form.estadistica-builder__save').trigger('submit')
+		await flushPromises()
+
+		expect(axios.post).toHaveBeenLastCalledWith(`${OCS}/preguntas`, { titulo: 'Evaluaciones de 20 a 24 años', consulta: asked, tipo: 'tabla' })
+		expect(asked.filtros.columnas).toStrictEqual(['col08'])
+		expect(wrapper.text()).toContain('«Evaluaciones de 20 a 24 años» quedó guardada en Preguntas.')
+		wrapper.unmount()
+	})
+
 	it('says there are no REM figures yet when none is loaded', async () => {
 		serve(FUENTES.map((fuente) => ({ ...fuente, filas: 0, anios: [] })))
 		const wrapper = await builder()

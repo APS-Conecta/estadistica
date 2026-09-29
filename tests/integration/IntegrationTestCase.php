@@ -7,26 +7,33 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Tests\Integration;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Db\DashboardMapper;
 use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Db\QuestionMapper;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\SavedContent;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
+use OCP\IGroupManager;
 use OCP\ITempManager;
 use OCP\IUser;
+use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Server;
+use OCP\Settings\IManager;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Shared plumbing for tests against the throwaway instance's real PostgreSQL
  * (make deps && make instance-up, then make integration): app config written
- * the way occ writes it, and the drop door driven the way the FilePicker
- * drives it. Each test class cleans up the rows it makes.
+ * the way occ writes it, the drop door driven the way the FilePicker drives
+ * it, and saved content as one person saves it. Each test class cleans up the
+ * rows it makes.
  */
 abstract class IntegrationTestCase extends TestCase {
 	/** The instance's occ, beside the lib/base.php the bootstrap requires. */
@@ -58,6 +65,25 @@ abstract class IntegrationTestCase extends TestCase {
 			Server::get(YearWindow::class),
 			Server::get(IngestStateMapper::class),
 			Server::get(Register::class),
+		);
+	}
+
+	/**
+	 * Preguntas and tableros as $uid saves and reads them. The session is the
+	 * one thing stubbed: who administers Estadística is the instance's own
+	 * answer (its admin group and its delegations). A new instance per call, so
+	 * that answer is asked afresh.
+	 */
+	final protected function savedFor(string $uid): SavedContent {
+		return new SavedContent(
+			Server::get(QuestionMapper::class),
+			Server::get(DashboardMapper::class),
+			$this->sessionOf($uid),
+			Server::get(IUserManager::class),
+			Server::get(IGroupManager::class),
+			Server::get(IManager::class),
+			Server::get(ITimeFactory::class),
+			Server::get(YearWindow::class),
 		);
 	}
 
@@ -110,7 +136,7 @@ abstract class IntegrationTestCase extends TestCase {
 	}
 
 	/** The instance's occ, as www-data runs it; a failure fails the test with occ's own output. */
-	private function occ(string ...$arguments): void {
+	final protected function occ(string ...$arguments): void {
 		exec(
 			'php ' . escapeshellarg(self::OCC) . ' ' . implode(' ', array_map('escapeshellarg', $arguments)) . ' 2>&1',
 			$output,
