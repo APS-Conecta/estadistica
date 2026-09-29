@@ -15,5 +15,6 @@ return [
 		['name' => 'admin#window', 'url' => '/admin/window', 'verb' => 'PUT'],
 		['name' => 'admin#drop', 'url' => '/admin/drop', 'verb' => 'POST'],
 		['name' => 'admin#ingests', 'url' => '/admin/ingests', 'verb' => 'GET'],
+		['name' => 'admin#piv', 'url' => '/admin/piv', 'verb' => 'PUT'],
 	],
 ];

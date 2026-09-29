@@ -10,6 +10,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Db\DashboardMapper;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Db\QuestionMapper;
+use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Service\DroppedFiles;
 use OCA\Estadistica\Service\SavedContent;
@@ -65,6 +66,7 @@ abstract class IntegrationTestCase extends TestCase {
 			Server::get(YearWindow::class),
 			Server::get(IngestStateMapper::class),
 			Server::get(Register::class),
+			Server::get(PivImporter::class),
 		);
 	}
 

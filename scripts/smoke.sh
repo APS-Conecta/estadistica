@@ -12,9 +12,12 @@
 #   - the REM job is registered by Nextcloud's cron (a18), the ingest state is
 #     delegated like every admin action, and the drop door resolves a path in
 #     the caller's own Files and refuses a non-zip in Spanish (a3, a4)
+#   - the PIV: a FONASA CSV that adds a RUT column is refused whole through
+#     the same door, and typing the establishment's figures is delegated:
+#     refused in Spanish with no establishment, 403 to an outsider (a10, a11)
 #   - the OCS surface answers every user, attribute routes and all: the
-#     fuentes list, a Spanish 400 for a year DEIS never published, a 404 for
-#     a fuente that does not exist (a14)
+#     fuentes list with the PIV from FONASA, a Spanish 400 for a year DEIS
+#     never published, a 404 for a fuente that does not exist (a14)
 #   - a consulta posted as JSON is answered in the OCS envelope, and a
 #     tampered spec or DEIS code is a Spanish 422, never a SQL error (a14, a16)
 #   - preguntas and tableros: any user saves one, a second user reads it and
@@ -225,6 +228,41 @@ is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_co
 	"a user outside the delegated group cannot drop a file (403)" \
 	"a user outside the delegated group was NOT refused the drop with 403"
 
+# --- the PIV: FONASA's export through the same door (a10, a11) ---------------
+# A CSV that adds a RUT to FONASA's eleven columns is refused whole: the header
+# lock is what keeps patients' data out (D5). Nothing is stored, so there is
+# nothing to clean up. The dev instance has no establishment, so a delegate's
+# typed figures are refused in Spanish, and an outsider gets core's 403.
+PIV_HEADER='"PERIODO","SERVICIO_SALUD","REGIÓN","COMUNA","COD_CENTRO","NOMBRE_CENTRO","DEPENDENCIA_ADMINISTRATIVA","TRAMO_FONASA","EDAD_TRAMO","SEXO","TOTAL_INSCRITOS","RUT"'
+is "$(web_as "$DELEGATE" "$DELEGATE_TOKEN" -o /dev/null -w '%{http_code}' \
+	-X PUT --data-binary "$PIV_HEADER" "$BASE/remote.php/dav/files/$DELEGATE/inscritos.csv")" '201' \
+	"a CSV lands in the delegate's Files (WebDAV 201)" \
+	"could NOT put the CSV in the delegate's Files"
+
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" -X POST -d 'path=/inscritos.csv' "$DROP"
+is "$CODE" '422' \
+	"a FONASA CSV with a RUT column is refused with 422" \
+	"a FONASA CSV with a RUT column was NOT refused with 422"
+expect "$BODY" 'Sobra: RUT' \
+	"the refusal names the column that is not FONASA's" \
+	"the PIV refusal does NOT name the RUT column"
+
+PIV="$BASE/index.php/apps/$APP/admin/piv"
+CELLS="{\"year\":$((YEAR - 1)),\"cells\":[{\"edad\":0,\"sexo\":\"M\",\"inscritos\":1}]}"
+
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -X PUT --data "$CELLS" "$PIV"
+is "$CODE" '422' \
+	"a delegate's typed PIV is refused with 422 while no establishment is configured" \
+	"a typed PIV with no establishment configured was NOT refused with 422"
+expect "$BODY" 'no se ha configurado el establecimiento' \
+	"the refusal is the Spanish sentence" \
+	"the typed-PIV refusal does NOT carry the Spanish sentence"
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -o /dev/null -w '%{http_code}' \
+	-X PUT --data "$CELLS" "$PIV")" '403' \
+	"a user outside the delegated group cannot type PIV figures (403)" \
+	"a user outside the delegated group was NOT refused the PIV with 403"
+
 # --- the OCS surface: every user reads the fuentes (a14) ----------------------
 # The outsider is in no delegated group: reading is everyone's (D6). The routes
 # exist only if ApiController's attributes registered them, which is the
@@ -242,6 +280,12 @@ expect "$BODY" '"status":"ok"' \
 expect "$BODY" '"id":"establecimientos"' \
 	"the fuentes list REM and the establishments" \
 	"the fuentes list does NOT carry the establishments"
+expect "$BODY" '"id":"piv"' \
+	"the fuentes list the PIV" \
+	"the fuentes list does NOT carry the PIV"
+expect "$BODY" '"origen":"FONASA"' \
+	"the PIV names FONASA as its origen" \
+	"the PIV does NOT name FONASA as its origen"
 
 fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" "$FUENTES/rem-a?anio=1990"
 is "$CODE" '400' \

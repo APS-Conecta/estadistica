@@ -103,10 +103,25 @@ final class ApiContractTest extends TestCase {
 
 		$rem = Sources::rem('rem-a', [$state], [$dictionary]);
 		$register = Sources::register(['origin' => null, 'year' => null, 'loadedAt' => null, 'rows' => 0]);
+		$piv = Sources::piv([['corte' => '2098-12-31', 'rows' => 3, 'establishments' => 2, 'inscritos' => 9, 'loadedAt' => 1]]);
 
 		self::assertSame(self::FUENTE, array_keys($rem), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::ANIO, array_keys($rem['anios'][0]));
 		self::assertSame(self::FUENTE, array_keys($register), 'every fuente has one shape');
+		self::assertSame(self::FUENTE, array_keys($piv), 'every fuente has one shape');
+	}
+
+	/** a14: each fuente names its publisher, and says up to when. */
+	public function testEachFuenteNamesItsPublisher(): void {
+		$piv = Sources::piv([
+			['corte' => '2098-12-31', 'rows' => 3, 'establishments' => 2, 'inscritos' => 9, 'loadedAt' => 1],
+			['corte' => '2097-12-31', 'rows' => 4, 'establishments' => 2, 'inscritos' => 8, 'loadedAt' => 1],
+		]);
+
+		self::assertSame('datos públicos DEIS', Sources::rem('rem-p', [], [])['origen']);
+		self::assertSame('datos públicos DEIS', Sources::register(['origin' => null, 'year' => null, 'loadedAt' => null, 'rows' => 0])['origen']);
+		self::assertSame(['FONASA', '2098-12-31', 7, 'ok'], [$piv['origen'], $piv['fecha_corte'], $piv['filas'], $piv['estado']]);
+		self::assertSame([null, 0, 'sin datos'], array_values(array_intersect_key(Sources::piv([]), array_flip(['fecha_corte', 'filas', 'estado']))));
 	}
 
 	public function testTheSpecNamesExactlyTheServedKeys(): void {

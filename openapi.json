@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "estadistica",
-        "version": "0.0.7",
+        "version": "0.0.8",
         "description": "Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias",
         "license": {
             "name": "AGPL-3.0-or-later"
@@ -50,7 +50,7 @@
         "/ocs/v2.php/apps/estadistica/api/v1/fuentes": {
             "get": {
                 "operationId": "api-fuentes",
-                "summary": "Every fuente this install holds: REM Serie A and P, year by year, and the establishments. Each says where it comes from (origen: datos públicos DEIS), up to when (fecha_corte: YYYY-MM for REM), how many rows it holds, and whether it is whole (estado: ok, incompleto, sin datos). A REM year also says how many of its códigos no dictionary explains (sin_descripcion) and whose dictionary labels it (etiquetas_de).",
+                "summary": "Every fuente this install holds: REM Serie A and P, year by year, the establishments, and FONASA's Población Inscrita Validada (piv). Each says where it comes from (origen: datos públicos DEIS, or FONASA), up to when (fecha_corte: YYYY-MM for REM, the newest corte's YYYY-MM-DD for the PIV), how many rows it holds, and whether it is whole (estado: ok, incompleto, sin datos). A REM year also says how many of its códigos no dictionary explains (sin_descripcion) and whose dictionary labels it (etiquetas_de).",
                 "tags": [
                     "api"
                 ],
@@ -76,7 +76,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "The fuentes, REM Serie A, REM Serie P, then the establishments",
+                        "description": "The fuentes, REM Serie A, REM Serie P, the establishments, then the PIV",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -213,7 +213,7 @@
         "/ocs/v2.php/apps/estadistica/api/v1/fuentes/{id}": {
             "get": {
                 "operationId": "api-fuente",
-                "summary": "One fuente, with its catálogo. For rem-a and rem-p, one year's hojas, secciones, prestaciones (código and label) and columns (col01…col50 and label), from that year's DICCIONARIO CODIGOS or, for a year without one, from the nearest later year's (etiquetas_de). For establecimientos, the values a peer group is chosen from, each with how many establishments carry it.",
+                "summary": "One fuente, with its catálogo. For rem-a and rem-p, one year's hojas, secciones, prestaciones (código and label) and columns (col01…col50 and label), from that year's DICCIONARIO CODIGOS or, for a year without one, from the nearest later year's (etiquetas_de). For establecimientos, the values a peer group is chosen from, each with how many establishments carry it. For piv, FONASA's cortes, newest first, each with how many establishments and inscritos it holds.",
                 "description": "An anio outside 2009 to the current year cannot be a REM year, and is refused rather than answered with an empty catálogo (epi's blank lesson: an empty answer is only for a question that was understood).",
                 "tags": [
                     "api"
@@ -230,7 +230,7 @@
                     {
                         "name": "id",
                         "in": "path",
-                        "description": "rem-a, rem-p or establecimientos",
+                        "description": "rem-a, rem-p, establecimientos or piv",
                         "required": true,
                         "schema": {
                             "type": "string",

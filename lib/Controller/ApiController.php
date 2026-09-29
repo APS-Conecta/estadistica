@@ -74,16 +74,18 @@ class ApiController extends OCSController {
 	}
 
 	/**
-	 * Every fuente this install holds: REM Serie A and P, year by year, and the
-	 * establishments. Each says where it comes from (origen: datos públicos
-	 * DEIS), up to when (fecha_corte: YYYY-MM for REM), how many rows it holds,
-	 * and whether it is whole (estado: ok, incompleto, sin datos). A REM year
-	 * also says how many of its códigos no dictionary explains
-	 * (sin_descripcion) and whose dictionary labels it (etiquetas_de).
+	 * Every fuente this install holds: REM Serie A and P, year by year, the
+	 * establishments, and FONASA's Población Inscrita Validada (piv). Each says
+	 * where it comes from (origen: datos públicos DEIS, or FONASA), up to when
+	 * (fecha_corte: YYYY-MM for REM, the newest corte's YYYY-MM-DD for the
+	 * PIV), how many rows it holds, and whether it is whole (estado: ok,
+	 * incompleto, sin datos). A REM year also says how many of its códigos no
+	 * dictionary explains (sin_descripcion) and whose dictionary labels it
+	 * (etiquetas_de).
 	 *
 	 * @return DataResponse<Http::STATUS_OK, list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, array{}>
 	 *
-	 * 200: The fuentes, REM Serie A, REM Serie P, then the establishments
+	 * 200: The fuentes, REM Serie A, REM Serie P, the establishments, then the PIV
 	 */
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
@@ -98,13 +100,14 @@ class ApiController extends OCSController {
 	 * label), from that year's DICCIONARIO CODIGOS or, for a year without one,
 	 * from the nearest later year's (etiquetas_de). For establecimientos, the
 	 * values a peer group is chosen from, each with how many establishments
-	 * carry it.
+	 * carry it. For piv, FONASA's cortes, newest first, each with how many
+	 * establishments and inscritos it holds.
 	 *
 	 * An anio outside 2009 to the current year cannot be a REM year, and is
 	 * refused rather than answered with an empty catálogo (epi's blank lesson:
 	 * an empty answer is only for a question that was understood).
 	 *
-	 * @param string $id rem-a, rem-p or establecimientos
+	 * @param string $id rem-a, rem-p, establecimientos or piv
 	 * @param ?int $anio for REM, the year whose catálogo to read; the newest loaded year when omitted
 	 * @return DataResponse<Http::STATUS_OK, array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>, catalogo: array<string, mixed>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *

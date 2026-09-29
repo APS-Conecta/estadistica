@@ -11,6 +11,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Service\DroppedFiles;
@@ -47,6 +48,7 @@ class AdminController extends Controller {
 		private DeisRepository $deis,
 		private Catalog $catalog,
 		private Register $register,
+		private PivImporter $piv,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -74,6 +76,8 @@ class AdminController extends Controller {
 	 *   the window. A wrong file is refused in this request, in Spanish. A
 	 *   right one loads in the background, one serie per hourly run (RemJob).
 	 * - A Base de Establecimientos loads now.
+	 * - FONASA's «Inscritos APS» CSV loads now. Any other header is refused
+	 *   whole, with nothing stored (a11, docs/adr/0007).
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function drop(string $path = ''): JSONResponse {
@@ -87,7 +91,8 @@ class AdminController extends Controller {
 	 * «sin descripción» (a6). Also the Base de Establecimientos, when DEIS was
 	 * last checked, and what that check could not do. A failure is never
 	 * silent (a4): a check that cannot reach DEIS must not read as a quiet day
-	 * (docs/adr/0005).
+	 * (docs/adr/0005). And the PIV: FONASA's cortes, and this install's
+	 * establishment's figures, FONASA's beside the ones typed here.
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function ingests(): JSONResponse {
@@ -96,6 +101,25 @@ class AdminController extends Controller {
 			'dictionaries' => $this->catalog->status(),
 			'register' => $this->register->status(),
 			'deis' => $this->deis->status(),
+			'piv' => $this->piv->status(),
 		]);
+	}
+
+	/**
+	 * This install's establishment's inscritos at 31 December of $year, as an
+	 * admin typed them. They replace what was typed before for that corte, and
+	 * a cell left out goes back to FONASA's figure. They count for this
+	 * establishment's own series only; the country and the peer groups stay
+	 * FONASA's (owner, Slice 8, docs/adr/0007). Refused while no establishment
+	 * is configured.
+	 *
+	 * @param list<mixed> $cells each {edad, sexo, inscritos}
+	 */
+	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
+	public function piv(int $year = 0, array $cells = []): JSONResponse {
+		return $this->attempt(function () use ($year, $cells): array {
+			$this->piv->enter($year, $cells);
+			return $this->piv->status();
+		});
 	}
 }

@@ -10,6 +10,7 @@ use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCP\AppFramework\Db\DoesNotExistException;
 
@@ -19,14 +20,17 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * figure, and suite apps and M3 read them over OCS.
  *
  * M1's fuentes are system fuentes with fixed ids (M2 contract notes): REM
- * Serie A and P, and the establishments. The origen is the publisher, whatever
- * carried the file here: a dropped zip holds DEIS's figures all the same.
+ * Serie A and P, the establishments, and FONASA's Población Inscrita Validada.
+ * The origen is the publisher, whatever carried the file here: a dropped zip
+ * holds DEIS's figures all the same. A PIV figure an admin typed is not
+ * FONASA's, and no fuente counts it.
  *
  * The payload is the public contract, so its keys are Spanish (the Naming
  * decision); the shapers are pure, so ApiContractTest reads the served keys
  * from them.
  *
  * @psalm-import-type Status from Catalog
+ * @psalm-import-type Corte from PivImporter
  * @psalm-type Anio = array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}
  * @psalm-type Fuente = array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<Anio>}
  */
@@ -37,6 +41,10 @@ class Sources {
 	public const REM = ['rem-a' => 'A', 'rem-p' => 'P'];
 
 	public const REGISTER = 'establecimientos';
+
+	public const PIV = 'piv';
+
+	public const ORIGIN_FONASA = 'FONASA';
 
 	public const OK = 'ok';
 
@@ -49,6 +57,7 @@ class Sources {
 		private Catalog $catalog,
 		private Register $register,
 		private YearWindow $window,
+		private PivImporter $piv,
 	) {
 	}
 
@@ -60,13 +69,15 @@ class Sources {
 		return [
 			...array_map(static fn (string $id): array => self::rem($id, $states, $dictionaries), array_keys(self::REM)),
 			self::register($this->register->status()),
+			self::piv($this->piv->cortes()),
 		];
 	}
 
 	/**
 	 * One fuente with its catálogo: for REM, one year's hojas, secciones,
 	 * prestaciones and columns (the newest loaded year when none is asked
-	 * for); for the establishments, the values a peer group is chosen from.
+	 * for); for the establishments, the values a peer group is chosen from;
+	 * for the PIV, FONASA's cortes.
 	 *
 	 * @return Fuente&array{catalogo: array<string, mixed>}
 	 * @throws DoesNotExistException no fuente has that id
@@ -75,6 +86,15 @@ class Sources {
 	public function one(string $id, ?int $anio): array {
 		if ($id === self::REGISTER) {
 			return self::register($this->register->status()) + ['catalogo' => $this->register->dimensions()];
+		}
+		if ($id === self::PIV) {
+			$cortes = $this->piv->cortes();
+
+			return self::piv($cortes) + ['catalogo' => ['cortes' => array_map(static fn (array $corte): array => [
+				'corte' => $corte['corte'],
+				'establecimientos' => $corte['establishments'],
+				'inscritos' => $corte['inscritos'],
+			], $cortes)]];
 		}
 		if (!isset(self::REM[$id])) {
 			throw new DoesNotExistException(sprintf('No hay una fuente «%s».', $id));
@@ -164,6 +184,25 @@ class Sources {
 			},
 			'filas' => $status['rows'],
 			'estado' => $status['rows'] > 0 ? self::OK : self::EMPTY,
+			'anios' => [],
+		];
+	}
+
+	/**
+	 * FONASA's Población Inscrita Validada as a fuente. Its fecha de corte is
+	 * the newest corte a FONASA file brought (YYYY-MM-DD).
+	 *
+	 * @param list<Corte> $cortes newest first (PivImporter::cortes)
+	 * @return Fuente
+	 */
+	public static function piv(array $cortes): array {
+		return [
+			'id' => self::PIV,
+			'nombre' => 'Población inscrita validada (FONASA)',
+			'origen' => self::ORIGIN_FONASA,
+			'fecha_corte' => $cortes[0]['corte'] ?? null,
+			'filas' => array_sum(array_column($cortes, 'rows')),
+			'estado' => $cortes === [] ? self::EMPTY : self::OK,
 			'anios' => [],
 		];
 	}

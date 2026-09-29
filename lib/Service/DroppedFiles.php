@@ -10,6 +10,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Register\RegisterParser;
 use OCA\Estadistica\Rem\LocalRange;
@@ -31,10 +32,11 @@ use OCP\IUserSession;
 use OCP\Lock\LockedException;
 
 /**
- * The admin's door for a file: a DEIS REM zip, or DEIS's Base de
- * Establecimientos. An install without internet has no other way to get
- * them. The admin picks the file in Files with the platform's picker, and it
- * is handed over by path.
+ * The admin's door for a file: a DEIS REM zip, DEIS's Base de
+ * Establecimientos, or FONASA's «Inscritos APS» CSV. An install without
+ * internet has no other way to get the first two, and FONASA offers no file a
+ * program can fetch (docs/adr/0007). The admin picks the file in Files with
+ * the platform's picker, and it is handed over by path.
  *
  * A REM zip is kept in the app's own storage until the job has loaded it. The
  * job has no session, so it cannot read anyone's Files; IAppData needs none
@@ -52,6 +54,10 @@ use OCP\Lock\LockedException;
  * A workbook is a zip too: one with no Serie A or P is read as the Base de
  * Establecimientos, and refused in Spanish if it is not one either. The year
  * comes from the rows, not the file name, which may say anything.
+ *
+ * Any other file that is not a zip is handed to FONASA's reader
+ * (PivImporter), loaded in the request (22 MB in 2025). The reader's header
+ * lock refuses, in Spanish, anything that is not FONASA's CSV.
  *
  * A drop queues its (año, serie) pairs only AFTER it is stored, so the job
  * never meets a queued pair whose file has not arrived.
@@ -82,21 +88,26 @@ class DroppedFiles {
 		private YearWindow $window,
 		private IngestStateMapper $states,
 		private Register $register,
+		private PivImporter $piv,
 	) {
 		$this->appData = $appDataFactory->get(Application::APP_ID);
 	}
 
 	/**
 	 * Takes the file at $path in the caller's own Files: queues a REM zip's
-	 * series, or loads a Base de Establecimientos.
+	 * series, or loads a Base de Establecimientos or FONASA's CSV.
 	 *
-	 * @return array{anio: int, series: list<string>}|array{establecimientos: int}
+	 * @return array{anio: int, series: list<string>}|array{establecimientos: int}|array{piv: array{cortes: list<string>, establishments: int, inscritos: int, unknownAge: int}}
 	 * @throws RefusedException
 	 */
 	public function accept(string $path): array {
 		$local = $this->localCopy($this->open($path));
 
 		try {
+			if (!self::isZip($local)) {
+				return ['piv' => $this->piv->import($local)];
+			}
+
 			$range = new LocalRange($local);
 			$zip = ZipDirectory::read($range);
 			$series = $zip->series();
@@ -126,6 +137,16 @@ class DroppedFiles {
 		}
 
 		return ['anio' => $year, 'series' => $series];
+	}
+
+	/**
+	 * A zip begins with a local file header or, when empty, with its end
+	 * record. A CSV never does.
+	 */
+	private static function isZip(string $local): bool {
+		$head = (string)file_get_contents($local, false, null, 0, 4);
+
+		return $head === "PK\x03\x04" || $head === "PK\x05\x06";
 	}
 
 	/**

@@ -230,7 +230,7 @@ class EnrichmentTest extends IntegrationTestCase {
 		$sources = Server::get(Sources::class);
 
 		$fuentes = array_column($sources->all(), null, 'id');
-		self::assertSame(['rem-a', 'rem-p', 'establecimientos'], array_keys($fuentes));
+		self::assertSame(['rem-a', 'rem-p', 'establecimientos', 'piv'], array_keys($fuentes));
 		self::assertSame(
 			['anio' => 2099, 'fecha_corte' => '2099-02', 'filas' => 12, 'estado' => 'ok', 'sin_descripcion' => 1, 'etiquetas_de' => 2099],
 			$fuentes['rem-a']['anios'][0],
