@@ -73,6 +73,71 @@ describe('AdminSettings — what the ingest state says (a6)', () => {
 	})
 })
 
+describe('AdminSettings — where each year came from, and narrowing the window', () => {
+	afterEach(() => {
+		vi.resetAllMocks()
+	})
+
+	it('says whether each (año, serie) came from DEIS or from a file loaded by hand', async () => {
+		const wrapper = await section({
+			ingests: [ingest(2026, 10), { ...ingest(2025, 10), origin: 'archivo' }, { ...ingest(2024, 0), origin: '' }],
+			dictionaries: [],
+			register: { origin: null, year: null, loadedAt: null, rows: 0 },
+			deis,
+		})
+
+		expect(wrapper.findAll('thead th').map((th) => th.text())).toContain('Origen')
+		const rows = wrapper.findAll('tbody tr').map((row) => row.text())
+		expect(rows[0]).toContain('DEIS')
+		expect(rows[1]).toContain('Archivo cargado a mano')
+		expect(rows[2]).toContain('—')
+		wrapper.unmount()
+	})
+
+	/** The section over 2023–2026, with 2023 Serie P still waiting to load. */
+	async function narrowing() {
+		return section({
+			ingests: [ingest(2026, 10), ingest(2024, 10), ingest(2023, 10), { ...ingest(2023, 0), serie: 'P', pending: true }],
+			dictionaries: [],
+			register: { origin: null, year: null, loadedAt: null, rows: 0 },
+			deis,
+		})
+	}
+
+	it('asks before a later first year lets go of years already loaded or waiting, and saves nothing on no', async () => {
+		const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
+		const wrapper = await narrowing()
+
+		wrapper.vm.firstYear = '2025'
+		await wrapper.vm.save()
+
+		expect(confirm).toHaveBeenCalledTimes(1)
+		expect(confirm.mock.calls[0][0]).toBe('Al empezar en 2025 se quitarán las cifras REM de 2023 y 2024, y lo que espera cargarse de esos años. ¿Guardar igual?')
+		expect(axios.put).not.toHaveBeenCalled()
+		confirm.mockRestore()
+		wrapper.unmount()
+	})
+
+	it('saves once the person confirms, and asks nothing when the window only widens', async () => {
+		const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+		const wrapper = await narrowing()
+		axios.put.mockResolvedValue({ data: { firstYear: 2024, chosen: 2024, earliest: 2009, currentYear: 2026 } })
+		axios.get.mockResolvedValue({ data: { ingests: [], dictionaries: [], register: null, deis, piv: NO_PIV, metas: NO_METAS } })
+
+		wrapper.vm.firstYear = '2024'
+		await wrapper.vm.save()
+		expect(confirm.mock.calls[0][0]).toBe('Al empezar en 2024 se quitarán las cifras REM de 2023, y lo que espera cargarse de esos años. ¿Guardar igual?')
+		expect(axios.put).toHaveBeenCalledTimes(1)
+
+		wrapper.vm.firstYear = '2015'
+		await wrapper.vm.save()
+		expect(confirm).toHaveBeenCalledTimes(1)
+		expect(axios.put).toHaveBeenCalledTimes(2)
+		confirm.mockRestore()
+		wrapper.unmount()
+	})
+})
+
 /** The 2025 corte as PivImporter::cortes() serves it. */
 const CORTE = { corte: '2025-12-31', rows: 35862, establishments: 2091, inscritos: 15788220, loadedAt: 1790000000 }
 

@@ -110,11 +110,14 @@ Arriba, la sección dice qué establecimiento sirve esta instalación. **Se defi
 ### Años de historia nacional
 
 El «Primer año» de cifras nacionales que se guardan, hasta el actual. La pantalla muestra cuánto ocupará en la base
-de datos y en cada respaldo. Presione **«Guardar»**: los años se cargan o se quitan en segundo plano.
+de datos y en cada respaldo. Presione **«Guardar»**: los años se cargan o se quitan en segundo plano. Si el nuevo
+primer año deja fuera años ya cargados, o un ZIP que espera cargarse, la pantalla lo avisa y pide confirmar antes de
+guardar.
 
 ### Cifras REM cargadas
 
-Cada año y serie, con su estado, fecha de corte, filas, códigos «Sin descripción» y último intento. La aplicación
+Cada año y serie, con su origen (el DEIS o un archivo cargado a mano), estado, fecha de corte, filas, códigos «Sin
+descripción» y último intento. La aplicación
 revisa el DEIS una vez al día y carga una serie por hora. **Si una carga falla, sigue mostrando la anterior** y aquí
 queda escrito por qué. Más abajo se ve la Base de Establecimientos en uso.
 

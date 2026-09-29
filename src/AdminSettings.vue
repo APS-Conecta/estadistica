@@ -62,6 +62,7 @@
 					<tr>
 						<th>Año</th>
 						<th>Serie</th>
+						<th>Origen</th>
 						<th>Estado</th>
 						<th>Fecha de corte</th>
 						<th>Filas</th>
@@ -74,6 +75,7 @@
 						<tr>
 							<td>{{ ingest.anio }}</td>
 							<td>{{ ingest.serie }}</td>
+							<td>{{ origin(ingest) }}</td>
 							<td>{{ status(ingest) }}</td>
 							<td>{{ ingest.fechaCorte ?? '—' }}</td>
 							<td>{{ count(ingest.rowCount) }}</td>
@@ -81,7 +83,7 @@
 							<td>{{ when(ingest.lastAttempt) }}</td>
 						</tr>
 						<tr v-if="ingest.lastError || ingest.detail || labelsNote(ingest)">
-							<td colspan="7" class="estadistica-admin__detail">
+							<td colspan="8" class="estadistica-admin__detail">
 								<p v-if="ingest.lastError" class="estadistica-admin__error">
 									{{ ingest.lastError }}
 								</p>
@@ -483,6 +485,10 @@ export default {
 
 	methods: {
 		async save() {
+			const warning = this.narrowingText(Number.parseInt(this.firstYear, 10) || 0)
+			if (warning && !window.confirm(warning)) {
+				return
+			}
 			this.saving = true
 			this.saved = false
 			this.failed = ''
@@ -502,6 +508,26 @@ export default {
 			} finally {
 				this.saving = false
 			}
+		},
+
+		/**
+		 * What a later first year lets go of, once the job acts on it: the years
+		 * before it already loaded, and what of them still waits to load (a ZIP
+		 * picked by hand included). Empty when nothing is let go.
+		 */
+		narrowingText(first) {
+			const leaving = this.ingests.filter((ingest) => ingest.anio < first)
+			if (leaving.length === 0) {
+				return ''
+			}
+			const years = [...new Set(leaving.map((ingest) => ingest.anio))].sort((a, b) => a - b)
+			const listed = years.length === 1 ? String(years[0]) : `${years.slice(0, -1).join(', ')} y ${years.at(-1)}`
+			const waiting = leaving.some((ingest) => ingest.pending) ? ', y lo que espera cargarse de esos años' : ''
+			return `Al empezar en ${first} se quitarán las cifras REM de ${listed}${waiting}. ¿Guardar igual?`
+		},
+
+		origin(ingest) {
+			return { deis: 'DEIS', archivo: 'Archivo cargado a mano' }[ingest.origin] ?? '—'
 		},
 
 		async loadIngests() {
