@@ -13,5 +13,9 @@ return [
 		// #[AuthorizedAdminSetting] on its controller method and by nothing
 		// else — no group check in code (docs/adr/0003).
 		['name' => 'admin#window', 'url' => '/admin/window', 'verb' => 'PUT'],
+		['name' => 'admin#drop', 'url' => '/admin/drop', 'verb' => 'POST'],
+		['name' => 'admin#ingests', 'url' => '/admin/ingests', 'verb' => 'GET'],
+		['name' => 'admin#piv', 'url' => '/admin/piv', 'verb' => 'PUT'],
+		['name' => 'admin#goals', 'url' => '/admin/goals', 'verb' => 'PUT'],
 	],
 ];

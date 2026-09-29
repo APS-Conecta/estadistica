@@ -35,3 +35,23 @@ setter, so every delegate is refused. Core evaluates the attribute as a class-st
 - Who may administer Estadística is instance configuration, like the establishment (gestion ADR-0013).
 - The first delegated write (the history window) lands before any data exists, so later slices build on a mechanism
   already proven end to end.
+
+## Amendment (2026-09-29, Slice 7): who moderates saved content
+
+Preguntas and tableros are not admin writes. Anyone may save one, and a saved one is changed by its creator or by
+«an admin» (FRD FR7, acceptance a8). The owner read «an admin» as whoever administers Estadística. That is a
+Nextcloud admin, or a member of a group this section is delegated to, so the unit that runs Estadística moderates
+what the staff share, and IT is not the only one who can.
+
+- The OCS routes stay `#[NoAdminRequired]`, because saving is everyone's. The check lives in
+  `lib/Service/SavedContent.php`, the one place that changes saved content, and it asks core both questions:
+  `IGroupManager::isAdmin()` and `IManager::getAllAllowedAdminSettings()`, which contains `AdminSettings` for a
+  delegate. No group name enters the app, and the delegation is still the one an admin grants with
+  `occ admin-delegation:add`.
+- This is not the IntraVox anti-pattern the Decision rules out. That pattern is a hand-written admin check in front
+  of an admin write, and it refuses every delegate. This check lets delegates through by core's own answer.
+  MetadataTest's `isAdmin(` gate stays on `lib/Controller`, where an admin write lives.
+- Core builds every app's admin-settings class to answer the delegation question. So SavedContent asks it at most
+  once per request, and only about content that is not the person's own.
+- smoke proves it on a real instance: a delegate changes someone else's pregunta (200), and a user in no delegated
+  group gets 403.

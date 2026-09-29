@@ -1,0 +1,212 @@
+{
+    "anio": 2026,
+    "version": 1,
+    "nombre": "Metas Sanitarias de Atención Primaria 2026 (Ley 19.813)",
+    "referencia": "MINSAL, Orientaciones Técnicas Metas Sanitarias de Atención Primaria 2026, Ley 19.813, versión 1.0 (10-10-2025): metas nacionales y rutas REM del Anexo 3.",
+    "nota": "Los pesos son los de 2025 (Anexo 2): las orientaciones 2026 no traen tabla de pesos.",
+    "diccionarios": {
+        "rem-a": "SA_25_V1.5",
+        "rem-p": "SP_25_V1.2"
+    },
+    "indicadores": [
+        {
+            "codigo": "I",
+            "nombre": "Recuperación del desarrollo psicomotor",
+            "indicador": "Porcentaje de niñas y niños de 12 a 23 meses diagnosticados con riesgo del desarrollo psicomotor recuperados",
+            "meta_nacional": 90,
+            "peso": 12.5,
+            "nota": "El denominador cuenta las primeras evaluaciones con riesgo de octubre de 2025 a septiembre de 2026: cada mes suma desde octubre hasta ese mes.",
+            "numerador": {
+                "fuente": "rem-a",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["02010420", "03500366"], "columnas": ["col08", "col09", "col10", "col11"]}
+                ]
+            },
+            "denominador": {
+                "fuente": "rem-a",
+                "periodo": {"desde": "2025-10", "hasta": "2026-09"},
+                "sumar": [
+                    {"codigos": ["02010321"], "columnas": ["col08", "col09", "col10", "col11"]}
+                ],
+                "restar": [
+                    {"codigos": ["03500331", "03500334"], "columnas": ["col08", "col09", "col10", "col11"]}
+                ]
+            }
+        },
+        {
+            "codigo": "II",
+            "nombre": "Detección precoz del cáncer de cuello uterino",
+            "indicador": "Porcentaje de personas de 25 a 64 años con tamizaje vigente (PAP o test de VPH) para la detección precoz del cáncer de cuello uterino",
+            "meta_nacional": 80,
+            "peso": 12.5,
+            "nota": "El numerador cuenta mujeres y personas transmasculinas (columnas 1 y 2 del REM P12); el denominador, solo mujeres: FONASA no informa personas transmasculinas.",
+            "numerador": {
+                "fuente": "rem-p",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["P1206010", "P1206020", "P1206030", "P1206040", "P1206050", "P1206060", "P1206070", "P1206080"], "columnas": ["col01", "col02"]}
+                ]
+            },
+            "denominador": {
+                "poblacion": [
+                    {"desde": 25, "hasta": 64, "sexo": "mujeres"}
+                ]
+            }
+        },
+        {
+            "codigo": "III.A",
+            "nombre": "Salud bucal: control con enfoque de riesgo odontológico de 0 a 9 años",
+            "indicador": "Porcentaje de niñas y niños de 0 a 9 años en control con enfoque de riesgo odontológico y pauta CERO aplicada",
+            "meta_nacional": 48,
+            "peso": 6.25,
+            "numerador": {
+                "fuente": "rem-a",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["03500364", "03500365"], "columnas": ["col04", "col05", "col06", "col07", "col08", "col09", "col10", "col11", "col12", "col13", "col14", "col15", "col16", "col17", "col18", "col19", "col20", "col21", "col22", "col23"]}
+                ]
+            },
+            "denominador": {
+                "poblacion": [
+                    {"desde": 0, "hasta": 9}
+                ]
+            }
+        },
+        {
+            "codigo": "III.B",
+            "nombre": "Salud bucal: niñas y niños de 6 años libres de caries",
+            "indicador": "Porcentaje de niñas y niños de 6 años libres de caries",
+            "meta_nacional": 22,
+            "peso": 6.25,
+            "numerador": {
+                "fuente": "rem-a",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["09220100"], "columnas": ["col16", "col17"]}
+                ]
+            },
+            "denominador": {
+                "poblacion": [
+                    {"desde": 6, "hasta": 6}
+                ]
+            }
+        },
+        {
+            "codigo": "IV.A",
+            "nombre": "Diabetes mellitus tipo 2: cobertura efectiva de tratamiento",
+            "indicador": "Cobertura efectiva de tratamiento de DM2 en personas de 15 y más años",
+            "meta_nacional": 29,
+            "peso": 12.5,
+            "numerador": {
+                "fuente": "rem-p",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["P4180300", "P4200200"], "columnas": ["col01"]}
+                ]
+            },
+            "denominador": {
+                "poblacion": [
+                    {"desde": 15, "hasta": 24, "prevalencia": 1.8},
+                    {"desde": 25, "hasta": 44, "prevalencia": 6.3},
+                    {"desde": 45, "hasta": 64, "prevalencia": 18.3},
+                    {"desde": 65, "prevalencia": 30.6}
+                ]
+            }
+        },
+        {
+            "codigo": "IV.B",
+            "nombre": "Diabetes mellitus tipo 2: evaluación anual de los pies",
+            "indicador": "Evaluación anual del pie diabético en personas con DM2 bajo control de 15 y más años",
+            "meta_nacional": 90,
+            "peso": 12.5,
+            "numerador": {
+                "fuente": "rem-p",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["P4190809", "P4170300", "P4190500", "P4190600"], "columnas": ["col01"]}
+                ]
+            },
+            "denominador": {
+                "fuente": "rem-p",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["P4150602"], "columnas": ["col01"]}
+                ]
+            }
+        },
+        {
+            "codigo": "V",
+            "nombre": "Hipertensión arterial: cobertura efectiva de tratamiento",
+            "indicador": "Cobertura efectiva de hipertensión arterial en personas de 15 y más años",
+            "meta_nacional": 45,
+            "peso": 12.5,
+            "numerador": {
+                "fuente": "rem-p",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["P4180200", "P4200100"], "columnas": ["col01"]}
+                ]
+            },
+            "denominador": {
+                "poblacion": [
+                    {"desde": 15, "hasta": 24, "prevalencia": 0.7},
+                    {"desde": 25, "hasta": 44, "prevalencia": 10.6},
+                    {"desde": 45, "hasta": 64, "prevalencia": 45.1},
+                    {"desde": 65, "prevalencia": 73.3}
+                ]
+            }
+        },
+        {
+            "codigo": "VI",
+            "nombre": "Lactancia materna exclusiva al sexto mes",
+            "indicador": "Prevalencia de lactancia materna exclusiva en niñas y niños al sexto mes de vida",
+            "meta_nacional": 60,
+            "peso": 12.5,
+            "nota": "Las orientaciones escriben el numerador «de enero a diciembre de 2025»; se cuenta 2026, el año del denominador.",
+            "numerador": {
+                "fuente": "rem-a",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["A0200002"], "columnas": ["col06"]}
+                ]
+            },
+            "denominador": {
+                "fuente": "rem-a",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["A0200001"], "columnas": ["col06"]}
+                ]
+            }
+        },
+        {
+            "codigo": "VII",
+            "nombre": "Asma y EPOC: cobertura efectiva de tratamiento",
+            "indicador": "Cobertura efectiva de tratamiento en enfermedades respiratorias crónicas (asma y EPOC) en personas de 5 años y más",
+            "meta_nacional": 15,
+            "peso": 6.25,
+            "numerador": {
+                "fuente": "rem-p",
+                "periodo": {"desde": "2026-01", "hasta": "2026-12"},
+                "sumar": [
+                    {"codigos": ["P3161041"], "columnas": ["col06", "col07", "col08", "col09", "col10", "col11", "col12", "col13", "col14", "col15", "col16", "col17", "col18", "col19", "col20", "col21", "col22", "col23", "col24", "col25", "col26", "col27", "col28", "col29", "col30", "col31", "col32", "col33", "col34", "col35", "col36", "col37"]},
+                    {"codigos": ["P3161045"], "columnas": ["col01"]}
+                ]
+            },
+            "denominador": {
+                "poblacion": [
+                    {"desde": 40, "prevalencia": 11.7},
+                    {"desde": 5, "prevalencia": 10.0}
+                ]
+            }
+        },
+        {
+            "codigo": "VIII",
+            "nombre": "Plan de participación social en salud",
+            "indicador": "Plan de salud comunitaria elaborado, ejecutado y evaluado participativamente",
+            "meta_nacional": 100,
+            "peso": 6.25,
+            "manual": true
+        }
+    ]
+}
