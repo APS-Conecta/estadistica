@@ -122,6 +122,11 @@ describe('chartConfig — each series keeps its color', () => {
 		expect(config.options.plugins.legend.labels.color).toBe('#ebebeb')
 	})
 
+	it('reads a three-digit surface color as the six-digit one it abbreviates', () => {
+		expect(themeOf((name) => (name === '--color-main-background' ? '#111' : '')).dark).toBe(true)
+		expect(themeOf((name) => (name === '--color-main-background' ? '#fff' : '')).dark).toBe(false)
+	})
+
 	it('says in the tooltip how many establishments reported, beyond the local one', () => {
 		const dataset = { label: 'Nacional', serie: 'nacional', informantes: [1204] }
 
