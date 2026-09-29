@@ -49,7 +49,7 @@ class QueryExecutor {
 	 */
 	public const TIMEOUT_MS = 10_000;
 
-	/** PostgreSQL's query_canceled, which is what a statement_timeout raises. */
+	/** PostgreSQL's query_canceled: a statement_timeout raises it, and so does pg_cancel_backend(). */
 	private const CANCELLED = '57014';
 
 	public function __construct(
@@ -162,10 +162,12 @@ class QueryExecutor {
 		} catch (Exception $e) {
 			$this->db->rollBack();
 			$driver = $e->getPrevious();
-			// The driver's SQLSTATE, read without naming Doctrine (OCP only).
+			// The driver's SQLSTATE, read without naming Doctrine (OCP only). An
+			// administrator's pg_cancel_backend() raises the same one, so the
+			// message names the limit without claiming it was the cause.
 			if ($driver !== null && method_exists($driver, 'getSQLState') && $driver->getSQLState() === self::CANCELLED) {
 				throw new RefusedException(sprintf(
-					'La consulta tardó más de %s s y se canceló: acote el periodo, las prestaciones o la comparación.',
+					'La consulta se canceló antes de terminar: superó el límite de %s s, o el servidor la interrumpió. Acote el periodo, las prestaciones o la comparación.',
 					str_replace('.', ',', (string)($timeoutMs / 1000)),
 				));
 			}

@@ -328,14 +328,18 @@ class QueryExecutorTest extends IntegrationTestCase {
 		self::assertSame(9, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_rem WHERE anio = ?', [2099])->fetchOne(), 'the rows are untouched');
 	}
 
-	/** a16: a statement past the timeout is cancelled, and says so in Spanish. */
+	/**
+	 * a16: a statement past the timeout is cancelled, and says so in Spanish.
+	 * The message does not claim the cause: PostgreSQL raises the same
+	 * SQLSTATE when an administrator cancels the statement.
+	 */
 	public function testAStatementPastTheTimeoutIsCancelled(): void {
 		$started = microtime(true);
 		try {
 			$this->executor->readOnly(fn (): array => $this->db()->executeQuery('SELECT pg_sleep(3)')->fetchAll(), 1000);
 			self::fail('the statement ran to the end');
 		} catch (RefusedException $e) {
-			self::assertSame('La consulta tardó más de 1 s y se canceló: acote el periodo, las prestaciones o la comparación.', $e->getMessage());
+			self::assertSame('La consulta se canceló antes de terminar: superó el límite de 1 s, o el servidor la interrumpió. Acote el periodo, las prestaciones o la comparación.', $e->getMessage());
 		}
 		self::assertLessThan(2.5, microtime(true) - $started, 'cancelled at the timeout, not at the end of the sleep');
 
