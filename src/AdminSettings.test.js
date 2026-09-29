@@ -26,9 +26,12 @@ function dictionary(anio, fields) {
 /** No PIV loaded and no establishment configured (PivImporter::status). */
 const NO_PIV = { cortes: [], local: null }
 
-/** The section, mounted over one ingests() answer, once that answer has rendered. ingests() always answers piv. */
+/** No metas loaded and no establishment configured (Goals::status). */
+const NO_METAS = { years: [], local: null }
+
+/** The section, mounted over one ingests() answer, once that answer has rendered. ingests() always answers piv and metas. */
 async function section(data) {
-	axios.get.mockResolvedValueOnce({ data: { piv: NO_PIV, ...data } })
+	axios.get.mockResolvedValueOnce({ data: { piv: NO_PIV, metas: NO_METAS, ...data } })
 	const wrapper = mount(AdminSettings)
 	await flushPromises()
 	return wrapper
@@ -83,8 +86,11 @@ function input(wrapper, name) {
 	return wrapper.find(`input[aria-label="${name}"]`)
 }
 
-/** The PIV's «Guardar»: the page's last. */
-function savePiv(wrapper) {
+/**
+ * The page's last «Guardar»: the PIV's while no metas can be committed (the
+ * PIV tests), the metas' once they can (the metas tests).
+ */
+function lastSave(wrapper) {
 	return wrapper.findAll('button').filter((button) => button.text() === 'Guardar').at(-1)
 }
 
@@ -139,7 +145,7 @@ describe('AdminSettings — the PIV (a11)', () => {
 		})
 
 		await input(wrapper, 'Mujeres de 0 a 9 años').setValue('4200')
-		await savePiv(wrapper).trigger('click')
+		await lastSave(wrapper).trigger('click')
 		await flushPromises()
 
 		expect(axios.put).toHaveBeenCalledWith('/apps/estadistica/admin/piv', {
@@ -158,7 +164,7 @@ describe('AdminSettings — the PIV (a11)', () => {
 		})
 
 		await input(wrapper, 'Hombres de 80 a más años').setValue('-3')
-		await savePiv(wrapper).trigger('click')
+		await lastSave(wrapper).trigger('click')
 		await flushPromises()
 
 		expect(axios.put).not.toHaveBeenCalled()
@@ -172,7 +178,7 @@ describe('AdminSettings — the PIV (a11)', () => {
 		axios.post.mockResolvedValueOnce({
 			data: { piv: { cortes: ['2025-12-31'], establishments: 2091, inscritos: 15788220, unknownAge: 3642 } },
 		})
-		axios.get.mockResolvedValueOnce({ data: { ingests: [], dictionaries: [], register: null, deis, piv: { cortes: [CORTE], local: null } } })
+		axios.get.mockResolvedValueOnce({ data: { ingests: [], dictionaries: [], register: null, deis, piv: { cortes: [CORTE], local: null }, metas: NO_METAS } })
 
 		await wrapper.findAll('button').find((button) => button.text() === 'Elegir un archivo en Archivos…').trigger('click')
 		await flushPromises()
@@ -181,6 +187,127 @@ describe('AdminSettings — the PIV (a11)', () => {
 		expect(wrapper.text()).toContain('Recibida la población inscrita de FONASA, corte al 31-12-2025: 2.091 establecimientos, 15.788.220 inscritos, ya en uso.')
 		expect(wrapper.text()).toContain('3.642 inscritos sin tramo de edad no entran en ningún denominador.')
 		expect(wrapper.text()).toContain('Corte al 31-12-2025: 2.091 establecimientos')
+		wrapper.unmount()
+	})
+})
+
+/** A year's metas as Goals::status() serves them: a REM meta, one counted over people, and a manual one. */
+function year(anio, indicadores = [
+	{ codigo: 'I', nombre: 'Recuperación del DSM', metaNacional: 90, peso: 12.5, base: 'rem', manual: false },
+	{ codigo: 'II', nombre: 'Cáncer de cuello uterino', metaNacional: 80, peso: 12.5, base: 'poblacion', manual: false },
+	{ codigo: 'VIII', nombre: 'Participación social', metaNacional: 100, peso: 6.25, base: null, manual: true },
+]) {
+	return { anio, version: 1, nombre: `Metas Sanitarias ${anio}`, loadedAt: 1790000000, indicadores }
+}
+
+const NEXT = year(2027, [{ codigo: 'I', nombre: 'Recuperación del DSM', metaNacional: 90, peso: 50, base: 'rem', manual: false }])
+
+/** What the establishment committed (Goals::status, local.commitments). */
+function committed(commitments) {
+	return { years: [NEXT, year(2026)], local: { deisCode: '900001', commitments } }
+}
+
+const noMore = { ingests: [], dictionaries: [], register: null, deis }
+
+describe('AdminSettings — the metas (a9, a10, a12)', () => {
+	afterEach(() => {
+		vi.clearAllMocks()
+		delete window.OC
+	})
+
+	it('says none are loaded yet', async () => {
+		const wrapper = await section(noMore)
+
+		expect(wrapper.text()).toContain('Todavía no hay metas cargadas.')
+		wrapper.unmount()
+	})
+
+	it('opens on this year\'s metas, and without an establishment offers nothing to commit', async () => {
+		const wrapper = await section({ ...noMore, metas: { years: [NEXT, year(2026)], local: null } })
+
+		expect(wrapper.find('select').element.value).toBe('2026')
+		expect(wrapper.text()).toContain('Metas Sanitarias 2026, versión 1, cargadas el')
+		expect(wrapper.text()).toContain('Sin un establecimiento configurado no hay metas propias que comprometer.')
+		expect(input(wrapper, 'Meta comprometida de la Meta I').exists()).toBe(false)
+		wrapper.unmount()
+	})
+
+	it('shows what was committed, and offers each meta only what it can commit', async () => {
+		const wrapper = await section({
+			...noMore,
+			metas: committed([
+				{ anio: 2026, codigo: 'I', meta: 75.5, denominador: null, cumplimiento: null },
+				{ anio: 2026, codigo: 'VIII', meta: null, denominador: null, cumplimiento: 100 },
+				{ anio: 2027, codigo: 'I', meta: 99, denominador: null, cumplimiento: null },
+			]),
+		})
+
+		expect(input(wrapper, 'Meta comprometida de la Meta I').element.value).toBe('75.5')
+		expect(input(wrapper, 'Denominador comprometido de la Meta I').exists()).toBe(false)
+		expect(input(wrapper, 'Denominador comprometido de la Meta II').exists()).toBe(true)
+		expect(input(wrapper, 'Cumplimiento de la Meta VIII').element.value).toBe('100')
+		expect(input(wrapper, 'Cumplimiento de la Meta I').exists()).toBe(false)
+
+		await wrapper.find('select').setValue('2027')
+		expect(input(wrapper, 'Meta comprometida de la Meta I').element.value).toBe('99')
+		expect(input(wrapper, 'Meta comprometida de la Meta II').exists()).toBe(false)
+		wrapper.unmount()
+	})
+
+	it('saves the metas with something typed, as numbers, and shows what the server kept', async () => {
+		const wrapper = await section({ ...noMore, metas: committed([{ anio: 2026, codigo: 'I', meta: 75.5, denominador: null, cumplimiento: null }]) })
+		const kept = [
+			{ anio: 2026, codigo: 'II', meta: 80, denominador: 1200, cumplimiento: null },
+			{ anio: 2026, codigo: 'VIII', meta: null, denominador: null, cumplimiento: 100 },
+		]
+		axios.put.mockResolvedValueOnce({ data: committed(kept) })
+
+		await input(wrapper, 'Meta comprometida de la Meta I').setValue('')
+		await input(wrapper, 'Meta comprometida de la Meta II').setValue('80')
+		await input(wrapper, 'Denominador comprometido de la Meta II').setValue('1200')
+		await input(wrapper, 'Cumplimiento de la Meta VIII').setValue('100')
+		await lastSave(wrapper).trigger('click')
+		await flushPromises()
+
+		expect(axios.put).toHaveBeenCalledWith('/apps/estadistica/admin/goals', {
+			year: 2026,
+			commitments: [{ codigo: 'II', meta: 80, denominador: 1200 }, { codigo: 'VIII', cumplimiento: 100 }],
+		})
+		expect(wrapper.text()).toContain('Guardado.')
+		expect(input(wrapper, 'Meta comprometida de la Meta I').element.value).toBe('')
+		expect(input(wrapper, 'Denominador comprometido de la Meta II').element.value).toBe('1200')
+		wrapper.unmount()
+	})
+
+	it('refuses a percentage over 100 before asking the server, and shows the server\'s refusal', async () => {
+		const wrapper = await section({ ...noMore, metas: committed([]) })
+
+		await input(wrapper, 'Meta comprometida de la Meta I').setValue('101')
+		await lastSave(wrapper).trigger('click')
+		await flushPromises()
+		expect(axios.put).not.toHaveBeenCalled()
+		expect(wrapper.text()).toContain('Meta comprometida de la Meta I: escriba un número de 0 a 100, o deje la casilla en blanco.')
+
+		axios.put.mockRejectedValueOnce({ response: { status: 422, data: { message: 'No hay Metas Sanitarias cargadas para 2026.' } } })
+		await input(wrapper, 'Meta comprometida de la Meta I').setValue('90')
+		await lastSave(wrapper).trigger('click')
+		await flushPromises()
+		expect(wrapper.text()).toContain('No hay Metas Sanitarias cargadas para 2026.')
+		wrapper.unmount()
+	})
+
+	it('says what a dropped metas file brought, and opens its year', async () => {
+		const wrapper = await section({ ...noMore, metas: { years: [year(2026)], local: null } })
+		window.OC = { dialogs: { filepicker: (title, pick) => pick('/metas-2027.json') } }
+		axios.post.mockResolvedValueOnce({ data: { metas: { anio: 2027, version: 1, indicadores: 1 } } })
+		axios.get.mockResolvedValueOnce({ data: { ...noMore, piv: NO_PIV, metas: { years: [NEXT, year(2026)], local: null } } })
+
+		await wrapper.findAll('button').find((button) => button.text() === 'Elegir un archivo en Archivos…').trigger('click')
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Recibidas las metas de 2027 (versión 1): 1 meta, ya en uso.')
+		expect(wrapper.find('select').element.value).toBe('2027')
+		expect(wrapper.text()).toContain('Metas Sanitarias 2027, versión 1')
 		wrapper.unmount()
 	})
 })

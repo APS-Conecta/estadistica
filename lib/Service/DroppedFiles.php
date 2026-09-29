@@ -10,6 +10,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Register\RegisterParser;
@@ -32,11 +33,12 @@ use OCP\IUserSession;
 use OCP\Lock\LockedException;
 
 /**
- * The admin's door for a file: a DEIS REM zip, DEIS's Base de
- * Establecimientos, or FONASA's «Inscritos APS» CSV. An install without
- * internet has no other way to get the first two, and FONASA offers no file a
- * program can fetch (docs/adr/0007). The admin picks the file in Files with
- * the platform's picker, and it is handed over by path.
+ * The admin's door for a file: a DEIS REM zip, DEIS's Base de Establecimientos,
+ * FONASA's «Inscritos APS» CSV, or a year's Metas Sanitarias. An install
+ * without internet has no other way to get the first two, FONASA offers no
+ * file a program can fetch (docs/adr/0007), and a later year's metas arrive as
+ * a file with no release (docs/adr/0008). The admin picks the file in Files
+ * with the platform's picker, and it is handed over by path.
  *
  * A REM zip is kept in the app's own storage until the job has loaded it. The
  * job has no session, so it cannot read anyone's Files; IAppData needs none
@@ -54,6 +56,10 @@ use OCP\Lock\LockedException;
  * A workbook is a zip too: one with no Serie A or P is read as the Base de
  * Establecimientos, and refused in Spanish if it is not one either. The year
  * comes from the rows, not the file name, which may say anything.
+ *
+ * A file whose first character is «{» is a metas file, JSON, loaded in the
+ * request by Goals, which refuses in Spanish whatever GoalSeed cannot read.
+ * FONASA's CSV begins with its header, never with a brace.
  *
  * Any other file that is not a zip is handed to FONASA's reader
  * (PivImporter), loaded in the request (22 MB in 2025). The reader's header
@@ -89,21 +95,26 @@ class DroppedFiles {
 		private IngestStateMapper $states,
 		private Register $register,
 		private PivImporter $piv,
+		private Goals $goals,
 	) {
 		$this->appData = $appDataFactory->get(Application::APP_ID);
 	}
 
 	/**
 	 * Takes the file at $path in the caller's own Files: queues a REM zip's
-	 * series, or loads a Base de Establecimientos or FONASA's CSV.
+	 * series, or loads a Base de Establecimientos, FONASA's CSV or a year's
+	 * metas.
 	 *
-	 * @return array{anio: int, series: list<string>}|array{establecimientos: int}|array{piv: array{cortes: list<string>, establishments: int, inscritos: int, unknownAge: int}}
+	 * @return array{anio: int, series: list<string>}|array{establecimientos: int}|array{piv: array{cortes: list<string>, establishments: int, inscritos: int, unknownAge: int}}|array{metas: array{anio: int, version: int, indicadores: int}}
 	 * @throws RefusedException
 	 */
 	public function accept(string $path): array {
 		$local = $this->localCopy($this->open($path));
 
 		try {
+			if (self::isSeed($local)) {
+				return ['metas' => $this->goals->import($local)];
+			}
 			if (!self::isZip($local)) {
 				return ['piv' => $this->piv->import($local)];
 			}
@@ -147,6 +158,13 @@ class DroppedFiles {
 		$head = (string)file_get_contents($local, false, null, 0, 4);
 
 		return $head === "PK\x03\x04" || $head === "PK\x05\x06";
+	}
+
+	/** A metas file is a JSON object: past a BOM and blank space, it opens with «{». */
+	private static function isSeed(string $local): bool {
+		$head = (string)file_get_contents($local, false, null, 0, 64);
+
+		return str_starts_with(ltrim(preg_replace('/^\xEF\xBB\xBF/', '', $head) ?? $head), '{');
 	}
 
 	/**

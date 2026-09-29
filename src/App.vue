@@ -35,6 +35,7 @@
 					<QueryBuilder v-show="view === 'consultar'" :establishment="establishment" />
 					<SavedQuestions v-if="view === 'preguntas'" />
 					<EstadisticaDashboard v-if="view === 'tableros'" />
+					<SanitaryGoals v-if="view === 'metas'" :establishment="establishment" />
 				</template>
 			</div>
 		</NcAppContent>
@@ -48,6 +49,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import EstadisticaDashboard from './components/Dashboard.vue'
+import SanitaryGoals from './components/Goals.vue'
 import QueryBuilder from './components/QueryBuilder.vue'
 import SavedQuestions from './components/Questions.vue'
 import { safeError } from './api.js'
@@ -57,12 +59,13 @@ const VIEWS = [
 	{ id: 'consultar', nombre: 'Consultar' },
 	{ id: 'preguntas', nombre: 'Preguntas' },
 	{ id: 'tableros', nombre: 'Tableros' },
+	{ id: 'metas', nombre: 'Metas Sanitarias' },
 ]
 
 export default {
 	name: 'App',
 
-	components: { EstadisticaDashboard, NcAppContent, NcButton, NcContent, NcNoteCard, QueryBuilder, SavedQuestions },
+	components: { EstadisticaDashboard, NcAppContent, NcButton, NcContent, NcNoteCard, QueryBuilder, SanitaryGoals, SavedQuestions },
 
 	data() {
 		const shared = { VIEWS, view: 'consultar' }

@@ -6,7 +6,7 @@
     <description><![CDATA[Las cifras REM que el DEIS publica para todo el país, etiquetadas con su diccionario oficial, para comparar el establecimiento con el promedio nacional y con establecimientos parecidos; y el avance mes a mes de las Metas Sanitarias de Atención Primaria. Consultable por todo el personal.
 
 No contiene información de pacientes: guarda solo conteos agregados publicados por el DEIS y FONASA.]]></description>
-    <version>0.0.8</version>
+    <version>0.0.9</version>
     <licence>AGPL-3.0-or-later</licence>
     <author>Daniel Espinoza</author>
     <namespace>Estadistica</namespace>
@@ -32,6 +32,18 @@ No contiene información de pacientes: guarda solo conteos agregados publicados 
     <background-jobs>
         <job>OCA\Estadistica\BackgroundJob\RemJob</job>
     </background-jobs>
+    <!-- The Metas Sanitarias the app ships (seeds/metas-<año>.json). A repair
+         step, not postSchemaChange: a first app:enable applies the schema only
+         (farmacia's EnsureSeedData). Both hooks, so an install and an upgrade
+         each load a year that is new or a newer version (docs/adr/0008). -->
+    <repair-steps>
+        <install>
+            <step>OCA\Estadistica\Migration\EnsureSeedData</step>
+        </install>
+        <post-migration>
+            <step>OCA\Estadistica\Migration\EnsureSeedData</step>
+        </post-migration>
+    </repair-steps>
     <!-- The section is IDelegatedSettings: an admin hands it to any group with
          occ admin-delegation:add or Administration privileges; no group name
          lives in this app (docs/adr/0003). -->

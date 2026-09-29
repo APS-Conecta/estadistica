@@ -15,6 +15,10 @@
 #   - the PIV: a FONASA CSV that adds a RUT column is refused whole through
 #     the same door, and typing the establishment's figures is delegated:
 #     refused in Spanish with no establishment, 403 to an outsider (a10, a11)
+#   - the metas: the shipped 2026 seed is loaded, any user reads it month by
+#     month over OCS, a metas file goes through the same door, and a delegate
+#     commits a meta comprometida (200) where an outsider gets 403 (a9, a10,
+#     a12, a14)
 #   - the OCS surface answers every user, attribute routes and all: the
 #     fuentes list with the PIV from FONASA, a Spanish 400 for a year DEIS
 #     never published, a 404 for a fuente that does not exist (a14)
@@ -98,6 +102,13 @@ mint() {
 # credentials, the three throwaway users (and with them the file the drop
 # check put in Files), the group and its delegation, and the window it moved.
 cleanup() {
+	# A run that died halfway leaves a commitment and the establishment it
+	# needed: the commitments are cleared while the key still names it.
+	if [ -n "${METAS_ESTABLISHMENT:-}" ]; then
+		web_as admin "$ADMIN_TOKEN" -H 'OCS-APIRequest: true' -H 'Content-Type: application/json' -o /dev/null \
+			-X PUT --data '{"year":2026,"commitments":[]}' "$BASE/index.php/apps/$APP/admin/goals"
+		occ config:app:delete "$APP" deis_code >/dev/null 2>&1
+	fi
 	# A run that died halfway leaves what it saved: the admin deletes it first.
 	[ -n "${TABLERO_ID:-}" ] && web_as admin "$ADMIN_TOKEN" -H 'OCS-APIRequest: true' -o /dev/null \
 		-X DELETE "$BASE/ocs/v2.php/apps/$APP/api/v1/tableros/$TABLERO_ID"
@@ -262,6 +273,83 @@ is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H 'Content-Type: applicat
 	-X PUT --data "$CELLS" "$PIV")" '403' \
 	"a user outside the delegated group cannot type PIV figures (403)" \
 	"a user outside the delegated group was NOT refused the PIV with 403"
+
+# --- the metas: the shipped seed, the door, the commitments (a9, a10, a12) ---
+# The 2026 seed ships with the app and loads when it is enabled (EnsureSeedData).
+# Any user reads it; the dev instance holds no REM, so the months carry no
+# figures, and that is an answer.
+INDICADORES="$BASE/ocs/v2.php/apps/$APP/api/v1/indicadores"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: application/json' "$INDICADORES?anio=2026"
+is "$CODE" '200' \
+	"any user reads the 2026 metas over OCS (200)" \
+	"the 2026 metas did NOT answer 200 — is the seed loaded, and the route registered?"
+expect "$BODY" '"status":"ok"' \
+	"the metas answer in the OCS envelope with status ok" \
+	"the metas answer does NOT carry status ok"
+expect "$BODY" '"diccionarios":{"rem-a":"SA_25_V1.5","rem-p":"SP_25_V1.2"}' \
+	"the metas cite the REM dictionaries of their routes" \
+	"the metas do NOT cite SA_25_V1.5 / SP_25_V1.2"
+expect "$BODY" '"codigo":"VIII"' \
+	"the metas run from I to VIII" \
+	"the metas do NOT reach Meta VIII"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: application/json' "$INDICADORES?anio=2026&pares=rut"
+is "$CODE" '400' \
+	"a peer trait that is not one is refused with 400" \
+	"a peer trait that is not one was NOT refused with 400"
+expect "$BODY" 'Los pares se eligen por' \
+	"the 400 is the Spanish sentence" \
+	"the 400 does NOT carry the Spanish sentence"
+
+# A metas file is told apart by its opening brace and judged by the seed's
+# rules: a year no metas can have is refused, and nothing is stored.
+is "$(web_as "$DELEGATE" "$DELEGATE_TOKEN" -o /dev/null -w '%{http_code}' \
+	-X PUT --data-binary '{"anio":1990}' "$BASE/remote.php/dav/files/$DELEGATE/metas.json")" '201' \
+	"a metas file lands in the delegate's Files (WebDAV 201)" \
+	"could NOT put the metas file in the delegate's Files"
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H 'OCS-APIRequest: true' -X POST -d 'path=/metas.json' "$DROP"
+is "$CODE" '422' \
+	"a metas file for a year no metas can have is refused with 422" \
+	"a metas file for 1990 was NOT refused with 422"
+expect "$BODY" '(anio) debe estar entre 2009' \
+	"the refusal is the seed's Spanish sentence" \
+	"the metas refusal does NOT carry the seed's sentence"
+
+# The commitments are this establishment's own, so one is configured for the
+# check (a fabricated code, a2) and removed after. App-config values reach the
+# web process within a few seconds of occ writing them.
+GOALS="$BASE/index.php/apps/$APP/admin/goals"
+COMMITMENT='{"year":2026,"commitments":[{"codigo":"I","meta":75}]}'
+occ config:app:set "$APP" deis_code --value=900001 >/dev/null
+METAS_ESTABLISHMENT=1
+sleep 4
+
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -X PUT --data "$COMMITMENT" "$GOALS"
+is "$CODE" '200' \
+	"a member of the delegated group commits a meta comprometida (200)" \
+	"a member of the delegated group could NOT commit a meta comprometida"
+expect "$BODY" '"codigo":"I","meta":75' \
+	"the commitment is kept as typed" \
+	"the commitment does NOT come back as typed"
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -o /dev/null -w '%{http_code}' \
+	-X PUT --data "$COMMITMENT" "$GOALS")" '403' \
+	"a user outside the delegated group cannot commit a meta (403)" \
+	"a user outside the delegated group was NOT refused the commitment with 403"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: application/json' "$INDICADORES?anio=2026"
+expect "$BODY" '"meta_comprometida":75' \
+	"the metas view reads the commitment back" \
+	"the metas do NOT carry the meta comprometida"
+
+web_as admin "$ADMIN_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -o /dev/null \
+	-X PUT --data '{"year":2026,"commitments":[]}' "$GOALS"
+occ config:app:delete "$APP" deis_code >/dev/null 2>&1
+METAS_ESTABLISHMENT=''
+# The delete reaches the web process the same way, and the checks below expect
+# an install with no establishment.
+sleep 4
 
 # --- the OCS surface: every user reads the fuentes (a14) ----------------------
 # The outsider is in no delegated group: reading is everyone's (D6). The routes

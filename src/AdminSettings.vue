@@ -187,9 +187,95 @@
 			</template>
 		</NcSettingsSection>
 
+		<NcSettingsSection name="Metas Sanitarias"
+			description="Las metas de cada año, con sus rutas en el REM: la aplicación trae las de 2026, y
+				las de un año nuevo se cargan como un archivo en «Cargar un archivo a mano». Aquí se escribe lo
+				que su establecimiento comprometió.">
+			<p v-if="!metasOfYear" class="estadistica-admin__hint">
+				Todavía no hay metas cargadas.
+			</p>
+
+			<template v-else>
+				<label class="estadistica-admin__field estadistica-admin__year">
+					Metas de
+					<select v-model="metasYear" :disabled="metasSaving">
+						<option v-for="year in metas.years" :key="year.anio" :value="year.anio">
+							{{ year.anio }}
+						</option>
+					</select>
+				</label>
+				<p class="estadistica-admin__hint">
+					{{ metasOfYear.nombre }}, versión {{ metasOfYear.version }}, cargadas el {{ when(metasOfYear.loadedAt) }}
+				</p>
+
+				<p v-if="!metas.local" class="estadistica-admin__hint">
+					Sin un establecimiento configurado no hay metas propias que comprometer.
+				</p>
+
+				<template v-else>
+					<p class="estadistica-admin__hint">
+						Lo que comprometió su establecimiento (código DEIS {{ metas.local.deisCode }}) para
+						{{ metasYear }}: la meta comprometida de cada una, en porcentaje; el denominador de las que
+						se cuentan sobre población, cuando se comprometió otro que la población inscrita de FONASA;
+						y el cumplimiento de las que se informan a mano. Una casilla en blanco no compromete nada.
+					</p>
+
+					<NcNoteCard v-if="metasFailed" type="error">
+						{{ metasFailed }}
+					</NcNoteCard>
+
+					<NcNoteCard v-else-if="metasSaved" type="success">
+						Guardado.
+					</NcNoteCard>
+
+					<!-- The settings page keeps its text on one line: the names wrap here,
+					     and on a phone the inputs scroll inside the section, never the page. -->
+					<div class="estadistica-admin__scroll">
+						<table class="estadistica-admin__table">
+							<thead>
+								<tr>
+									<th>Meta</th>
+									<th>Meta nacional</th>
+									<th>Meta comprometida (%)</th>
+									<th>Denominador comprometido</th>
+									<th>Cumplimiento (%)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-for="meta in metasOfYear.indicadores" :key="meta.codigo">
+									<th scope="row" class="estadistica-admin__goal">
+										Meta {{ meta.codigo }}: {{ meta.nombre }}
+									</th>
+									<td>{{ count(meta.metaNacional) }} %</td>
+									<td v-for="field in COMMITTED" :key="field.id">
+										<input v-if="field.applies(meta)"
+											v-model="commitments[meta.codigo][field.id]"
+											type="number"
+											min="0"
+											:max="field.max"
+											step="any"
+											class="estadistica-admin__cell"
+											:aria-label="`${field.label} de la Meta ${meta.codigo}`"
+											:disabled="metasSaving">
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+
+					<NcButton :disabled="metasSaving"
+						variant="primary"
+						class="estadistica-admin__field"
+						@click="saveGoals">
+						Guardar
+					</NcButton>
+				</template>
+			</template>
+		</NcSettingsSection>
+
 		<NcSettingsSection name="Cargar un archivo a mano"
 			description="Para lo que esta instalación no descarga sola: suba el archivo a Archivos y
-				elíjalo aquí. Se revisa al momento, y un archivo que no sea uno de estos tres se rechaza sin
+				elíjalo aquí. Se revisa al momento, y un archivo que no sea uno de estos cuatro se rechaza sin
 				guardar nada.">
 			<ul class="estadistica-admin__hint">
 				<li>
@@ -198,6 +284,10 @@
 				</li>
 				<li>La «Base de Establecimientos» del DEIS (.xlsx): queda en uso de inmediato.</li>
 				<li>El CSV «Inscritos APS» que exporta el reporte de FONASA: queda en uso de inmediato.</li>
+				<li>
+					Un archivo de Metas Sanitarias (.json), como el que la aplicación trae para 2026: crea o
+					reemplaza las metas de su año, y lo comprometido para ese año se mantiene.
+				</li>
 			</ul>
 
 			<NcNoteCard v-if="dropFailed" type="error">
@@ -206,6 +296,10 @@
 
 			<NcNoteCard v-else-if="dropped && dropped.piv" type="success">
 				{{ pivDroppedText }}
+			</NcNoteCard>
+
+			<NcNoteCard v-else-if="dropped && dropped.metas" type="success">
+				{{ metasDroppedText }}
 			</NcNoteCard>
 
 			<NcNoteCard v-else-if="dropped && dropped.establecimientos !== undefined" type="success">
@@ -265,6 +359,17 @@ const SEXES = [
 
 const cellKey = (edad, sexo) => `${edad}-${sexo}`
 
+/**
+ * What a commitment holds (Goals::commit): a percent for every meta, people for
+ * a meta counted over people or only against a commitment, a percent typed for
+ * a manual one.
+ */
+const COMMITTED = [
+	{ id: 'meta', label: 'Meta comprometida', max: 100, applies: () => true },
+	{ id: 'denominador', label: 'Denominador comprometido', max: null, applies: (meta) => meta.base === 'poblacion' || meta.base === 'comprometido' },
+	{ id: 'cumplimiento', label: 'Cumplimiento', max: 100, applies: (meta) => meta.manual },
+]
+
 /** Every typed cell of the grid, empty. */
 function emptyCells() {
 	return Object.fromEntries(BANDS.flatMap((band) => SEXES.map((sex) => [cellKey(band.edad, sex.id), ''])))
@@ -300,6 +405,13 @@ export default {
 			pivFailed: '',
 			bands: BANDS,
 			sexes: SEXES,
+			metas: { years: [], local: null },
+			metasYear: null,
+			commitments: {},
+			metasSaving: false,
+			metasSaved: false,
+			metasFailed: '',
+			COMMITTED,
 		}
 	},
 
@@ -332,9 +444,17 @@ export default {
 				? `Última revisión del DEIS: ${this.when(this.deis.checkedAt)}. ${cadence}`
 				: `El DEIS se revisará dentro de la próxima hora. ${cadence}`
 		},
+		/** The metas the commitments grid shows. */
+		metasOfYear() {
+			return this.metas.years.find((year) => year.anio === this.metasYear) ?? null
+		},
 		/** The corte the grid shows: 31 December of the chosen year. */
 		pivCorte() {
 			return `${Number.parseInt(this.pivYear, 10) || 0}-12-31`
+		},
+		metasDroppedText() {
+			const { anio, version, indicadores } = this.dropped.metas
+			return `Recibidas las metas de ${anio} (versión ${version}): ${indicadores === 1 ? '1 meta' : `${indicadores} metas`}, ya en uso.`
 		},
 		pivDroppedText() {
 			const piv = this.dropped.piv
@@ -350,6 +470,10 @@ export default {
 		pivCorte() {
 			this.pivSaved = false
 			this.fillPivCells()
+		},
+		metasYear() {
+			this.metasSaved = false
+			this.fillCommitments()
 		},
 	},
 
@@ -390,6 +514,9 @@ export default {
 				this.deis = data.deis
 				this.piv = data.piv
 				this.fillPivCells()
+				this.metas = data.metas
+				this.pickMetasYear()
+				this.fillCommitments()
 			} catch (error) {
 				warnError('could not read the ingest state', error)
 				this.ingestsFailed = await messageFrom(error, 'No se pudo leer el estado de las cargas. Recargue la página.')
@@ -415,7 +542,7 @@ export default {
 			}
 
 			window.OC.dialogs.filepicker(
-				'Elegir un archivo del DEIS o de FONASA',
+				'Elegir un archivo del DEIS, de FONASA o de metas',
 				(path) => this.drop(path),
 				false,
 				[],
@@ -431,6 +558,9 @@ export default {
 				const { data } = await axios.post(generateUrl('/apps/estadistica/admin/drop'), { path })
 				this.dropped = data
 				await this.loadIngests()
+				if (data.metas) {
+					this.metasYear = data.metas.anio
+				}
 			} catch (error) {
 				warnError('could not hand over the file', error)
 				this.dropFailed = await messageFrom(error, 'No se pudo recibir el archivo. Revise la conexión e inténtelo de nuevo.')
@@ -540,6 +670,67 @@ export default {
 			}
 		},
 
+		/**
+		 * The year the grid opens on: the one shown, while it is still loaded;
+		 * else the newest up to this year, as GET indicadores picks it.
+		 */
+		pickMetasYear() {
+			const years = this.metas.years.map((year) => year.anio)
+			if (!years.includes(this.metasYear)) {
+				this.metasYear = years.find((year) => year <= this.yearWindow.currentYear) ?? years[0] ?? null
+			}
+		},
+
+		/** The grid, from what was committed for the year it shows. */
+		fillCommitments() {
+			const saved = (this.metas.local?.commitments ?? []).filter((commitment) => commitment.anio === this.metasYear)
+			this.commitments = Object.fromEntries((this.metasOfYear?.indicadores ?? []).map((meta) => {
+				const commitment = saved.find((c) => c.codigo === meta.codigo)
+				return [meta.codigo, Object.fromEntries(COMMITTED.map((field) => [field.id, commitment?.[field.id] ?? '']))]
+			}))
+		},
+
+		/**
+		 * Sends the metas with something typed, and only those: the server
+		 * replaces the year's commitments with exactly this.
+		 */
+		async saveGoals() {
+			this.metasSaved = false
+			this.metasFailed = ''
+			const commitments = []
+			for (const meta of this.metasOfYear.indicadores) {
+				const commitment = { codigo: meta.codigo }
+				for (const field of COMMITTED) {
+					const typed = String(this.commitments[meta.codigo]?.[field.id] ?? '').trim()
+					if (typed === '' || !field.applies(meta)) {
+						continue
+					}
+					const value = Number(typed)
+					if (!Number.isFinite(value) || value < 0 || (field.max !== null && value > field.max)) {
+						this.metasFailed = `${field.label} de la Meta ${meta.codigo}: escriba un número de 0${field.max === null ? ' para arriba' : ` a ${field.max}`}, o deje la casilla en blanco.`
+						return
+					}
+					commitment[field.id] = value
+				}
+				if (Object.keys(commitment).length > 1) {
+					commitments.push(commitment)
+				}
+			}
+
+			this.metasSaving = true
+			try {
+				const { data } = await axios.put(generateUrl('/apps/estadistica/admin/goals'), { year: this.metasYear, commitments })
+				this.metas = data
+				this.fillCommitments()
+				this.metasSaved = true
+			} catch (error) {
+				warnError('could not save the commitments', error)
+				this.metasFailed = await messageFrom(error, 'No se pudo guardar. Revise la conexión e inténtelo de nuevo.')
+			} finally {
+				this.metasSaving = false
+			}
+		},
+
 		/** 2025-12-31 as FONASA writes it: 31-12-2025. */
 		corteText(corte) {
 			return corte.split('-').reverse().join('-')
@@ -597,5 +788,14 @@ export default {
 
 .estadistica-admin__cell {
 	width: 8em;
+}
+
+.estadistica-admin__scroll {
+	overflow-x: auto;
+}
+
+.estadistica-admin__goal {
+	min-width: 12em;
+	white-space: normal;
 }
 </style>

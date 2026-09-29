@@ -2,7 +2,9 @@
  * The builder's half of the consulta (docs/adr/0006): its four steps, Datos →
  * Filtrar → Resumir → Visualizar, and the one spec they become. The builder
  * and the tableros (Slice 7) post that spec to the same OCS route, so the page
- * shows exactly what the API answers (a15).
+ * shows exactly what the API answers (a15). The metas' routes are the same
+ * specs, asked on the server: the metas view reads GET indicadores
+ * (docs/adr/0006 amendment).
  *
  * Everything here but the three calls at the bottom is pure, so the spec the
  * builder emits is pinned in node (query.test.js, a7). The server's

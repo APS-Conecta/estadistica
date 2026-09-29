@@ -233,13 +233,15 @@ class QueryExecutor {
 	}
 
 	/**
-	 * One series of a consulta, as answer() asks it.
+	 * One series of a consulta, as answer() asks it. Public for the metas
+	 * (GoalEvaluator), which ask every route of a year inside one readOnly():
+	 * it runs only there.
 	 *
 	 * @param list<string> $codigos
 	 * @param array<string, int|string> $who [] for the country; ['estab' => code]; trait → value for a peer group
 	 * @return list<Punto>
 	 */
-	private function series(QuerySpec $spec, array $codigos, array $who): array {
+	public function series(QuerySpec $spec, array $codigos, array $who): array {
 		['sql' => $sql, 'params' => $params] = QueryCompiler::compile($spec, $codigos, $who);
 		$result = $this->db->executeQuery($sql, $params);
 		$rows = $result->fetchAll();

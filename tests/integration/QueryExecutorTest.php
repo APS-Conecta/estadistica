@@ -10,6 +10,7 @@ use OCA\Estadistica\Controller\ApiController;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Register\Register;
@@ -289,6 +290,7 @@ class QueryExecutorTest extends IntegrationTestCase {
 			Server::get(EstablishmentConfig::class),
 			new YearWindow(Server::get(IAppConfig::class), $time),
 			Server::get(SavedContent::class),
+			Server::get(GoalEvaluator::class),
 		);
 
 		$answered = $controller->consultas(['fuente' => 'rem-a', 'periodo' => ['desde' => '2099-01', 'hasta' => '2099-01'], 'filtros' => ['codigos' => ['02010420'], 'columnas' => ['col04']]]);

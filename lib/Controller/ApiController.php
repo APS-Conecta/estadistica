@@ -11,6 +11,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\ForbiddenException;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\EstablishmentConfig;
@@ -31,7 +32,7 @@ use OCP\IRequest;
  * Estadística over OCS: the contract suite apps and M3 read (gestion
  * docs/CONTRACTS.md, Slice 10). farmacia's resource-per-endpoint shape (the
  * OCS decision), under Spanish resource names: fuentes, consultas,
- * preguntas and tableros.
+ * preguntas, tableros and indicadores.
  *
  * Consumers send `OCS-APIRequest: true`, which is also the CSRF protection
  * (Request::passesCSRFCheck), and get the OCS envelope back:
@@ -69,6 +70,7 @@ class ApiController extends OCSController {
 		private EstablishmentConfig $establishment,
 		private YearWindow $window,
 		private SavedContent $saved,
+		private GoalEvaluator $goals,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -135,7 +137,9 @@ class ApiController extends OCSController {
 	 * spec asks to compare, the national and the peer group's. Each is summed
 	 * and grouped as the spec says, and comes with the labels of what was
 	 * summed and the fuente it came from. The builder and the tableros ask
-	 * through here, so the API returns the UI's numbers (a15).
+	 * through here, so the API returns the UI's numbers (a15). The metas'
+	 * routes are the same specs, asked on the server for GET indicadores
+	 * (docs/adr/0006 amendment).
 	 *
 	 * The spec is refused in Spanish, before any SQL, when it names anything
 	 * it may not: an unknown key, a column outside col01…col50, a metric that
@@ -378,6 +382,59 @@ class ApiController extends OCSController {
 
 			return new DataResponse([]);
 		});
+	}
+
+	/**
+	 * The Metas Sanitarias of a year, month by month (a12). For each meta:
+	 * this install's establishment's numerador, denominador and %, and the
+	 * gaps to its meta comprometida and to the meta nacional (in points); beside
+	 * them, the country's % and the peer group's, wherever the denominator is
+	 * nationally computable: REM, or FONASA's inscritos when a corte serves the
+	 * year. A Serie A month adds up to that month; a Serie P month is the
+	 * latest corte up to it (June, December); a month past the data has no
+	 * figure. A manual meta (VIII) is its typed cumplimiento. numerador and
+	 * denominador are the meta's routes as its seed file writes them, with the
+	 * REM dictionaries they cite (docs/adr/0008). Percentages are percentages:
+	 * 90 is 90 %.
+	 *
+	 * The local series is this install's establishment (app config, gestion
+	 * ADR-0013). The peers are the register's establishments that share the
+	 * chosen traits with it; aviso says why there are none when some were
+	 * asked for.
+	 *
+	 * ponytail: the list is the one route. A route per meta joins when a
+	 * consumer needs one alone.
+	 *
+	 * @param ?int $anio the metas' year; the newest with metas up to the current year when omitted
+	 * @param string $pares what the peers share with this establishment, comma-separated: tipo, dependencia, nivel, servicio, region or comuna; empty for no peers
+	 * @return DataResponse<Http::STATUS_OK, array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, indicadores: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?array{comprometida: bool, corte: ?string, factor: ?float, prorrateado: bool}, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 *
+	 * 200: The year's metas, month by month
+	 * 400: The year cannot hold metas, or a peer trait is not one — {message: the Spanish sentence}
+	 * 404: No metas are loaded for that year
+	 * 422: Understood and refused, as a consulta past its time — {message: the Spanish sentence}
+	 */
+	#[NoAdminRequired]
+	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
+	#[ApiRoute(verb: 'GET', url: '/api/v1/indicadores')]
+	public function indicadores(?int $anio = null, string $pares = 'tipo'): DataResponse {
+		$current = $this->window->currentYear();
+		$traits = array_values(array_unique(array_filter(array_map('trim', explode(',', $pares)), static fn (string $trait): bool => $trait !== '')));
+		// 400, not 422: the request itself is unintelligible (fuente()'s rule).
+		if ($anio !== null && ($anio < YearWindow::EARLIEST || $anio > $current + 1)) {
+			return new DataResponse(['message' => sprintf('El año de las metas debe estar entre %d y %d.', YearWindow::EARLIEST, $current + 1)], Http::STATUS_BAD_REQUEST);
+		}
+		if (array_diff($traits, QuerySpec::TRAITS) !== []) {
+			return new DataResponse(['message' => sprintf('Los pares se eligen por %s.', implode(', ', QuerySpec::TRAITS))], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			return new DataResponse($this->goals->evaluate($anio, $this->establishment->get(), $traits));
+		} catch (DoesNotExistException) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		} catch (RefusedException $e) {
+			return $this->refuse($e->getMessage());
+		}
 	}
 
 	/**

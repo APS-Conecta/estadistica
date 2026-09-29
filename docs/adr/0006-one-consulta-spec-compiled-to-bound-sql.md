@@ -70,3 +70,16 @@ statement.
   every dictionary of its periodo) answers its own Spanish 422, in its own card, and the cards beside it still draw.
 - **The chart type is not part of the spec.** A pregunta keeps it beside the consulta (`tipo`: barra, linea or
   tabla), because it says how an answer is drawn, not what is asked.
+
+## Amendment (2026-09-29, Slice 9): the metas ask on the server
+
+- **The metas' routes are consultas, but the metas view does not post them.** Where the Decision says the metas send
+  the spec to `POST /api/v1/consultas`, read: each term of a meta's route is a consulta that `QuerySpec::from()`
+  judges when its seed is read (docs/adr/0008). `GoalEvaluator` then asks every term of the year on the server:
+  `QueryCompiler` compiles the same statements, and `QueryExecutor::series()` runs them inside one `readOnly()`, so
+  the same guard applies and the whole year reads one snapshot.
+- **Why not from the page.** A meta is more than a consulta: it subtracts terms (Meta I), divides by FONASA's
+  inscritos or a commitment, and turns months into running sums or cortes (a12). Done in the browser, that would be
+  fourteen consultas and the PIV rules copied into JavaScript. The view reads `GET /api/v1/indicadores` instead, so
+  the page shows what the API answers (a15) through that route, and a meta's numbers equal a consulta's for the same
+  códigos, columns and months.

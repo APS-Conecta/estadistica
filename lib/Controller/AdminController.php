@@ -11,6 +11,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
@@ -49,6 +50,7 @@ class AdminController extends Controller {
 		private Catalog $catalog,
 		private Register $register,
 		private PivImporter $piv,
+		private Goals $goals,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -78,6 +80,8 @@ class AdminController extends Controller {
 	 * - A Base de Establecimientos loads now.
 	 * - FONASA's «Inscritos APS» CSV loads now. Any other header is refused
 	 *   whole, with nothing stored (a11, docs/adr/0007).
+	 * - A year's Metas Sanitarias file (JSON) loads now, replacing that year's
+	 *   metas; its commitments stay (a9, docs/adr/0008).
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function drop(string $path = ''): JSONResponse {
@@ -92,7 +96,8 @@ class AdminController extends Controller {
 	 * last checked, and what that check could not do. A failure is never
 	 * silent (a4): a check that cannot reach DEIS must not read as a quiet day
 	 * (docs/adr/0005). And the PIV: FONASA's cortes, and this install's
-	 * establishment's figures, FONASA's beside the ones typed here.
+	 * establishment's figures, FONASA's beside the ones typed here. And the
+	 * metas: each year's, and this establishment's commitments.
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function ingests(): JSONResponse {
@@ -102,6 +107,7 @@ class AdminController extends Controller {
 			'register' => $this->register->status(),
 			'deis' => $this->deis->status(),
 			'piv' => $this->piv->status(),
+			'metas' => $this->goals->status(),
 		]);
 	}
 
@@ -120,6 +126,24 @@ class AdminController extends Controller {
 		return $this->attempt(function () use ($year, $cells): array {
 			$this->piv->enter($year, $cells);
 			return $this->piv->status();
+		});
+	}
+
+	/**
+	 * This install's establishment's commitments for the metas of $year, as an
+	 * admin typed them: each meta's meta comprometida (percent), the
+	 * denominador comprometido of a meta counted over people, and the
+	 * cumplimiento of a manual meta (VIII). They replace what was typed for
+	 * that year; a meta left out has none. Refused while no establishment is
+	 * configured (a10, a11, a12).
+	 *
+	 * @param list<mixed> $commitments each {codigo, meta?, denominador?, cumplimiento?}
+	 */
+	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
+	public function goals(int $year = 0, array $commitments = []): JSONResponse {
+		return $this->attempt(function () use ($year, $commitments): array {
+			$this->goals->commit($year, $commitments);
+			return $this->goals->status();
 		});
 	}
 }

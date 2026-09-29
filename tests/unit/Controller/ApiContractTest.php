@@ -10,6 +10,8 @@ use OCA\Estadistica\Controller\ApiController;
 use OCA\Estadistica\Db\Dashboard;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\Question;
+use OCA\Estadistica\Goals\GoalEvaluator;
+use OCA\Estadistica\Goals\GoalSeed;
 use OCA\Estadistica\Query\QueryCompiler;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
@@ -20,12 +22,13 @@ use ReflectionParameter;
 
 /**
  * The schema↔served-payload drift test (farmacia's L2-10), for the fuentes,
- * the consultas, the preguntas and the tableros (acceptance a14): openapi.json
- * names exactly the keys the routes serve. The spec is generated from
- * ApiController's @return docblocks and the served shape is read from the
- * shapers that build it (Sources, QueryCompiler::points, QueryExecutor::label
- * and ::response, Question::toClient, Dashboard::toClient), so this test holds
- * the two together without either copying the other.
+ * the consultas, the preguntas, the tableros and the indicadores (acceptance
+ * a14): openapi.json names exactly the keys the routes serve. The spec is
+ * generated from ApiController's @return docblocks and the served shape is
+ * read from the shapers that build it (Sources, QueryCompiler::points,
+ * QueryExecutor::label and ::response, Question::toClient, Dashboard::toClient,
+ * GoalEvaluator::response, ::indicator and ::month), so this test holds the two
+ * together without either copying the other.
  */
 final class ApiContractTest extends TestCase {
 	private const FUENTE = ['id', 'nombre', 'origen', 'fecha_corte', 'filas', 'estado', 'anios'];
@@ -48,6 +51,14 @@ final class ApiContractTest extends TestCase {
 
 	private const TARJETA = ['pregunta', 'ancho'];
 
+	private const METAS = ['anios', 'anio', 'nombre', 'referencia', 'nota', 'diccionarios', 'version', 'establecimiento', 'pares', 'aviso', 'fuentes', 'indicadores'];
+
+	private const META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'peso', 'nota', 'numerador', 'denominador', 'manual', 'cumplimiento', 'denominador_comprometido', 'poblacion', 'meses'];
+
+	private const MES = ['mes', 'numerador', 'denominador', 'porcentaje', 'brecha_comprometida', 'brecha_nacional', 'nacional', 'pares'];
+
+	private const POBLACION = ['comprometida', 'corte', 'factor', 'prorrateado'];
+
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 
 	private const CONSULTAS = '/ocs/v2.php/apps/estadistica/api/v1/consultas';
@@ -55,6 +66,8 @@ final class ApiContractTest extends TestCase {
 	private const PREGUNTAS = '/ocs/v2.php/apps/estadistica/api/v1/preguntas';
 
 	private const TABLEROS = '/ocs/v2.php/apps/estadistica/api/v1/tableros';
+
+	private const INDICADORES = '/ocs/v2.php/apps/estadistica/api/v1/indicadores';
 
 	/** @return array<string, mixed> */
 	private static function spec(): array {
@@ -234,5 +247,46 @@ final class ApiContractTest extends TestCase {
 		self::assertSame(self::parameters('crearTablero'), self::body(self::TABLEROS, 'post')[0]);
 		self::assertSame([['titulo', 'tarjetas'], []], self::body(self::TABLEROS . '/{id}', 'put'));
 		self::assertSame(self::parameters('editarTablero', ['id']), self::body(self::TABLEROS . '/{id}', 'put')[0]);
+	}
+
+	public function testTheMetasServeTheSameKeys(): void {
+		$metas = GoalSeed::parse(json_decode((string)file_get_contents(dirname(__DIR__, 3) . '/seeds/metas-2026.json'), true, 64, JSON_THROW_ON_ERROR), 2026);
+		$ii = array_column($metas['indicadores'], null, 'codigo')['II'];
+		$inscritos = ['corte' => '2025-12-31', 'factor' => 1.0, 'manual' => false, 'bands' => [20 => ['M' => 100]]];
+		$commitment = ['meta' => 70.0, 'denominador' => null, 'cumplimiento' => null];
+
+		$indicator = GoalEvaluator::indicator($ii, $commitment, [], ['local' => $inscritos, 'nacional' => $inscritos, 'pares' => null], true, 2026, 6, 202606);
+		$answer = GoalEvaluator::response([2026], $metas, '900001', ['tipo' => 'CESFAM'], null, [Sources::rem('rem-a', [], []), Sources::piv([])], [$indicator]);
+
+		self::assertSame(self::METAS, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
+		self::assertSame(self::META, array_keys($indicator));
+		self::assertCount(6, $indicator['meses']);
+		self::assertSame(self::MES, array_keys($indicator['meses'][0]));
+		self::assertSame(self::MES, array_keys(GoalEvaluator::month('2026-01', null, null, null, 90.0, null, null)));
+		self::assertSame(self::POBLACION, array_keys($indicator['poblacion']));
+		self::assertSame(self::FUENTE, array_keys($answer['fuentes'][0]), 'the metas carry their fuentes as GET fuentes serves them');
+	}
+
+	public function testTheSpecNamesExactlyTheKeysTheMetasServe(): void {
+		$data = self::data(self::INDICADORES);
+		self::assertSame(self::METAS, array_keys($data['properties']));
+		self::assertSame(self::FUENTE, array_keys($data['properties']['fuentes']['items']['properties']));
+
+		$meta = $data['properties']['indicadores']['items']['properties'];
+		self::assertSame(self::META, array_keys($meta));
+		self::assertSame(self::MES, array_keys($meta['meses']['items']['properties']));
+		self::assertSame(self::POBLACION, array_keys($meta['poblacion']['properties']));
+		self::assertTrue($meta['poblacion']['nullable'] ?? false, 'poblacion is null for a meta not counted over people');
+	}
+
+	/** The query a consumer sends is exactly the controller's parameters. */
+	public function testTheIndicadoresQueryIsTheControllersParameters(): void {
+		$query = array_values(array_filter(
+			self::spec()['paths'][self::INDICADORES]['get']['parameters'] ?? [],
+			static fn (array $parameter): bool => ($parameter['in'] ?? null) === 'query',
+		));
+
+		self::assertSame(['anio', 'pares'], array_column($query, 'name'));
+		self::assertSame(self::parameters('indicadores'), array_column($query, 'name'));
 	}
 }

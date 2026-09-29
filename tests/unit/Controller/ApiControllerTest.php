@@ -10,6 +10,7 @@ use OCA\Estadistica\Controller\ApiController;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\ForbiddenException;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\EstablishmentConfig;
@@ -27,7 +28,9 @@ use PHPUnit\Framework\TestCase;
  * the local series is, and a refusal answered as a Spanish 422 whether the
  * spec, the DEIS code or the executor refuses. And the preguntas and tableros
  * routes (a8): a save answers 201, and SavedContent's three refusals answer
- * 404, 403 and 422, each with its sentence.
+ * 404, 403 and 422, each with its sentence. And GET indicadores (a12, a14):
+ * the configured establishment and the peer traits reach the evaluator, and
+ * a question it cannot read is a Spanish 400 before any SQL.
  */
 final class ApiControllerTest extends TestCase {
 	private const SPEC = [
@@ -43,12 +46,15 @@ final class ApiControllerTest extends TestCase {
 
 	private SavedContent&MockObject $saved;
 
+	private GoalEvaluator&MockObject $goals;
+
 	private ApiController $controller;
 
 	protected function setUp(): void {
 		$this->config = $this->createMock(EstablishmentConfig::class);
 		$this->executor = $this->createMock(QueryExecutor::class);
 		$this->saved = $this->createMock(SavedContent::class);
+		$this->goals = $this->createMock(GoalEvaluator::class);
 		$window = $this->createStub(YearWindow::class);
 		$window->method('currentYear')->willReturn(2026);
 
@@ -59,6 +65,7 @@ final class ApiControllerTest extends TestCase {
 			$this->config,
 			$window,
 			$this->saved,
+			$this->goals,
 		);
 	}
 
@@ -189,5 +196,51 @@ final class ApiControllerTest extends TestCase {
 		$this->saved->method('getDashboard')->willThrowException(new DoesNotExistException(''));
 
 		self::assertSame(Http::STATUS_NOT_FOUND, $this->controller->tablero(99)->getStatus());
+	}
+
+	/** a12: the metas are this install's establishment's, compared with the peers «like ours» by the traits named. */
+	public function testTheMetasAreTheConfiguredEstablishmentsWithThePeersAskedFor(): void {
+		$configured = Establishment::of('900001');
+		$this->config->method('get')->willReturn($configured);
+		$this->goals->expects(self::once())->method('evaluate')
+			->with(2026, self::identicalTo($configured), ['tipo', 'servicio'])
+			->willReturn(['anio' => 2026]);
+
+		$response = $this->controller->indicadores(2026, ' tipo, servicio ,tipo,');
+
+		self::assertSame([Http::STATUS_OK, ['anio' => 2026]], [$response->getStatus(), $response->getData()]);
+	}
+
+	public function testNoYearIsTheEvaluatorsChoiceAndAnEmptyParesIsNoPeers(): void {
+		$this->config->method('get')->willReturn(Establishment::none());
+		$this->goals->expects(self::once())->method('evaluate')->with(self::isNull(), self::anything(), [])->willReturn([]);
+
+		self::assertSame(Http::STATUS_OK, $this->controller->indicadores(null, '')->getStatus());
+	}
+
+	/** Next year's metas may be loaded in October; a year past that cannot hold any. */
+	public function testAYearOrATraitItCannotReadIsA400InSpanish(): void {
+		$this->goals->expects(self::never())->method('evaluate');
+
+		$late = $this->controller->indicadores(2028);
+		self::assertSame([Http::STATUS_BAD_REQUEST, ['message' => 'El año de las metas debe estar entre 2009 y 2027.']], [$late->getStatus(), $late->getData()]);
+
+		$trait = $this->controller->indicadores(2026, 'tipo,rut');
+		self::assertSame(Http::STATUS_BAD_REQUEST, $trait->getStatus());
+		self::assertSame('Los pares se eligen por tipo, dependencia, nivel, servicio, region, comuna.', $trait->getData()['message']);
+	}
+
+	public function testAYearWithoutMetasIs404AndARefusalIs422(): void {
+		$this->config->method('get')->willReturn(Establishment::none());
+		$this->goals->method('evaluate')->willReturnOnConsecutiveCalls(
+			self::throwException(new DoesNotExistException('')),
+			self::throwException(new RefusedException('La consulta tardó más de 10 s y se canceló: acote el periodo, las prestaciones o la comparación.')),
+		);
+
+		$missing = $this->controller->indicadores(2025);
+		self::assertSame([Http::STATUS_NOT_FOUND, []], [$missing->getStatus(), $missing->getData()]);
+		$refused = $this->controller->indicadores(2026);
+		self::assertSame(Http::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatus());
+		self::assertStringContainsString('se canceló', $refused->getData()['message']);
 	}
 }
