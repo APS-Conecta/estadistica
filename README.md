@@ -28,8 +28,14 @@ it to any group.
 and by a dropped zip, the catalogue, the consulta engine and its OCS API, preguntas and tableros, the FONASA import,
 and the 2026 metas. `info.xml`, `package.json` and `openapi.json` all read 0.1.0.
 
+It went through a code review on 2026-09-29. Its fixes are in, and what it deferred is in [`BUGS.md`](BUGS.md)
+(B-015 to B-020).
+
 Not done yet:
 
+- **gestion's side is its own PR**, and it merges before or with this app: phase 16 writes `deis_code`,
+  `establishment_type` and `comuna_cut`, the divergence gate reads them back, and `dev/lab-apps.sh` lists the app.
+  Until it merges, the links to it below describe what that PR adds. 0.1.0 is not tagged before it.
 - It is a **lab app** in gestion ([`dev/lab-apps.sh`](https://github.com/APS-Conecta/gestion/blob/main/dev/lab-apps.sh)),
   in no release. Promotion is its own change: a tarball, `OWN_APPS`, gestion's CI clone and org-drift check, and a
   `docs/LICENSING.md` row.

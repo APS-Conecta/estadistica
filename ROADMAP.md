@@ -7,24 +7,32 @@ Status doc, repo-first SSOT: where the app is and where it is going. The reasoni
 
 **0.1.0 — M1, the REM pillar, is built** and tested on synthetic data. [`README.md`](README.md) § *Status* says what
 works; [`CHANGELOG.md`](CHANGELOG.md) lists it. It is a **lab app** in gestion (`dev/lab-apps.sh`), in no release.
+It went through a code review on 2026-09-29: its fixes are in, and what it deferred is in [`BUGS.md`](BUGS.md)
+(B-015 to B-020).
 
 ## Next
 
-1. **Real data on the dev instance.** Run the job over the default window and load the owner's FONASA export
+1. **Merge order.** gestion's side is its own PR: phase 16 writes `deis_code`, `establishment_type` and
+   `comuna_cut`, the divergence gate reads them back, and `dev/lab-apps.sh` lists the app. It merges before or with
+   this app's, and 0.1.0 is not tagged before it.
+2. **Real data on the dev instance.** Run the job over the default window and load the owner's FONASA export
    through the admin section, then check:
    - more than one establishment per loaded year;
    - the configured center's Serie A row count equals the extract's, recomputed from the zip for `SITE_DEIS`;
    - 2026's A and P códigos with no label: none, or an explicit list;
    - a national consulta with no year filter answers inside the 10 s timeout;
    - FONASA's corte of 31-12-2025 holds every center of the export.
-2. **The owner's check in production.** One real month of Metas I–VII against the Estadística-REM unit's own
+3. **The owner's check in production.** One real month of Metas I–VII against the Estadística-REM unit's own
    calculation, recorded, before staff are told.
-3. **Owner questions the 2026 metas file leaves open**, each written in its notes:
+4. **Owner questions the 2026 metas file leaves open**, each written in its notes:
    - the pesos are 2025's, because the 2026 OOTT restate none;
    - Meta II's denominator counts mujeres only, while its numerador also counts col02's transmasculine people;
    - Meta VI's numerador is counted in 2026, where the OOTT's text says 2025.
-4. **Promotion to `OWN_APPS`**, a gestion change: a release tag and its tarball, the CI clone,
+5. **Promotion to `OWN_APPS`**, a gestion change: a release tag and its tarball, the CI clone,
    `check-org-drift.sh`, and the `docs/LICENSING.md` row.
+6. **What the code review left to the farmacia template** (BUGS B-015 to B-019): the webpack-vue-config major,
+   `.htaccess`'s 404s, a pinned and checked `composer.phar`, the browser gate in CI, and the `APS` default in a
+   worktree. Fixed in farmacia first, then here.
 
 ## Future
 
