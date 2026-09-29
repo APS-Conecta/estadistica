@@ -33,12 +33,10 @@ It went through a code review on 2026-09-29. Its fixes are in, and what it defer
 
 Not done yet:
 
-- **gestion's side is its own PR**, and it merges before or with this app: phase 16 writes `deis_code`,
-  `establishment_type` and `comuna_cut`, the divergence gate reads them back, and `dev/lab-apps.sh` lists the app.
-  Until it merges, the links to it below describe what that PR adds. 0.1.0 is not tagged before it.
 - It is a **lab app** in gestion ([`dev/lab-apps.sh`](https://github.com/APS-Conecta/gestion/blob/main/dev/lab-apps.sh)),
-  in no release. Promotion is its own change: a tarball, `OWN_APPS`, gestion's CI clone and org-drift check, and a
-  `docs/LICENSING.md` row.
+  installed on the lab since 2026-09-29, in no release. 0.1.0 is not tagged: the tag waits for the owner's
+  real-data check ([`ROADMAP.md`](ROADMAP.md) § *Next*). Promotion is its own change: a tarball, `OWN_APPS`,
+  gestion's CI clone and org-drift check, and a `docs/LICENSING.md` row.
 - Real data has not been run through it yet. The full DEIS window and a real FONASA export are the dev instance's
   next check, and the owner compares one real month of Metas I–VII in production before staff are told
   ([`ROADMAP.md`](ROADMAP.md)).
