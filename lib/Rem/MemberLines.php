@@ -37,6 +37,29 @@ final class MemberLines {
 	 * @throws RefusedException
 	 */
 	public static function of(RangeReader $range, array $member): Generator {
+		$pending = '';
+		foreach (self::chunks($range, $member) as $data) {
+			$lines = explode("\n", $pending . $data);
+			$pending = array_pop($lines);
+			foreach ($lines as $line) {
+				yield rtrim($line, "\r");
+			}
+		}
+
+		return $pending === '';
+	}
+
+	/**
+	 * The member's inflated bytes, a chunk at a time, for a member that is not
+	 * lines: a year's DICCIONARIO is itself a workbook (Catalog). The same
+	 * checks hold: it is refused if it is cut short or does not match the
+	 * directory.
+	 *
+	 * @param Member $member
+	 * @return Generator<int, string, mixed, void>
+	 * @throws RefusedException
+	 */
+	public static function chunks(RangeReader $range, array $member): Generator {
 		// Only the local header's name and extra lengths are read: they say where
 		// the data starts, which the central directory does not.
 		$header = $range->read($member['offset'], 30);
@@ -51,7 +74,6 @@ final class MemberLines {
 			$crc = hash_init('crc32b');
 			$size = 0;
 			$left = $member['compressedSize'];
-			$pending = '';
 
 			while ($left > 0) {
 				$chunk = fread($stream, min(self::CHUNK, $left));
@@ -69,11 +91,7 @@ final class MemberLines {
 				hash_update($crc, $data);
 				$size += strlen($data);
 
-				$lines = explode("\n", $pending . $data);
-				$pending = array_pop($lines);
-				foreach ($lines as $line) {
-					yield rtrim($line, "\r");
-				}
+				yield $data;
 			}
 
 			if (inflate_get_status($inflate) !== ZLIB_STREAM_END
@@ -84,7 +102,5 @@ final class MemberLines {
 		} finally {
 			fclose($stream);
 		}
-
-		return $pending === '';
 	}
 }

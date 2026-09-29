@@ -7,15 +7,26 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Tests\Integration;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Register\Register;
+use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\YearWindow;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Files\AppData\IAppDataFactory;
+use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
+use OCP\ITempManager;
+use OCP\IUser;
+use OCP\IUserSession;
 use OCP\Server;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Shared plumbing for tests against the throwaway instance's real PostgreSQL
  * (make deps && make instance-up, then make integration): app config written
- * the way occ writes it. Each test class cleans up the rows it makes.
+ * the way occ writes it, and the drop door driven the way the FilePicker
+ * drives it. Each test class cleans up the rows it makes.
  */
 abstract class IntegrationTestCase extends TestCase {
 	/** The instance's occ, beside the lib/base.php the bootstrap requires. */
@@ -30,6 +41,29 @@ abstract class IntegrationTestCase extends TestCase {
 
 	final protected function appConfig(): IAppConfig {
 		return Server::get(IAppConfig::class);
+	}
+
+	/**
+	 * The drop door as the app wires it, acting for $uid, the way the
+	 * FilePicker drives it. The session is the one thing stubbed; everything
+	 * else is the instance's own (territorio's FilesImportTest).
+	 */
+	final protected function dropsFor(string $uid): DroppedFiles {
+		return new DroppedFiles(
+			Server::get(IRootFolder::class),
+			$this->sessionOf($uid),
+			Server::get(IAppDataFactory::class),
+			Server::get(ITempManager::class),
+			Server::get(ITimeFactory::class),
+			Server::get(YearWindow::class),
+			Server::get(IngestStateMapper::class),
+			Server::get(Register::class),
+		);
+	}
+
+	/** A local file put in $uid's Files as $name, for dropsFor() to be handed. The caller deletes it. */
+	final protected function putInFiles(string $uid, string $name, string $local): void {
+		Server::get(IRootFolder::class)->getUserFolder($uid)->newFile($name, fopen($local, 'rb'));
 	}
 
 	/**
@@ -64,6 +98,15 @@ abstract class IntegrationTestCase extends TestCase {
 		}
 		$this->restore = [];
 		parent::tearDown();
+	}
+
+	private function sessionOf(string $uid): IUserSession {
+		$user = $this->createStub(IUser::class);
+		$user->method('getUID')->willReturn($uid);
+		$session = $this->createStub(IUserSession::class);
+		$session->method('getUser')->willReturn($user);
+
+		return $session;
 	}
 
 	/** The instance's occ, as www-data runs it; a failure fails the test with occ's own output. */

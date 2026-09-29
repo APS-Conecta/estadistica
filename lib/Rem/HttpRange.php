@@ -14,6 +14,8 @@ use Throwable;
 
 /**
  * A zip on a web server that answers Range requests: DEIS's (DeisRepository).
+ * A workbook is a zip too, and the Base de Establecimientos is read through
+ * one whole.
  *
  * Every byte comes from a Range request for exactly those bytes, and every
  * body is streamed, never held whole (acceptance a3, a17). The central
@@ -197,8 +199,8 @@ final class HttpRange implements RangeReader {
 		];
 	}
 
-	/** The file's name, for the sentences a person reads. */
+	/** The file's name as a person reads it: «Base de Establecimientos 2025.xlsx», not its %20s. */
 	private function name(): string {
-		return basename((string)parse_url($this->url, PHP_URL_PATH));
+		return rawurldecode(basename((string)parse_url($this->url, PHP_URL_PATH)));
 	}
 }

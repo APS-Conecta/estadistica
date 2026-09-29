@@ -1,0 +1,479 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "estadistica",
+        "version": "0.0.4",
+        "description": "Cifras REM del establecimiento junto al promedio nacional y de pares, y el avance de las Metas Sanitarias",
+        "license": {
+            "name": "AGPL-3.0-or-later"
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "basic_auth": {
+                "type": "http",
+                "scheme": "basic"
+            },
+            "bearer_auth": {
+                "type": "http",
+                "scheme": "bearer"
+            }
+        },
+        "schemas": {
+            "OCSMeta": {
+                "type": "object",
+                "required": [
+                    "status",
+                    "statuscode"
+                ],
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "statuscode": {
+                        "type": "integer"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "totalitems": {
+                        "type": "string"
+                    },
+                    "itemsperpage": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "paths": {
+        "/ocs/v2.php/apps/estadistica/api/v1/fuentes": {
+            "get": {
+                "operationId": "api-fuentes",
+                "summary": "Every fuente this install holds: REM Serie A and P, year by year, and the establishments. Each says where it comes from (origen: datos públicos DEIS), up to when (fecha_corte: YYYY-MM for REM), how many rows it holds, and whether it is whole (estado: ok, incompleto, sin datos). A REM year also says how many of its códigos no dictionary explains (sin_descripcion) and whose dictionary labels it (etiquetas_de).",
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "bearer_auth": []
+                    },
+                    {
+                        "basic_auth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "OCS-APIRequest",
+                        "in": "header",
+                        "description": "Required to be true for the API request to pass",
+                        "required": true,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The fuentes, REM Serie A, REM Serie P, then the establishments",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "id",
+                                                            "nombre",
+                                                            "origen",
+                                                            "fecha_corte",
+                                                            "filas",
+                                                            "estado",
+                                                            "anios"
+                                                        ],
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "nombre": {
+                                                                "type": "string"
+                                                            },
+                                                            "origen": {
+                                                                "type": "string"
+                                                            },
+                                                            "fecha_corte": {
+                                                                "type": "string",
+                                                                "nullable": true
+                                                            },
+                                                            "filas": {
+                                                                "type": "integer",
+                                                                "format": "int64"
+                                                            },
+                                                            "estado": {
+                                                                "type": "string"
+                                                            },
+                                                            "anios": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "object",
+                                                                    "required": [
+                                                                        "anio",
+                                                                        "fecha_corte",
+                                                                        "filas",
+                                                                        "estado",
+                                                                        "sin_descripcion",
+                                                                        "etiquetas_de"
+                                                                    ],
+                                                                    "properties": {
+                                                                        "anio": {
+                                                                            "type": "integer",
+                                                                            "format": "int64"
+                                                                        },
+                                                                        "fecha_corte": {
+                                                                            "type": "string",
+                                                                            "nullable": true
+                                                                        },
+                                                                        "filas": {
+                                                                            "type": "integer",
+                                                                            "format": "int64"
+                                                                        },
+                                                                        "estado": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sin_descripcion": {
+                                                                            "type": "integer",
+                                                                            "format": "int64"
+                                                                        },
+                                                                        "etiquetas_de": {
+                                                                            "type": "integer",
+                                                                            "format": "int64",
+                                                                            "nullable": true
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Current user is not logged in",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ocs/v2.php/apps/estadistica/api/v1/fuentes/{id}": {
+            "get": {
+                "operationId": "api-fuente",
+                "summary": "One fuente, with its catálogo. For rem-a and rem-p, one year's hojas, secciones, prestaciones (código and label) and columns (col01…col50 and label), from that year's DICCIONARIO CODIGOS or, for a year without one, from the nearest later year's (etiquetas_de). For establecimientos, the values a peer group is chosen from, each with how many establishments carry it.",
+                "description": "An anio outside 2009 to the current year cannot be a REM year, and is refused rather than answered with an empty catálogo (epi's blank lesson: an empty answer is only for a question that was understood).",
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "bearer_auth": []
+                    },
+                    {
+                        "basic_auth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "rem-a, rem-p or establecimientos",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[a-z-]+$"
+                        }
+                    },
+                    {
+                        "name": "anio",
+                        "in": "query",
+                        "description": "for REM, the year whose catálogo to read; the newest loaded year when omitted",
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "nullable": true,
+                            "default": null
+                        }
+                    },
+                    {
+                        "name": "OCS-APIRequest",
+                        "in": "header",
+                        "description": "Required to be true for the API request to pass",
+                        "required": true,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The fuente and its catálogo",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "id",
+                                                        "nombre",
+                                                        "origen",
+                                                        "fecha_corte",
+                                                        "filas",
+                                                        "estado",
+                                                        "anios",
+                                                        "catalogo"
+                                                    ],
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "nombre": {
+                                                            "type": "string"
+                                                        },
+                                                        "origen": {
+                                                            "type": "string"
+                                                        },
+                                                        "fecha_corte": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        },
+                                                        "filas": {
+                                                            "type": "integer",
+                                                            "format": "int64"
+                                                        },
+                                                        "estado": {
+                                                            "type": "string"
+                                                        },
+                                                        "anios": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "object",
+                                                                "required": [
+                                                                    "anio",
+                                                                    "fecha_corte",
+                                                                    "filas",
+                                                                    "estado",
+                                                                    "sin_descripcion",
+                                                                    "etiquetas_de"
+                                                                ],
+                                                                "properties": {
+                                                                    "anio": {
+                                                                        "type": "integer",
+                                                                        "format": "int64"
+                                                                    },
+                                                                    "fecha_corte": {
+                                                                        "type": "string",
+                                                                        "nullable": true
+                                                                    },
+                                                                    "filas": {
+                                                                        "type": "integer",
+                                                                        "format": "int64"
+                                                                    },
+                                                                    "estado": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "sin_descripcion": {
+                                                                        "type": "integer",
+                                                                        "format": "int64"
+                                                                    },
+                                                                    "etiquetas_de": {
+                                                                        "type": "integer",
+                                                                        "format": "int64",
+                                                                        "nullable": true
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "catalogo": {
+                                                            "type": "object",
+                                                            "additionalProperties": {
+                                                                "type": "object"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The year cannot be a REM year — {message: the Spanish sentence}",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "message"
+                                                    ],
+                                                    "properties": {
+                                                        "message": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No fuente has that id",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Current user is not logged in",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "ocs"
+                                    ],
+                                    "properties": {
+                                        "ocs": {
+                                            "type": "object",
+                                            "required": [
+                                                "meta",
+                                                "data"
+                                            ],
+                                            "properties": {
+                                                "meta": {
+                                                    "$ref": "#/components/schemas/OCSMeta"
+                                                },
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "admin",
+            "description": "The admin section's actions: its writes, and the ingest state it reads. Every public method carries #[AuthorizedAdminSetting(settings: AdminSettings::class)] and nothing else that decides who may call it: NC core lets a real admin through, lets a member of any group an admin delegated the section to through, and answers 403 to everyone else (SecurityMiddleware). A hand-written admin check beside it would refuse every delegate — IntraVox's SettingsApiController does exactly that — so there is none, and MetadataTest fails a method without the attribute (docs/adr/0003). The check's name is not even written here: the a10 gate greps this directory for it. CSRF stays on: the section's own requests carry the token, and an API client sends OCS-APIRequest: true, which NC accepts in its place."
+        },
+        {
+            "name": "api",
+            "description": "Estadística over OCS: the contract suite apps and M3 read (gestion docs/CONTRACTS.md, Slice 10). farmacia's resource-per-endpoint shape (the OCS decision), under Spanish resource names, starting with the fuentes. Consumers send `OCS-APIRequest: true`, which is also the CSRF protection (Request::passesCSRFCheck), and get the OCS envelope back: GET /ocs/v2.php/apps/estadistica/api/v1/fuentes { \"ocs\": { \"meta\": {…}, \"data\": [ …the fuentes… ] } } Everyone reads everything published (D6), so every route is #[NoAdminRequired], and every one carries a #[UserRateLimit] (MetadataTest holds both)."
+        }
+    ]
+}

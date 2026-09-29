@@ -7,13 +7,20 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Rem;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Catalog\Catalog;
+use OCA\Estadistica\Catalog\DictionaryParser;
+use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Register\Register;
+use OCA\Estadistica\Register\RegisterParser;
 use OCA\Estadistica\Service\YearWindow;
+use OCA\Estadistica\Xlsx\XlsxReader;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Http\Client\IClientService;
 use OCP\IAppConfig;
 use OCP\IConfig;
+use OCP\ITempManager;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -29,9 +36,11 @@ use Psr\Log\LoggerInterface;
  *   year settled, and it costs 0 bytes (research: 304 on If-None-Match).
  * - **The central directory of a year that did change** (two ≈ 66 KB Range
  *   requests). Serie A or P is queued only when its CRC-32 or size differs
- *   from the member last judged on its content (IngestState::memberCrc). The
- *   ETag says when to look and the CRC says what changed: IIS derives the
- *   ETag from the file's mtime, so it cannot say what (research).
+ *   from the member last judged on its content (IngestState::memberCrc), or
+ *   its DICCIONARIO's from the one last judged (Catalog::judged): a dictionary
+ *   DEIS republishes alone is read again with its serie. The ETag says when to
+ *   look and the CRC says what changed: IIS derives the ETag from the file's
+ *   mtime, so it cannot say what (research).
  * - **The ETag is kept only once the year is settled**, with nothing of it
  *   queued. A load that fails is looked at again the next day, instead of
  *   hiding behind a 304.
@@ -42,14 +51,31 @@ use Psr\Log\LoggerInterface;
  * admin section (status()), because a check that cannot reach DEIS must not
  * look like a quiet day (#74).
  *
+ * The same pass looks for the newest Base de Establecimientos on the same
+ * host, one xlsx per year (the Register decision): this year's once DEIS
+ * publishes it, last year's until then. A conditional HEAD on the file last
+ * loaded costs nothing while it has not changed, and a new one is read whole
+ * (≈ 1 MB) and replaces the register.
+ *
  * An install configured without internet (config.php
  * `'has_internet_connection' => false`, which Nextcloud's own app store and
  * update checks obey) never calls DEIS. Its figures come from dropped zips
  * only.
+ *
+ * @psalm-import-type Row from RegisterParser
  */
 class DeisRepository {
 	/** Every year's zip, 2009 onward, at one address (research: all 18 years measured). */
 	private const URL = 'https://repositoriodeis.minsal.cl/DatosAbiertos/REM/SERIE_REM_%d.zip';
+
+	/**
+	 * Every year's Base de Establecimientos, 2014 onward, beside REM on the same
+	 * host (measured 2026-09-28: 2025 answers 200 at 1.0 MB, 2026 not yet out).
+	 */
+	private const REGISTER_URL = 'https://repositoriodeis.minsal.cl/ContenidoSitioWeb2020/Establecimientos/Base%%20de%%20Establecimientos%%20%d.xlsx';
+
+	/** A Base de Establecimientos weighs ≈ 1 MB. This stops a wrong file before it is copied. */
+	private const REGISTER_MAX_BYTES = 64 * 1024 * 1024;
 
 	/** Names this app in every request (epidemiologia ADR-0015). */
 	public const USER_AGENT = 'APS-Conecta-Estadistica/1.0 (+https://github.com/APS-Conecta/estadistica)';
@@ -63,6 +89,9 @@ class DeisRepository {
 	/** What the last check could not do, one line per year. Empty when it did everything. */
 	public const KEY_ERRORS = 'deis_check_errors';
 
+	/** The Base de Establecimientos last loaded from DEIS: its year and its ETag. */
+	public const KEY_REGISTER = 'deis_register';
+
 	public const CHECK_EVERY = 24 * 3600;
 
 	private const OFFLINE = 'Esta instalación está configurada sin acceso a internet, así que no consulta el DEIS. Cargue a mano el ZIP de ese año.';
@@ -74,6 +103,9 @@ class DeisRepository {
 		private ITimeFactory $time,
 		private YearWindow $window,
 		private IngestStateMapper $states,
+		private Catalog $catalog,
+		private Register $register,
+		private ITempManager $tempManager,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -138,6 +170,13 @@ class DeisRepository {
 			}
 		}
 
+		try {
+			$this->checkRegister();
+		} catch (RefusedException $e) {
+			$errors[] = sprintf('Base de Establecimientos: %s', $e->getMessage());
+			$this->logger->warning('The DEIS check of the Base de Establecimientos failed', ['exception' => $e]);
+		}
+
 		$this->appConfig->setValueArray(Application::APP_ID, self::KEY_ETAGS, $etags);
 		$this->appConfig->setValueString(Application::APP_ID, self::KEY_ERRORS, implode("\n", $errors));
 		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_CHECKED_AT, $this->time->getTime());
@@ -193,6 +232,14 @@ class DeisRepository {
 				// the same sentence, on the row the admin reads.
 				$settled = false;
 			}
+			try {
+				$dictionary = DictionaryParser::member($directory, $serie);
+			} catch (RefusedException) {
+				// Two of them: the load records that with no identity
+				// (Catalog::load), and this compares against the same none.
+				$dictionary = null;
+			}
+			$settled = $settled && $this->catalog->judged($year, $serie, $dictionary);
 
 			if (!$settled) {
 				$this->states->markPending($year, $serie);
@@ -201,6 +248,76 @@ class DeisRepository {
 		}
 
 		return $queued;
+	}
+
+	/**
+	 * The newest Base de Establecimientos: this year's, or last year's while
+	 * this year's is not out. A 404 is quiet only for this year, and only
+	 * while this year's file was never loaded: a file loaded once and gone
+	 * means the address moved (epidemiologia ADR-0014), and that is said.
+	 *
+	 * @throws RefusedException
+	 */
+	private function checkRegister(): void {
+		$kept = $this->appConfig->getValueArray(Application::APP_ID, self::KEY_REGISTER);
+		$current = $this->window->currentYear();
+
+		foreach ([$current, $current - 1] as $year) {
+			$file = new HttpRange($this->clients->newClient(), sprintf(self::REGISTER_URL, $year), self::USER_AGENT, $this->logger);
+			try {
+				$changed = $file->changedSince(($kept['year'] ?? null) === $year ? (string)($kept['etag'] ?? '') : '');
+			} catch (RefusedException $e) {
+				if ($e->getCode() === HttpRange::NOT_FOUND && $year === $current && ($kept['year'] ?? null) !== $current) {
+					continue;
+				}
+				throw $e;
+			}
+
+			if ($changed) {
+				$this->register->replace($this->registerRows($file), IngestState::ORIGIN_DEIS, $year);
+				$this->appConfig->setValueArray(Application::APP_ID, self::KEY_REGISTER, ['year' => $year, 'etag' => $file->etag()]);
+			}
+			return;
+		}
+	}
+
+	/**
+	 * The file copied whole to a temporary one, then read.
+	 *
+	 * @return list<Row>
+	 * @throws RefusedException
+	 */
+	private function registerRows(HttpRange $file): array {
+		$size = $file->size();
+		if ($size > self::REGISTER_MAX_BYTES) {
+			throw new RefusedException(sprintf('El archivo pesa %d MB; una Base de Establecimientos pesa cerca de 1 MB.', intdiv($size, 1024 * 1024)));
+		}
+
+		$path = $this->tempManager->getTemporaryFile('.xlsx');
+		if ($path === false) {
+			throw new RefusedException('No se pudo crear un archivo temporal para leerla.');
+		}
+
+		try {
+			$target = fopen($path, 'wb');
+			if ($target === false) {
+				throw new RefusedException('No se pudo crear un archivo temporal para leerla.');
+			}
+			try {
+				$source = $file->stream(0, $size);
+				$copied = stream_copy_to_stream($source, $target, $size);
+				fclose($source);
+			} finally {
+				fclose($target);
+			}
+			if ($copied !== $size) {
+				throw new RefusedException('La descarga llegó cortada.');
+			}
+
+			return RegisterParser::parse(XlsxReader::open($path))['rows'];
+		} finally {
+			unlink($path);
+		}
 	}
 
 	/** @return array<int, string> */

@@ -6,20 +6,24 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Tests\Unit\Rem;
 
+use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Rem\LocalRange;
 use OCA\Estadistica\Rem\MemberLines;
 use OCA\Estadistica\Rem\ZipDirectory;
 use OCA\Estadistica\Service\YearWindow;
+use OCA\Estadistica\Tests\Unit\Xlsx\XlsxFixture;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Http\Client\IClient;
 use OCP\Http\Client\IClientService;
 use OCP\Http\Client\IResponse;
 use OCP\IAppConfig;
 use OCP\IConfig;
+use OCP\ITempManager;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use RuntimeException;
@@ -34,6 +38,10 @@ use Throwable;
  * - 404 for a year it does not publish;
  * - 200 with the whole file when If-Range names an ETag that is no longer
  *   current.
+ *
+ * It also publishes each year's Base de Establecimientos beside REM, which
+ * the same daily pass looks at. By default only last year's is out, as on the
+ * day this was measured.
  */
 class DeisRepositoryTest extends TestCase {
 	/** 2026-09-28 12:00 UTC: the default window is 2023–2026. */
@@ -58,6 +66,9 @@ class DeisRepositoryTest extends TestCase {
 	/** @var array<int, array{path: string, etag: string}> what the fake server publishes, by year */
 	private array $published = [];
 
+	/** @var array<int, array{path: string, etag: string}> the Base de Establecimientos it publishes, by year */
+	private array $registers = [];
+
 	/** @var list<array{kind: string, method: string, year: int, headers: array<string, string>, stream: bool}> */
 	private array $requests = [];
 
@@ -73,8 +84,35 @@ class DeisRepositoryTest extends TestCase {
 	/** @var list<string> "año-serie" as the check queued them */
 	private array $queued = [];
 
+	/** @var list<string> "año-serie" whose dictionary the catalogue has not judged as the one now published */
+	private array $unjudged = [];
+
+	/** @var list<array{rows: int, origin: string, year: ?int}> every register the check stored */
+	private array $stored = [];
+
+	/** @var list<string> temporary files the repository asked for */
+	private array $temporary = [];
+
+	protected function setUp(): void {
+		$this->publishRegister(2025);
+	}
+
 	protected function tearDown(): void {
 		ZipFixture::cleanup();
+		XlsxFixture::cleanup();
+		foreach ($this->temporary as $path) {
+			if (is_file($path)) {
+				unlink($path);
+			}
+		}
+	}
+
+	/** Publishes $year's Base de Establecimientos: two fabricated establishments. */
+	private function publishRegister(int $year, string $etag = '"r1:0"'): void {
+		$this->registers[$year] = [
+			'path' => XlsxFixture::register([XlsxFixture::establishment(900001), XlsxFixture::establishment(900002)]),
+			'etag' => $etag,
+		];
 	}
 
 	/** Publishes $year: Serie A and P, plus BS, D and a dictionary that are never read. */
@@ -148,7 +186,23 @@ class DeisRepositoryTest extends TestCase {
 			$this->queued[] = "$anio-$serie";
 		});
 
-		return new DeisRepository($clients, $appConfig, $system, $time, new YearWindow($appConfig, $time), $states, new NullLogger());
+		$catalog = $this->createMock(Catalog::class);
+		$catalog->method('judged')->willReturnCallback(
+			fn (int $anio, string $serie): bool => !in_array("$anio-$serie", $this->unjudged, true),
+		);
+
+		$register = $this->createMock(Register::class);
+		$register->method('replace')->willReturnCallback(function (array $rows, string $origin, ?int $year): int {
+			$this->stored[] = ['rows' => count($rows), 'origin' => $origin, 'year' => $year];
+			return count($rows);
+		});
+
+		$temp = $this->createMock(ITempManager::class);
+		$temp->method('getTemporaryFile')->willReturnCallback(function (): string {
+			return $this->temporary[] = (string)tempnam(sys_get_temp_dir(), 'estadistica-');
+		});
+
+		return new DeisRepository($clients, $appConfig, $system, $time, new YearWindow($appConfig, $time), $states, $catalog, $register, $temp, new NullLogger());
 	}
 
 	private function client(): IClient {
@@ -188,10 +242,15 @@ class DeisRepositoryTest extends TestCase {
 
 	/** @return array{path: string, etag: string} */
 	private function serve(string $method, string $url, array $options): array {
-		self::assertMatchesRegularExpression('~^https://repositoriodeis\.minsal\.cl/DatosAbiertos/REM/SERIE_REM_(\d{4})\.zip$~', $url);
-		preg_match('~(\d{4})\.zip$~', $url, $match);
-		$kind = 'rem';
-		$files = $this->published;
+		if (preg_match('~^https://repositoriodeis\.minsal\.cl/DatosAbiertos/REM/SERIE_REM_(\d{4})\.zip$~', $url, $match) === 1) {
+			$kind = 'rem';
+			$files = $this->published;
+		} else {
+			self::assertMatchesRegularExpression('~^https://repositoriodeis\.minsal\.cl/ContenidoSitioWeb2020/Establecimientos/Base%20de%20Establecimientos%20(\d{4})\.xlsx$~', $url);
+			preg_match('~(\d{4})\.xlsx$~', $url, $match);
+			$kind = 'register';
+			$files = $this->registers;
+		}
 		$year = (int)$match[1];
 		$this->requests[] = ['kind' => $kind, 'method' => $method, 'year' => $year, 'headers' => $options['headers'], 'stream' => $options['stream'] ?? false];
 
@@ -412,7 +471,8 @@ class DeisRepositoryTest extends TestCase {
 
 		self::assertSame([], $this->queued);
 		self::assertSame(
-			'2026: No se pudo conectar con el DEIS para pedir SERIE_REM_2026.zip. Se volverá a intentar.',
+			"2026: No se pudo conectar con el DEIS para pedir SERIE_REM_2026.zip. Se volverá a intentar.\n"
+			. 'Base de Establecimientos: No se pudo conectar con el DEIS para pedir Base de Establecimientos 2026.xlsx. Se volverá a intentar.',
 			$deis->status()['errors'],
 		);
 		self::assertFalse($deis->checkDue(), 'failed or not, the check runs once a day');
@@ -477,5 +537,107 @@ class DeisRepositoryTest extends TestCase {
 		$this->requests = [];
 		$deis->check();
 		self::assertArrayNotHasKey('If-None-Match', $this->requests[0]['headers'], 'a year let go is not answered by a 304 when it comes back');
+	}
+
+	/** A dictionary DEIS republishes alone: its serie is read again, so the labels follow it. */
+	public function testADictionaryRepublishedAloneRequeuesItsSerie(): void {
+		$this->config[YearWindow::KEY] = 2026;
+		$this->publish(2026);
+		$deis = $this->repository();
+		$deis->check();
+		$this->load();
+		$this->now += self::DAY;
+		$deis->check();
+		self::assertSame([], $this->queued);
+
+		$this->publish(2026, '"2:0"');
+		$this->unjudged = ['2026-A'];
+		$this->now += self::DAY;
+		$deis->check();
+
+		self::assertSame(['2026-A'], $this->queued, 'Serie A\'s figures are byte-identical; its dictionary is not');
+	}
+
+	/** The newest Base de Establecimientos: last year's while this year's is not out, read whole, stored. */
+	public function testTheRegisterIsTheNewestOneDeisPublishes(): void {
+		$this->config[YearWindow::KEY] = 2026;
+		$this->publish(2026);
+		$deis = $this->repository();
+
+		$deis->check();
+
+		self::assertSame(['head 2026', 'head 2025', 'get 2025'], $this->methods('register'), 'this year\'s is not out yet: quiet');
+		self::assertSame([['rows' => 2, 'origin' => IngestState::ORIGIN_DEIS, 'year' => 2025]], $this->stored);
+		self::assertSame(['year' => 2025, 'etag' => '"r1:0"'], $this->config[DeisRepository::KEY_REGISTER]);
+		self::assertNull($deis->status()['errors']);
+		foreach ($this->requestsFor('register') as $request) {
+			self::assertSame(DeisRepository::USER_AGENT, $request['headers']['User-Agent']);
+		}
+		self::assertSame([], array_filter($this->temporary, 'is_file'), 'the temporary copy is gone');
+	}
+
+	public function testAnUnchangedRegisterCostsTwoHeadsAndThisYearsReplacesIt(): void {
+		$this->config[YearWindow::KEY] = 2026;
+		$this->publish(2026);
+		$deis = $this->repository();
+		$deis->check();
+
+		$this->requests = [];
+		$this->now += self::DAY;
+		$deis->check();
+		self::assertSame(['head 2026', 'head 2025'], $this->methods('register'), 'a 404 and a 304');
+		self::assertSame('"r1:0"', $this->requestsFor('register')[1]['headers']['If-None-Match']);
+		self::assertCount(1, $this->stored);
+
+		$this->publishRegister(2026, '"r2:0"');
+		$this->now += self::DAY;
+		$deis->check();
+		self::assertSame(2026, $this->stored[1]['year']);
+		self::assertSame(['year' => 2026, 'etag' => '"r2:0"'], $this->config[DeisRepository::KEY_REGISTER]);
+	}
+
+	/** #74: a file that is not the register is said, and the register loaded before stays. */
+	public function testARegisterThatCannotBeReadIsSaidAndStoresNothing(): void {
+		$this->config[YearWindow::KEY] = 2026;
+		$this->publish(2026);
+		$this->registers[2025]['path'] = XlsxFixture::register([XlsxFixture::establishment(900001)], ['tipo']);
+		$deis = $this->repository();
+
+		$deis->check();
+
+		self::assertSame([], $this->stored);
+		self::assertSame(
+			'Base de Establecimientos: La Base de Establecimientos no trae TipoEstablecimientoGlosa: no tiene la forma que esta aplicación conoce.',
+			$deis->status()['errors'],
+		);
+		self::assertArrayNotHasKey(DeisRepository::KEY_REGISTER, $this->config, 'looked at again tomorrow, not settled');
+	}
+
+	public function testNoRegisterAtAllIsSaid(): void {
+		$this->config[YearWindow::KEY] = 2026;
+		$this->publish(2026);
+		$this->registers = [];
+		$deis = $this->repository();
+
+		$deis->check();
+
+		self::assertSame('Base de Establecimientos: El DEIS no publica Base de Establecimientos 2025.xlsx.', $deis->status()['errors']);
+	}
+
+	/** A file loaded once and gone means the address moved (epidemiologia ADR-0014): said, and the register kept. */
+	public function testThisYearsRegisterGoneAfterLoadingIsSaid(): void {
+		$this->config[YearWindow::KEY] = 2026;
+		$this->publish(2026);
+		$this->publishRegister(2026);
+		$deis = $this->repository();
+		$deis->check();
+		self::assertSame(2026, $this->stored[0]['year']);
+
+		unset($this->registers[2026]);
+		$this->now += self::DAY;
+		$deis->check();
+
+		self::assertCount(1, $this->stored, 'last year\'s never replaces this year\'s');
+		self::assertSame('Base de Establecimientos: El DEIS no publica Base de Establecimientos 2026.xlsx.', $deis->status()['errors']);
 	}
 }

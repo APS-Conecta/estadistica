@@ -8,8 +8,10 @@ namespace OCA\Estadistica\Controller;
 
 use APS\Common\Refuses;
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
+use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Service\DroppedFiles;
 use OCA\Estadistica\Service\YearWindow;
@@ -43,6 +45,8 @@ class AdminController extends Controller {
 		private DroppedFiles $drops,
 		private IngestStateMapper $states,
 		private DeisRepository $deis,
+		private Catalog $catalog,
+		private Register $register,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -69,6 +73,7 @@ class AdminController extends Controller {
 	 * - A REM zip is checked now: a zip, with Serie A or P, of a year inside
 	 *   the window. A wrong file is refused in this request, in Spanish. A
 	 *   right one loads in the background, one serie per hourly run (RemJob).
+	 * - A Base de Establecimientos loads now.
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function drop(string $path = ''): JSONResponse {
@@ -78,14 +83,18 @@ class AdminController extends Controller {
 	/**
 	 * Every (año, serie) this install knows about: what is loaded, its fecha de
 	 * corte and row count, whether it is incompleto, and what the last attempt
-	 * did. Also when DEIS was last checked, and what that check could not do.
-	 * A failure is never silent (a4): a check that cannot reach DEIS must not
-	 * read as a quiet day (docs/adr/0005).
+	 * did; beside each, its dictionary and how many of its códigos are left
+	 * «sin descripción» (a6). Also the Base de Establecimientos, when DEIS was
+	 * last checked, and what that check could not do. A failure is never
+	 * silent (a4): a check that cannot reach DEIS must not read as a quiet day
+	 * (docs/adr/0005).
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function ingests(): JSONResponse {
 		return $this->attempt(fn (): array => [
 			'ingests' => array_map(static fn (IngestState $state): array => $state->toClient(), $this->states->findAll()),
+			'dictionaries' => $this->catalog->status(),
+			'register' => $this->register->status(),
 			'deis' => $this->deis->status(),
 		]);
 	}

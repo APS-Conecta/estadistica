@@ -7,13 +7,17 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Service;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Register\Register;
+use OCA\Estadistica\Register\RegisterParser;
 use OCA\Estadistica\Rem\LocalRange;
 use OCA\Estadistica\Rem\MemberLines;
 use OCA\Estadistica\Rem\RangeReader;
 use OCA\Estadistica\Rem\RemReader;
 use OCA\Estadistica\Rem\ZipDirectory;
+use OCA\Estadistica\Xlsx\XlsxReader;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\File;
@@ -27,13 +31,15 @@ use OCP\IUserSession;
 use OCP\Lock\LockedException;
 
 /**
- * The admin's door for a DEIS REM zip. An install without internet has no
- * other way to get one. The admin picks the file in Files with the platform's
- * picker, and it is handed over by path.
+ * The admin's door for a file: a DEIS REM zip, or DEIS's Base de
+ * Establecimientos. An install without internet has no other way to get
+ * them. The admin picks the file in Files with the platform's picker, and it
+ * is handed over by path.
  *
  * A REM zip is kept in the app's own storage until the job has loaded it. The
  * job has no session, so it cannot read anyone's Files; IAppData needs none
- * (research).
+ * (research). The Base de Establecimientos is ≈ 1 MB and 5,600 rows, so it is
+ * loaded in the request, and replaces the register at once (Register).
  *
  * Nothing is read into memory:
  *
@@ -43,7 +49,9 @@ use OCP\Lock\LockedException;
  *    Spanish while the admin is still looking;
  * 3. it is streamed on into IAppData as drops/<año>.zip.
  *
- * The year comes from the rows, not the file name, which may say anything.
+ * A workbook is a zip too: one with no Serie A or P is read as the Base de
+ * Establecimientos, and refused in Spanish if it is not one either. The year
+ * comes from the rows, not the file name, which may say anything.
  *
  * A drop queues its (año, serie) pairs only AFTER it is stored, so the job
  * never meets a queued pair whose file has not arrived.
@@ -73,15 +81,16 @@ class DroppedFiles {
 		private ITimeFactory $time,
 		private YearWindow $window,
 		private IngestStateMapper $states,
+		private Register $register,
 	) {
 		$this->appData = $appDataFactory->get(Application::APP_ID);
 	}
 
 	/**
-	 * Takes the file at $path in the caller's own Files and queues the REM
-	 * zip's series.
+	 * Takes the file at $path in the caller's own Files: queues a REM zip's
+	 * series, or loads a Base de Establecimientos.
 	 *
-	 * @return array{anio: int, series: list<string>}
+	 * @return array{anio: int, series: list<string>}|array{establecimientos: int}
 	 * @throws RefusedException
 	 */
 	public function accept(string $path): array {
@@ -92,7 +101,7 @@ class DroppedFiles {
 			$zip = ZipDirectory::read($range);
 			$series = $zip->series();
 			if ($series === []) {
-				throw new RefusedException('El ZIP no trae la Serie A ni la Serie P del REM.');
+				return ['establecimientos' => $this->acceptRegister($local)];
 			}
 
 			$year = $this->yearOf($range, $zip, $series);
@@ -117,6 +126,21 @@ class DroppedFiles {
 		}
 
 		return ['anio' => $year, 'series' => $series];
+	}
+
+	/**
+	 * The register, replaced now: its rows are few, and nothing waits on the job.
+	 *
+	 * @throws RefusedException
+	 */
+	private function acceptRegister(string $local): int {
+		try {
+			$xlsx = XlsxReader::open($local);
+		} catch (RefusedException) {
+			throw new RefusedException('El ZIP no trae la Serie A ni la Serie P del REM, y tampoco es la Base de Establecimientos del DEIS.');
+		}
+
+		return $this->register->replace(RegisterParser::parse($xlsx)['rows'], IngestState::ORIGIN_FILE, null);
 	}
 
 	/**

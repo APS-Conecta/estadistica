@@ -44,3 +44,17 @@ member is cut by its publisher: 615 establishments missing, the last row cut, th
 - A failure never replaces the last good copy and never goes quiet: every attempt writes its outcome to the
   (año, serie) row the admin section lists.
 - The ceiling is ≈ 32k rows/s inside OCP. COPY over a second connection would lift it, and is rejected (AD-9, owner).
+
+## Amendment (2026-09-28, Slice 4): labels and establishments join the rows
+
+- **Labels.** `estadistica_code` holds one row per (año, serie, código) from that year's own DICCIONARIO CODIGOS, and
+  `estadistica_dictionary` says, per (año, serie), which dictionary that was and what it could not do (Catalog).
+  - A year with a readable dictionary reads only its own: códigos and columns change by year (DEIS FAQ).
+  - A year without one (2009–2016 ship BIFF `.xls`) takes each código's label from the nearest later year that has
+    it, marked «etiqueta de <año>».
+  - A código no dictionary explains is «sin descripción», counted per (año, serie) when the serie loads.
+  - The rules that read a dictionary were measured on the 2017–2026 files; DictionaryParser states them.
+- **Establishments.** `estadistica_establishment` is DEIS's Base de Establecimientos, header-locked by its field
+  names, stored once and joined by the six-digit code (Register). A peer group is a filter over it.
+- `estadistica_rem` and `estadistica_ingest` are unchanged. A dictionary or register that cannot be read never holds
+  back the figures: it is recorded and shown, and the previous one keeps serving.

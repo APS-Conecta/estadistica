@@ -51,3 +51,24 @@
   bytes are incomplete over a complete load (ADR-0004).
 - An install behind a firewall that blocks DEIS sees the check fail every day in the admin section, and loads from
   drops.
+
+## Amendment (2026-09-28, Slice 4): the dictionaries and the Base de Establecimientos
+
+- **Context.** Each `SERIE_REM_<año>.zip` also carries that year's DICCIONARIO CODIGOS for Serie A and P: `.xlsx` or
+  `.xlsm` from 2017, BIFF `.xls` before. The Base de Establecimientos is on the same host, one xlsx per year at
+  `ContenidoSitioWeb2020/Establecimientos/Base de Establecimientos <año>.xlsx`. Measured 2026-09-28: 2025 answers
+  200 at 1.0 MB with 5,563 establishments; 2026 is not out yet.
+- **Decision.**
+  - A serie's dictionary is read from the same zip, in the same attempt, as the serie: by Range from DEIS, or from
+    the dropped zip. The daily check also compares the dictionary's CRC and size with the one last judged, so a
+    dictionary republished alone is read again, with its serie.
+  - The same daily pass looks for the newest Base de Establecimientos: this year's once it is out, last year's until
+    then, with a conditional HEAD on the file last loaded. A new file is read whole (≈ 1 MB) and replaces the
+    register in one transaction. A 404 is quiet only for this year, and only while this year's file was never
+    loaded.
+  - An admin may drop the Base de Establecimientos through the same door as a REM zip. It is loaded in the request.
+- **Consequences.**
+  - An idle day costs two more HEADs.
+  - A dictionary republished alone costs a full re-read of its serie (up to ≈ 3.4 min). That is rare, and it keeps
+    the labels the zip's own.
+  - A register DEIS stops publishing is said in the admin section, and the one loaded keeps serving.

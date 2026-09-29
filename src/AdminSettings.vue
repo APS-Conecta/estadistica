@@ -32,8 +32,8 @@
 
 		<NcSettingsSection name="Cifras REM cargadas"
 			description="Cada año y serie del REM se carga completo y en segundo plano, desde el DEIS o
-				desde un ZIP elegido en Archivos. Si una carga falla, se sigue mostrando la anterior y aquí
-				queda escrito por qué.">
+				desde un ZIP elegido en Archivos, junto con el diccionario de códigos de ese año. Si una carga
+				falla, se sigue mostrando la anterior y aquí queda escrito por qué.">
 			<p v-if="deis" class="estadistica-admin__hint">
 				{{ deisText }}
 			</p>
@@ -65,6 +65,7 @@
 						<th>Estado</th>
 						<th>Fecha de corte</th>
 						<th>Filas</th>
+						<th>Sin descripción</th>
 						<th>Último intento</th>
 					</tr>
 				</thead>
@@ -76,15 +77,19 @@
 							<td>{{ status(ingest) }}</td>
 							<td>{{ ingest.fechaCorte ?? '—' }}</td>
 							<td>{{ count(ingest.rowCount) }}</td>
+							<td>{{ unmapped(ingest) }}</td>
 							<td>{{ when(ingest.lastAttempt) }}</td>
 						</tr>
-						<tr v-if="ingest.lastError || ingest.detail">
-							<td colspan="6" class="estadistica-admin__detail">
+						<tr v-if="ingest.lastError || ingest.detail || labelsNote(ingest)">
+							<td colspan="7" class="estadistica-admin__detail">
 								<p v-if="ingest.lastError" class="estadistica-admin__error">
 									{{ ingest.lastError }}
 								</p>
 								<p v-if="ingest.detail">
 									{{ ingest.detail }}
+								</p>
+								<p v-if="labelsNote(ingest)">
+									{{ labelsNote(ingest) }}
 								</p>
 							</td>
 						</tr>
@@ -92,8 +97,18 @@
 				</tbody>
 			</table>
 
+			<h3>Base de Establecimientos</h3>
+			<p class="estadistica-admin__hint">
+				{{ registerText }}
+			</p>
+
 			<NcNoteCard v-if="dropFailed" type="error">
 				{{ dropFailed }}
+			</NcNoteCard>
+
+			<NcNoteCard v-else-if="dropped && dropped.establecimientos !== undefined" type="success">
+				Recibida la Base de Establecimientos: {{ count(dropped.establecimientos) }} establecimientos,
+				ya en uso.
 			</NcNoteCard>
 
 			<NcNoteCard v-else-if="dropped" type="success">
@@ -104,7 +119,7 @@
 			<NcButton :disabled="dropping"
 				class="estadistica-admin__field"
 				@click="pickZip">
-				{{ dropping ? 'Revisando el archivo…' : 'Elegir un ZIP en Archivos…' }}
+				{{ dropping ? 'Revisando el archivo…' : 'Elegir un archivo en Archivos…' }}
 			</NcButton>
 		</NcSettingsSection>
 	</div>
@@ -141,6 +156,8 @@ export default {
 			saved: false,
 			failed: '',
 			ingests: [],
+			dictionaries: [],
+			register: null,
 			deis: null,
 			ingestsLoading: true,
 			ingestsFailed: '',
@@ -160,6 +177,15 @@ export default {
 		},
 		gigabytes() {
 			return (this.years * GB_PER_YEAR).toLocaleString('es-CL', { maximumFractionDigits: 1 })
+		},
+		registerText() {
+			if (!this.register || this.register.rows === 0) {
+				return 'Todavía no se ha cargado: sin ella las cifras no se pueden comparar con establecimientos parecidos. Se descarga del DEIS en la revisión diaria, o puede elegirla aquí abajo.'
+			}
+			const source = this.register.origin === 'deis'
+				? `la ${this.register.year} del DEIS`
+				: 'la elegida a mano'
+			return `En uso ${source}: ${this.count(this.register.rows)} establecimientos, cargada el ${this.when(this.register.loadedAt)}.`
 		},
 		deisText() {
 			if (!this.deis.online) {
@@ -204,6 +230,8 @@ export default {
 			try {
 				const { data } = await axios.get(generateUrl('/apps/estadistica/admin/ingests'))
 				this.ingests = data.ingests
+				this.dictionaries = data.dictionaries
+				this.register = data.register
 				this.deis = data.deis
 			} catch (error) {
 				warnError('could not read the ingest state', error)
@@ -219,8 +247,9 @@ export default {
 		 *
 		 * ponytail: `OC.dialogs.filepicker`, which Nextcloud 34 still ships, so
 		 * no new dependency. The upgrade path, if core drops `OC.dialogs`, is
-		 * `@nextcloud/dialogs`. No mimetype filter: the server tells a zip by its
-		 * bytes, and says in Spanish what is wrong with anything else.
+		 * `@nextcloud/dialogs`. No mimetype filter: the server tells a REM zip
+		 * from a Base de Establecimientos by their bytes, and says in Spanish
+		 * what is wrong with anything else.
 		 */
 		pickZip() {
 			if (!window.OC?.dialogs?.filepicker) {
@@ -229,7 +258,7 @@ export default {
 			}
 
 			window.OC.dialogs.filepicker(
-				'Elegir un ZIP del DEIS',
+				'Elegir un archivo del DEIS',
 				(path) => this.drop(path),
 				false,
 				[],
@@ -261,6 +290,33 @@ export default {
 				return ingest.lastError ? 'Con error' : 'Sin datos'
 			}
 			return ingest.incomplete ? 'Incompleto' : 'Cargado'
+		},
+
+		dictionaryOf(ingest) {
+			return this.dictionaries.find((dictionary) => dictionary.anio === ingest.anio && dictionary.serie === ingest.serie) ?? null
+		},
+
+		unmapped(ingest) {
+			const dictionary = this.dictionaryOf(ingest)
+			return dictionary && ingest.rowCount > 0 ? this.count(dictionary.unmapped) : '—'
+		},
+
+		/** Whose labels the figures read, when they are not the year's own, and why. */
+		labelsNote(ingest) {
+			const dictionary = this.dictionaryOf(ingest)
+			if (!dictionary) {
+				return ''
+			}
+			if (dictionary.error) {
+				return `Diccionario: ${dictionary.error}`
+			}
+			if (dictionary.labelsFrom === null) {
+				return 'No hay diccionario de este año ni de uno posterior: sus códigos se muestran «sin descripción».'
+			}
+			if (dictionary.labelsFrom !== ingest.anio) {
+				return `Este año no trae un diccionario que se pueda leer: sus códigos usan las etiquetas del diccionario de ${dictionary.labelsFrom}.`
+			}
+			return ''
 		},
 
 		seriesText(series) {

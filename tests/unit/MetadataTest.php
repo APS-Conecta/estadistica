@@ -8,10 +8,13 @@ namespace OCA\Estadistica\Tests\Unit;
 
 use DOMDocument;
 use OCA\Estadistica\Controller\AdminController;
+use OCA\Estadistica\Controller\ApiController;
 use OCA\Estadistica\Controller\PageController;
 use OCA\Estadistica\Settings\AdminSettings;
+use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\AuthorizedAdminSetting;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\Settings\IDelegatedSettings;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -20,7 +23,8 @@ use ReflectionMethod;
 /**
  * The repo says true things about itself, and this file fails when they stop
  * being true (farmacia's MetadataTest, extended with the promises this app
- * adds: PostgreSQL only, and delegation declared on every admin write).
+ * adds: PostgreSQL only, delegation declared on every admin write, and every
+ * OCS route open, rate-limited and attribute-routed).
  */
 class MetadataTest extends TestCase {
 	private const APP_DIR = __DIR__ . '/../..';
@@ -164,6 +168,23 @@ class MetadataTest extends TestCase {
 		foreach ($this->actions(PageController::class) as $method) {
 			self::assertCount(1, $method->getAttributes(NoAdminRequired::class),
 				PageController::class . '::' . $method->getName() . ' must be #[NoAdminRequired]');
+		}
+	}
+
+	/**
+	 * a14: every OCS route is routed by its attribute, open to every user (D6)
+	 * and rate-limited. An attribute deleted from one method is a route that
+	 * is gone, admin-only or unbounded, silently (farmacia's gate).
+	 */
+	public function testEveryOcsRouteIsRoutedOpenAndRateLimited(): void {
+		$actions = $this->actions(ApiController::class);
+		self::assertNotEmpty($actions, 'ApiController must have routes by now');
+
+		foreach ($actions as $method) {
+			$name = ApiController::class . '::' . $method->getName();
+			self::assertCount(1, $method->getAttributes(ApiRoute::class), "$name must carry #[ApiRoute]");
+			self::assertCount(1, $method->getAttributes(NoAdminRequired::class), "$name must be #[NoAdminRequired]: every staff member reads (D6)");
+			self::assertCount(1, $method->getAttributes(UserRateLimit::class), "$name must carry #[UserRateLimit]");
 		}
 	}
 }

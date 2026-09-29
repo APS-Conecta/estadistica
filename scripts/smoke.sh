@@ -12,6 +12,9 @@
 #   - the REM job is registered by Nextcloud's cron (a18), the ingest state is
 #     delegated like every admin action, and the drop door resolves a path in
 #     the caller's own Files and refuses a non-zip in Spanish (a3, a4)
+#   - the OCS surface answers every user, attribute routes and all: the
+#     fuentes list, a Spanish 400 for a year DEIS never published, a 404 for
+#     a fuente that does not exist (a14)
 #   - the icon serves, the .htaccess holes stay shut, the bundle matches src/,
 #     and openapi.json regenerates without drift once the OCS surface exists
 #
@@ -209,6 +212,36 @@ is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_co
 	-X POST -d 'path=/nota.txt' "$DROP")" '403' \
 	"a user outside the delegated group cannot drop a file (403)" \
 	"a user outside the delegated group was NOT refused the drop with 403"
+
+# --- the OCS surface: every user reads the fuentes (a14) ----------------------
+# The outsider is in no delegated group: reading is everyone's (D6). The routes
+# exist only if ApiController's attributes registered them, which is the
+# wiring no unit test can see.
+FUENTES="$BASE/ocs/v2.php/apps/$APP/api/v1/fuentes"
+JSONH='Accept: application/json'
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" "$FUENTES"
+is "$CODE" '200' \
+	"any user reads the fuentes over OCS (200)" \
+	"the fuentes did NOT answer 200 to a plain user — is ApiController routed?"
+expect "$BODY" '"status":"ok"' \
+	"the fuentes answer in the OCS envelope with status ok" \
+	"the fuentes answer does NOT carry status ok"
+expect "$BODY" '"id":"establecimientos"' \
+	"the fuentes list REM and the establishments" \
+	"the fuentes list does NOT carry the establishments"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" "$FUENTES/rem-a?anio=1990"
+is "$CODE" '400' \
+	"a year DEIS never published is refused with 400" \
+	"a year DEIS never published was NOT refused with 400"
+expect "$BODY" 'debe estar entre 2009' \
+	"the 400 is the Spanish sentence" \
+	"the 400 does NOT carry the Spanish sentence"
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H "$JSONH" -o /dev/null -w '%{http_code}' "$FUENTES/nada")" '404' \
+	"a fuente that does not exist is 404" \
+	"a fuente that does not exist was NOT 404"
 
 # --- the icon ----------------------------------------------------------------
 icon="$(web_as admin "$ADMIN_TOKEN" -o /dev/null -w '%{http_code} %{content_type} %{size_download}' \

@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Rem;
 
+use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
@@ -32,6 +33,10 @@ use Throwable;
  *   with the sentence that says why. The #74 lesson: a failure never replaces
  *   the last good copy, and never goes quiet.
  *
+ * Once the zip's directory is read, the serie's DICCIONARIO is read from the
+ * same zip whatever happened to the figures (Catalog::load): the labels are
+ * the zip's, and a kept or failed load keeps serving under them.
+ *
  * Outcomes are recorded, not thrown. What still propagates is a failure to
  * record one, the database itself; the job's runner logs it.
  *
@@ -51,6 +56,7 @@ class RemImporter {
 		private IDBConnection $db,
 		private IngestStateMapper $states,
 		private RemLoader $loader,
+		private Catalog $catalog,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
 	) {
@@ -66,7 +72,10 @@ class RemImporter {
 			return $this->failed($state, $e);
 		}
 
-		return $this->replace($range, $member, $state, $year, $serie, $origin);
+		$state = $this->replace($range, $member, $state, $year, $serie, $origin);
+		$this->catalog->load($range, $zip, $year, $serie);
+
+		return $state;
 	}
 
 	/**
@@ -136,16 +145,17 @@ class RemImporter {
 	}
 
 	/**
-	 * Lets go of a year the window no longer keeps: its rows and its state rows,
-	 * in one transaction, so no state row ever describes rows that are gone.
-	 * The job calls it, one year per tick (the Window decision: narrowing
-	 * happens in the job, never in the request).
+	 * Lets go of a year the window no longer keeps: its rows, its state rows and
+	 * its labels, in one transaction, so no state row ever describes rows that
+	 * are gone. The job calls it, one year per tick (the Window decision:
+	 * narrowing happens in the job, never in the request).
 	 */
 	public function forget(int $year): void {
 		$this->db->beginTransaction();
 		try {
 			$this->loader->forget($year);
 			$this->states->forget($year);
+			$this->catalog->forget($year);
 			$this->db->commit();
 		} catch (Throwable $e) {
 			$this->db->rollBack();

@@ -17,13 +17,9 @@ use OCA\Estadistica\Service\DroppedFiles;
 use OCA\Estadistica\Service\EstablishmentConfig;
 use OCA\Estadistica\Service\YearWindow;
 use OCA\Estadistica\Tests\Unit\Rem\ZipFixture;
-use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
-use OCP\ITempManager;
-use OCP\IUser;
-use OCP\IUserSession;
 use OCP\Server;
 use ReflectionMethod;
 
@@ -53,7 +49,7 @@ class RemImportTest extends IntegrationTestCase {
 
 	protected function tearDown(): void {
 		foreach ($this->years as $year) {
-			foreach (['estadistica_rem', 'estadistica_ingest'] as $table) {
+			foreach (['estadistica_rem', 'estadistica_ingest', 'estadistica_code', 'estadistica_dictionary'] as $table) {
 				$this->db()->executeStatement("DELETE FROM *PREFIX*$table WHERE anio = ?", [$year]);
 			}
 			Server::get(DroppedFiles::class)->remove($year);
@@ -65,33 +61,6 @@ class RemImportTest extends IntegrationTestCase {
 		}
 		ZipFixture::cleanup();
 		parent::tearDown();
-	}
-
-	/**
-	 * The drop door as the app wires it, acting for $uid, the way the
-	 * FilePicker drives it. The session is the one thing stubbed; everything
-	 * else is the instance's own (territorio's FilesImportTest).
-	 */
-	private function dropsFor(string $uid): DroppedFiles {
-		$user = $this->createStub(IUser::class);
-		$user->method('getUID')->willReturn($uid);
-		$session = $this->createStub(IUserSession::class);
-		$session->method('getUser')->willReturn($user);
-
-		return new DroppedFiles(
-			Server::get(IRootFolder::class),
-			$session,
-			Server::get(IAppDataFactory::class),
-			Server::get(ITempManager::class),
-			Server::get(ITimeFactory::class),
-			Server::get(YearWindow::class),
-			Server::get(IngestStateMapper::class),
-		);
-	}
-
-	/** A local file put in $uid's Files as $name, for dropsFor() to be handed. The caller deletes it. */
-	private function putInFiles(string $uid, string $name, string $local): void {
-		Server::get(IRootFolder::class)->getUserFolder($uid)->newFile($name, fopen($local, 'rb'));
 	}
 
 	private function import(string $zip, int $year, string $serie = 'A'): IngestState {
@@ -285,6 +254,7 @@ class RemImportTest extends IntegrationTestCase {
 		self::assertSame(0, $this->snapshot(2097, 'P')['rows']);
 		self::assertNull($this->state(2097)->getId(), 'no state row still says 2097 Serie A is loaded');
 		self::assertNull($this->state(2097, 'P')->getId(), 'nor Serie P');
+		self::assertSame(0, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_dictionary WHERE anio = ?', [2097])->fetchOne(), 'nor its dictionary rows');
 		self::assertSame($kept, $this->snapshot(2098), 'another year is untouched');
 		self::assertSame($kept['rows'], $this->state(2098)->getRowCount());
 	}
