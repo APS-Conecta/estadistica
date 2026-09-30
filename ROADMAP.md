@@ -6,14 +6,15 @@ Status doc, repo-first SSOT: where the app is and where it is going. The reasoni
 ## Where we are
 
 **0.1.0 — M1, the REM pillar, is built** and tested on synthetic data. [`README.md`](README.md) § *Status* says what
-works; [`CHANGELOG.md`](CHANGELOG.md) lists it. It is a **lab app** in gestion (`dev/lab-apps.sh`), in no release.
+works; [`CHANGELOG.md`](CHANGELOG.md) lists it. It **ships**: gestion vendors the `v0.1.0` tarball in `OWN_APPS`
+(APS-Conecta/gestion#198, 2026-09-30).
 It went through a code review on 2026-09-29: its fixes are in, and what it deferred is in [`BUGS.md`](BUGS.md)
 (B-015 to B-020).
 
 On 2026-09-29 it merged to `main`, together with its gestion side (APS-Conecta/gestion#196), and was installed on
 gestion's lab: its migrations applied, Administración → Estadística names the site file's DEIS code, and
-`make divergence` catches a hand-set one until the next seed puts it back. 0.1.0 is not tagged: the tag waits for
-the owner's check of the metas (item 1 below).
+`make divergence` catches a hand-set one until the next seed puts it back. It was tagged `v0.1.0` the same day: the
+owner's check of the metas (item 1 below) gates telling staff, not the release.
 
 The real-data run (acceptance a21) was on gestion's lab rather than the dev instance, on 2026-09-29. The default
 window's eight members loaded, 27.3 million rows in 4.9 GB, each checked against DEIS's own zips, and the owner's FONASA
@@ -30,9 +31,7 @@ export loaded 2,091 centers. What it found is B-030 to B-032 in [`BUGS.md`](BUGS
    - Meta VI's numerador is counted in 2026, where the OOTT's text says 2025.
 3. **What the real-data run found** (BUGS B-030 to B-032): a fecha de corte one establishment can move, labels
    borrowed from an earlier year's dictionary, and whole-hoja national consultas at the 10 s timeout. The M2 lap.
-4. **Promotion to `OWN_APPS`**, a gestion change: a release tag and its tarball, the CI clone,
-   `check-org-drift.sh`, and the `docs/LICENSING.md` row.
-5. **What the code review left to the farmacia template** (BUGS B-015 to B-019): the webpack-vue-config major,
+4. **What the code review left to the farmacia template** (BUGS B-015 to B-019): the webpack-vue-config major,
    `.htaccess`'s 404s, a pinned and checked `composer.phar`, the browser gate in CI, and the `APS` default in a
    worktree. Fixed in farmacia first, then here.
 

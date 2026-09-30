@@ -26,17 +26,14 @@ it to any group.
 
 **0.1.0, M1: the REM pillar.** Every piece above is built and tested on synthetic data: the ingest by HTTP Range
 and by a dropped zip, the catalogue, the consulta engine and its OCS API, preguntas and tableros, the FONASA import,
-and the 2026 metas. `info.xml`, `package.json` and `openapi.json` all read 0.1.0.
+and the 2026 metas. `info.xml`, `package.json` and `openapi.json` all read 0.1.0. It is tagged `v0.1.0` and
+ships in gestion's `OWN_APPS` as a vendored tarball (APS-Conecta/gestion#198, 2026-09-30).
 
 It went through a code review on 2026-09-29. Its fixes are in, and what it deferred is in [`BUGS.md`](BUGS.md)
 (B-015 to B-020).
 
 Not done yet:
 
-- It is a **lab app** in gestion ([`dev/lab-apps.sh`](https://github.com/APS-Conecta/gestion/blob/main/dev/lab-apps.sh)),
-  installed on the lab since 2026-09-29, in no release. 0.1.0 is not tagged: the tag waits for the owner's
-  check of the metas ([`ROADMAP.md`](ROADMAP.md) § *Next*). Promotion is its own change: a tarball, `OWN_APPS`,
-  gestion's CI clone and org-drift check, and a `docs/LICENSING.md` row.
 - Real data went through it on the lab on 2026-09-29: DEIS's default window (27.3 million rows) and the owner's
   FONASA export. What it found is B-030 to B-032 in [`BUGS.md`](BUGS.md). The owner still compares June 2026's
   Metas I–VII with the Estadística-REM unit's own calculation before staff are told ([`ROADMAP.md`](ROADMAP.md)).
@@ -62,14 +59,15 @@ stack.
 
 ## Install
 
-A clinic gets Estadística through gestion, not from the app store. Today it is a lab app, so it installs only where
-it is cloned, as `gestion/apps/estadistica` (the directory name is the app id). Both commands run from the gestion
-checkout:
+A clinic gets Estadística through gestion, not from the app store: gestion's phase 12 unpacks the tarball it vendors
+under `provisioning/apps/estadistica/` (built from a tag of this repo), and phase 16 writes the establishment (below).
+A clinic needs no clone and no network for the app itself.
+
+To develop, clone it as `gestion/apps/estadistica` (the directory name is the app id). Phase 12 then leaves the live
+clone alone instead of unpacking over it. Both commands run from the gestion checkout:
 
     git clone https://github.com/APS-Conecta/estadistica.git apps/estadistica
     make fix-mount-perms && make seed
-
-Phase 12 enables a lab app when `apps/<id>/.git` exists, and phase 16 writes the establishment (below).
 
 Nextcloud 34, PHP 8.2–8.5, **PostgreSQL only**: `info.xml` declares it, so an install on another engine is refused at
 enable time ([ADR-0002](docs/adr/0002-postgresql-only.md)). The default window of four years takes about 4.9 GB of
