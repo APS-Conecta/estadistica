@@ -219,20 +219,17 @@ class ApiController extends OCSController {
 	 * @param string $titulo what the staff see in the list, up to 200 characters
 	 * @param array<string, mixed> $consulta the spec, as POST consultas takes it (docs/adr/0006)
 	 * @param string $tipo barra, linea or tabla
-	 * @return DataResponse<Http::STATUS_CREATED, array{id: int, titulo: string, consulta: array<string, mixed>, tipo: string, autor: string, autor_nombre: string, actualizada: int, editable: bool}, array{}>|DataResponse<Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>
+	 * @return DataResponse<Http::STATUS_CREATED, array{id: int, titulo: string, consulta: array<string, mixed>, tipo: string, autor: string, autor_nombre: string, actualizada: int, editable: bool}, array{}>|DataResponse<Http::STATUS_FORBIDDEN|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>
 	 *
 	 * 201: The stored pregunta
+	 * 403: Unauthenticated — {message: the Spanish sentence}
 	 * 422: Understood and refused — {message: the Spanish sentence}
 	 */
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/preguntas')]
 	public function crearPregunta(string $titulo, array $consulta, string $tipo = 'barra'): DataResponse {
-		try {
-			return new DataResponse($this->saved->createQuestion($titulo, $consulta, $tipo), Http::STATUS_CREATED);
-		} catch (RefusedException $e) {
-			return $this->refuse($e->getMessage());
-		}
+		return $this->write(fn (): DataResponse => new DataResponse($this->saved->createQuestion($titulo, $consulta, $tipo), Http::STATUS_CREATED));
 	}
 
 	/**
@@ -323,20 +320,17 @@ class ApiController extends OCSController {
 	 *
 	 * @param string $titulo what the staff see in the list, up to 200 characters
 	 * @param list<array{pregunta: int, ancho?: int}> $tarjetas the cards in order; ancho is 1, 2 or 3 and 1 when left out
-	 * @return DataResponse<Http::STATUS_CREATED, array{id: int, titulo: string, tarjetas: list<array{pregunta: int, ancho: int}>, autor: string, autor_nombre: string, actualizado: int, editable: bool}, array{}>|DataResponse<Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>
+	 * @return DataResponse<Http::STATUS_CREATED, array{id: int, titulo: string, tarjetas: list<array{pregunta: int, ancho: int}>, autor: string, autor_nombre: string, actualizado: int, editable: bool}, array{}>|DataResponse<Http::STATUS_FORBIDDEN|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>
 	 *
 	 * 201: The stored tablero
+	 * 403: Unauthenticated — {message: the Spanish sentence}
 	 * 422: Understood and refused — {message: the Spanish sentence}
 	 */
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/tableros')]
 	public function crearTablero(string $titulo, array $tarjetas = []): DataResponse {
-		try {
-			return new DataResponse($this->saved->createDashboard($titulo, $tarjetas), Http::STATUS_CREATED);
-		} catch (RefusedException $e) {
-			return $this->refuse($e->getMessage());
-		}
+		return $this->write(fn (): DataResponse => new DataResponse($this->saved->createDashboard($titulo, $tarjetas), Http::STATUS_CREATED));
 	}
 
 	/**
