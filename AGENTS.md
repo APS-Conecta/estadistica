@@ -13,8 +13,10 @@ Claude reviews every PR. The rules below are this repo's own facts, and they bin
   `janitor.md`, `palette.md`, `scribe.md`, `lexicon.md`) — never create `.Jules/`.
   Date each entry with today's `date +%F`, never a remembered or copied date.
 - **Names:** code is English, but a domain term keeps the spelling `CONTEXT.md` gives it (*Pregunta* and
-  *Tablero*, never *question* or *dashboard*). Rename an existing name only inside code a change already
-  touches, and never a table, column, route, controller action (an OpenAPI operation id) or API field.
+  *Tablero* in new names and UI text, never *question* or *dashboard*). Rename an existing name only inside
+  code a change already touches, and never a table, column, route, controller action (an OpenAPI operation
+  id) or API field. The existing `Question*` and `Dashboard*` classes are this repo's established code
+  spelling: keep them.
 - **Threat model:** read `docs/threat-model.md` before any security work.
 - **Gate before opening a PR** — what `ci.yml` and `docs.yml` run. This repo uses **npm**, not pnpm:
   `git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common` if it is missing — aps-common is
