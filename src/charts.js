@@ -42,6 +42,9 @@ export function formatValue(value) {
 	return Number(value).toLocaleString('es-CL', { maximumFractionDigits: 1 })
 }
 
+// Reuse a single Intl.Collator instance to avoid the heavy per-call overhead of String.prototype.localeCompare with options.
+const esCollator = new Intl.Collator('es', { numeric: true })
+
 /** null last, numbers by value, text in Spanish order with numbers inside. */
 function compare(a, b) {
 	if (a === b) {
@@ -56,7 +59,7 @@ function compare(a, b) {
 	if (typeof a === 'number' && typeof b === 'number') {
 		return a - b
 	}
-	return String(a).localeCompare(String(b), 'es', { numeric: true })
+	return esCollator.compare(String(a), String(b))
 }
 
 function distinct(values) {
