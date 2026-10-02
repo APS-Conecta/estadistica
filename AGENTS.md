@@ -9,7 +9,8 @@ Nightly Jules presets — Sentinel (security), Bolt (performance), Palette (UX/a
 - **Journals** live only in lowercase `.jules/` (`bolt.md`, `sentinel.md`, `palette.md`) — never create `.Jules/`.
   Date each entry with today's `date +%F`, never a remembered or copied date.
 - **Gate before opening a PR** — what `ci.yml` and `docs.yml` run. This repo uses **npm**, not pnpm:
-  `git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common` if it is missing;
+  `git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common` if it is missing — aps-common is
+  private, so if the clone fails, skip the steps that need it and list them as not run; never edit a workflow to work around it;
   `make aps-drift`; `npm ci`; `npm run lint-js`; `npm test`; `npm run build`, then `git diff --exit-code js/`;
   `make test`; `make instance-up && make smoke`, then `make instance-clean`;
   `python3 .github/repo-docs.py check . --offline`. A step you could not run is named in the PR, never reported as passed.
@@ -23,4 +24,5 @@ Nightly Jules presets — Sentinel (security), Bolt (performance), Palette (UX/a
 - **One concern per PR**, under 50 lines of hand-written source (rebuilt bundle excluded), and it contains every change
   its description claims — a journal-only PR is invalid. Nothing worthwhile → no PR. Never repeat a change an open or
   recently closed PR already proposes.
-- **PR text:** Conventional Commits title; tick the template's AI-involvement box (`ai-assisted`), leave «Human-reviewed» unticked.
+- **PR text:** keep your preset's title prefix (`⚡ Bolt:` / `🛡️ Sentinel:` / `🎨 Palette:`) and its body format;
+  the maintainer gives the squash commit its Conventional Commits title and adds the `ai-assisted` label.
