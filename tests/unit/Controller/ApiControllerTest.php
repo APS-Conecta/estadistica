@@ -145,6 +145,15 @@ final class ApiControllerTest extends TestCase {
 		self::assertSame([Http::STATUS_UNPROCESSABLE_ENTITY, ['message' => 'Póngale un título: es lo que el resto del personal verá en la lista.']], [$response->getStatus(), $response->getData()]);
 	}
 
+	public function testCreatingAPreguntaUnauthenticatedIsA403InSpanish(): void {
+		$this->saved->method('createQuestion')->willThrowException(new ForbiddenException('Hay que iniciar sesión para guardar preguntas y tableros.'));
+
+		$response = $this->controller->crearPregunta('Controles', self::SPEC);
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertStringContainsString('Hay que iniciar sesión', $response->getData()['message']);
+	}
+
 	/** a8: someone else's pregunta is read, never changed. */
 	public function testChangingSomeoneElsesPreguntaIsA403InSpanish(): void {
 		$this->saved->method('updateQuestion')->willThrowException(new ForbiddenException('Solo quien creó esta pregunta, o quien administra Estadística, puede cambiarla o eliminarla.'));
@@ -190,6 +199,15 @@ final class ApiControllerTest extends TestCase {
 
 		$this->saved->method('deleteDashboard')->willThrowException(new ForbiddenException('Solo quien creó este tablero, o quien administra Estadística, puede cambiarlo o eliminarlo.'));
 		self::assertSame(Http::STATUS_FORBIDDEN, $this->controller->eliminarTablero(3)->getStatus());
+	}
+
+	public function testCreatingATableroUnauthenticatedIsA403InSpanish(): void {
+		$this->saved->method('createDashboard')->willThrowException(new ForbiddenException('Hay que iniciar sesión para guardar preguntas y tableros.'));
+
+		$response = $this->controller->crearTablero('Metas', []);
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertStringContainsString('Hay que iniciar sesión', $response->getData()['message']);
 	}
 
 	public function testAMissingTableroIs404(): void {
