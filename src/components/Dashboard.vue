@@ -80,13 +80,13 @@
 						<QuestionCard :pregunta="preguntaOf(card.pregunta)">
 							<template v-if="tablero.editable" #actions>
 								<NcButton variant="tertiary"
-									aria-label="Subir tarjeta"
+									:aria-label="`Subir la tarjeta «${cardName(card)}»`"
 									:disabled="index === 0 || saving"
 									@click="move(index, -1)">
 									Subir
 								</NcButton>
 								<NcButton variant="tertiary"
-									aria-label="Bajar tarjeta"
+									:aria-label="`Bajar la tarjeta «${cardName(card)}»`"
 									:disabled="index === cards.length - 1 || saving"
 									@click="move(index, 1)">
 									Bajar
@@ -100,7 +100,7 @@
 									</option>
 								</select>
 								<NcButton variant="tertiary"
-									aria-label="Quitar tarjeta"
+									:aria-label="`Quitar la tarjeta «${cardName(card)}»`"
 									:disabled="saving"
 									@click="drop(index)">
 									Quitar
@@ -184,6 +184,10 @@ export default {
 	methods: {
 		preguntaOf(id) {
 			return this.preguntas.find((pregunta) => pregunta.id === id) ?? null
+		},
+
+		cardName(card) {
+			return this.preguntaOf(card.pregunta)?.titulo ?? 'Pregunta eliminada'
 		},
 
 		open(id) {
