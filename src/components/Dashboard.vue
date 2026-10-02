@@ -79,10 +79,16 @@
 						:style="{ gridColumn: `span ${card.ancho}` }">
 						<QuestionCard :pregunta="preguntaOf(card.pregunta)">
 							<template v-if="tablero.editable" #actions>
-								<NcButton variant="tertiary" :disabled="index === 0 || saving" @click="move(index, -1)">
+								<NcButton variant="tertiary"
+									aria-label="Subir tarjeta"
+									:disabled="index === 0 || saving"
+									@click="move(index, -1)">
 									Subir
 								</NcButton>
-								<NcButton variant="tertiary" :disabled="index === cards.length - 1 || saving" @click="move(index, 1)">
+								<NcButton variant="tertiary"
+									aria-label="Bajar tarjeta"
+									:disabled="index === cards.length - 1 || saving"
+									@click="move(index, 1)">
 									Bajar
 								</NcButton>
 								<select :value="card.ancho"
@@ -93,7 +99,10 @@
 										{{ ancho === 1 ? '1 columna' : `${ancho} columnas` }}
 									</option>
 								</select>
-								<NcButton variant="tertiary" :disabled="saving" @click="drop(index)">
+								<NcButton variant="tertiary"
+									aria-label="Quitar tarjeta"
+									:disabled="saving"
+									@click="drop(index)">
 									Quitar
 								</NcButton>
 							</template>
