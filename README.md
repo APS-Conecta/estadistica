@@ -123,12 +123,12 @@ gestion's [`docs/CONTRACTS.md`](https://github.com/APS-Conecta/gestion/blob/main
 
 - `make test`: the unit suite in a bare PHP container, no Nextcloud.
 - `npm run lint-js` and `npm test`: ESLint and Vitest.
-- `make aps-drift`: the vendored `aps-common` copies are current (`make aps-sync` refreshes them).
+- `make aps-drift`: the vendored `aps-common` copies are current (`make aps-sync` refreshes them; `aps-sync` is no longer run directly in CI).
 - `make smoke`: the wiring against the dev instance, including «openapi.json regenerates without drift».
 - `make test-integration`: the integration suite against the dev instance's PostgreSQL (needs `make deps` first).
-  No CI job runs it; run it before a change to `lib/`.
+  No longer run in CI; run it before a change to `lib/`.
 - `make test-browser`: a tablero card's figures against the API's, in Chromium (Playwright for Python on the host).
-  No CI job runs it either.
+  No longer run in CI either.
 - `npm run build` and commit `js/`: the bundles are committed, and CI fails when they differ from `src/`.
 
 CI (`.github/workflows/ci.yml`) runs `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, the bundle check,
