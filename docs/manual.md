@@ -125,7 +125,7 @@ queda escrito por qué. Más abajo se ve la Base de Establecimientos en uso.
 
 FONASA no publica su población inscrita en un archivo que se pueda descargar solo, así que se carga a mano:
 
-- el CSV «Inscritos APS» que exporta el reporte de FONASA, por «Cargar un archivo a mano»; o
+- el CSV «Inscritos APS» que exporta FONASA, por «Cargar un archivo a mano»; o
 - en «Población de su establecimiento», las cifras de su establecimiento por tramo de edad y sexo, para el corte al
   31 de diciembre del año que elija, cuando FONASA todavía no las entrega o para corregirlas. Una casilla en blanco
   usa la cifra de FONASA, la que se ve en gris. Lo escrito vale solo para su establecimiento: el país y los pares

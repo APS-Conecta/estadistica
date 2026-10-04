@@ -108,7 +108,7 @@
 		<NcSettingsSection name="Población inscrita validada (FONASA)"
 			description="La población que FONASA valida cada año por establecimiento, edad y sexo: el
 				denominador de varias Metas Sanitarias. FONASA no la publica en un archivo que se pueda
-				descargar solo, así que se carga a mano: el CSV «Inscritos APS» que exporta su reporte, o
+				descargar solo, así que se carga a mano: el CSV «Inscritos APS» que exporta FONASA, o
 				las cifras de su establecimiento escritas aquí.">
 			<p v-if="piv.cortes.length === 0" class="estadistica-admin__hint">
 				Todavía no hay ningún corte de FONASA cargado. Elija el CSV en «Cargar un archivo a mano»,
@@ -285,7 +285,7 @@
 					segundo plano, igual que una descarga automática.
 				</li>
 				<li>La «Base de Establecimientos» del DEIS (.xlsx): queda en uso de inmediato.</li>
-				<li>El CSV «Inscritos APS» que exporta el reporte de FONASA: queda en uso de inmediato.</li>
+				<li>El CSV «Inscritos APS» que exporta FONASA: queda en uso de inmediato.</li>
 				<li>
 					Un archivo de Metas Sanitarias (.json), como el que la aplicación trae para 2026: crea o
 					reemplaza las metas de su año, y lo comprometido para ese año se mantiene.
