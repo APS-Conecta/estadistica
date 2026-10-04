@@ -10,6 +10,11 @@ No contiene información de pacientes: guarda solo conteos agregados publicados 
     <licence>AGPL-3.0-or-later</licence>
     <author>Daniel Espinoza</author>
     <namespace>Estadistica</namespace>
+    <documentation>
+        <user>https://github.com/APS-Conecta/estadistica/blob/main/docs/manual.md</user>
+        <admin>https://github.com/APS-Conecta/estadistica/blob/main/README.md#configuration</admin>
+        <developer>https://github.com/APS-Conecta/estadistica/blob/main/README.md#development</developer>
+    </documentation>
     <category>tools</category>
     <dependencies>
         <php min-version="8.2" max-version="8.5"/>
