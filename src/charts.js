@@ -59,10 +59,40 @@ function compare(a, b) {
 	return String(a).localeCompare(String(b), 'es', { numeric: true })
 }
 
+function compareGroups(a, b) {
+	const len = a.length
+	for (let i = 0; i < len; i++) {
+		const c = compare(a[i], b[i])
+		if (c !== 0) {
+			return c
+		}
+	}
+	return 0
+}
+
+function toKey(grupo) {
+	const len = grupo.length
+	if (len === 0) {
+		return ''
+	}
+	if (len === 1) {
+		const v = grupo[0]
+		return v === null ? '\0' : (typeof v === 'number' ? `n${v}` : v)
+	}
+	const v0 = grupo[0]
+	const k0 = v0 === null ? '\0' : (typeof v0 === 'number' ? `n${v0}` : v0)
+	const v1 = grupo[1]
+	const k1 = v1 === null ? '\0' : (typeof v1 === 'number' ? `n${v1}` : v1)
+	return `${k0}\x01${k1}`
+}
+
 function distinct(values) {
 	const seen = new Map()
 	for (const value of values) {
-		seen.set(JSON.stringify(value), value)
+		const k = value === null ? '\0' : (typeof value === 'number' ? `n${value}` : value)
+		if (!seen.has(k)) {
+			seen.set(k, value)
+		}
 	}
 	return [...seen.values()].sort(compare)
 }
@@ -70,20 +100,26 @@ function distinct(values) {
 /** The answer's points by series and grupo, and every grupo any series has, in order. */
 function indexOf(answer) {
 	const present = SERIES.filter((serie) => answer.series[serie.id] !== null && answer.series[serie.id] !== undefined)
-	const points = new Map()
-	const groups = new Map()
+	const points = { local: new Map(), nacional: new Map(), pares: new Map() }
+	const groupsMap = new Map()
 	for (const serie of present) {
+		const map = points[serie.id]
 		for (const point of answer.series[serie.id]) {
-			const key = JSON.stringify(point.grupo)
-			points.set(`${serie.id}|${key}`, point)
-			groups.set(key, point.grupo)
+			const key = toKey(point.grupo)
+			map.set(key, point)
+			groupsMap.set(key, point.grupo)
 		}
 	}
-	const sorted = [...groups.values()].sort((a, b) => a.reduce((order, value, i) => order || compare(value, b[i]), 0))
+	const sortedEntries = [...groupsMap.entries()]
+		.map(([key, grupo]) => ({ key, grupo }))
+		.sort((a, b) => compareGroups(a.grupo, b.grupo))
+
 	return {
 		present,
-		groups: sorted,
-		at: (serie, grupo) => points.get(`${serie}|${JSON.stringify(grupo)}`) ?? null,
+		points,
+		groups: sortedEntries.map((e) => e.grupo),
+		entries: sortedEntries,
+		at: (serie, grupo) => points[serie]?.get(toKey(grupo)) ?? null,
 	}
 }
 
@@ -93,9 +129,18 @@ function indexOf(answer) {
  * second. `max` is the highest value in any panel, so every panel shares it.
  */
 export function panelsOf(answer, spec) {
-	const { present, groups, at } = indexOf(answer)
+	const { present, groups, points, at } = indexOf(answer)
 	const dims = spec.agrupar
-	const max = Math.max(0, ...groups.flatMap((grupo) => present.map((serie) => at(serie.id, grupo)?.valor ?? 0)))
+
+	let max = 0
+	for (const serie of present) {
+		for (const point of points[serie.id].values()) {
+			if (point.valor > max) {
+				max = point.valor
+			}
+		}
+	}
+
 	const firsts = dims.length === 0 ? [null] : distinct(groups.map((grupo) => grupo[0]))
 	const seconds = dims.length === 2 ? distinct(groups.map((grupo) => grupo[1])) : [undefined]
 	if (seconds.length > MAX_PANELS) {
@@ -123,15 +168,28 @@ export function panelsOf(answer, spec) {
  * per grupo, one column per series, side by side (a22).
  */
 export function tableOf(answer, spec) {
-	const { present, groups, at } = indexOf(answer)
-	return {
-		columnas: spec.agrupar.map(dimensionName),
-		series: present.map(({ id, nombre }) => ({ id, nombre })),
-		filas: groups.map((grupo) => ({
-			grupo: grupo.length === 0 ? ['Todo el periodo'] : grupo.map((value, i) => groupLabel(spec.agrupar[i], value, answer.etiquetas)),
-			celdas: present.map((serie) => at(serie.id, grupo)),
-		})),
+	const { present, entries, points } = indexOf(answer)
+	const dims = spec.agrupar
+	const columnas = dims.map(dimensionName)
+	const series = present.map(({ id, nombre }) => ({ id, nombre }))
+
+	const labelCache = new Map()
+	const getLabel = (dim, val) => {
+		const k = `${dim}:${val}`
+		let l = labelCache.get(k)
+		if (l === undefined) {
+			l = groupLabel(dim, val, answer.etiquetas)
+			labelCache.set(k, l)
+		}
+		return l
 	}
+
+	const filas = entries.map(({ key, grupo }) => ({
+		grupo: grupo.length === 0 ? ['Todo el periodo'] : grupo.map((value, i) => getLabel(dims[i], value)),
+		celdas: present.map((serie) => points[serie.id].get(key) ?? null),
+	}))
+
+	return { columnas, series, filas }
 }
 
 /** A tooltip line: the series, its value and, beyond the local one, who reported. */

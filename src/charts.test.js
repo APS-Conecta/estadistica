@@ -75,6 +75,40 @@ describe('panelsOf — what is drawn', () => {
 	})
 })
 
+describe('panelsOf and tableOf — large dataset performance (5,000 groups)', () => {
+	it('processes 5,000 groups rapidly and produces equivalent table rows', () => {
+		const months = 500
+		const cols = 10
+		const local = []
+		const nacional = []
+		const pares = []
+		for (let m = 0; m < months; m++) {
+			const y = 2000 + Math.floor(m / 12)
+			const monthStr = `${y}-${String((m % 12) + 1).padStart(2, '0')}`
+			for (let c = 0; c < cols; c++) {
+				const g = [monthStr, `col${String(c + 1).padStart(2, '0')}`]
+				local.push(point(g, m + c, 1))
+				nacional.push(point(g, (m + c) * 1.5, 100))
+				pares.push(point(g, (m + c) * 1.1, 10))
+			}
+		}
+		const ans = answer({ local, nacional, pares })
+		const spec = { agrupar: ['mes', 'columna'] }
+
+		const table = tableOf(ans, spec)
+		expect(table.filas).toHaveLength(5000)
+		expect(table.filas[0].celdas[0].valor).toBe(0)
+
+		const start = Date.now()
+		for (let i = 0; i < 5; i++) {
+			panelsOf(ans, spec)
+			tableOf(ans, spec)
+		}
+		const duration = Date.now() - start
+		expect(duration).toBeLessThan(1000)
+	})
+})
+
 describe('tableOf — the side-by-side table (a22)', () => {
 	it('has one row per grupo and one column per series, with an empty cell where a series has no point', () => {
 		const table = tableOf(answer({

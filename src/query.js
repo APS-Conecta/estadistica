@@ -242,8 +242,15 @@ export function groupLabel(dimension, value, etiquetas) {
 		return label ? `${label.prestacion} (${value})` : String(value)
 	}
 	case 'columna': {
-		const label = etiquetas?.codigos.map((c) => c.columnas[value]).find(Boolean)
-		return label ? `${label} (${value})` : String(value)
+		if (etiquetas?.codigos) {
+			for (const c of etiquetas.codigos) {
+				const label = c.columnas?.[value]
+				if (label) {
+					return `${label} (${value})`
+				}
+			}
+		}
+		return String(value)
 	}
 	default:
 		return String(value)
