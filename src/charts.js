@@ -81,10 +81,7 @@ function toKey(grupo) {
 function distinct(values) {
 	const seen = new Map()
 	for (const value of values) {
-		const k = keyOf(value)
-		if (!seen.has(k)) {
-			seen.set(k, value)
-		}
+		seen.set(keyOf(value), value)
 	}
 	return [...seen.values()].sort(compare)
 }

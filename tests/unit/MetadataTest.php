@@ -128,11 +128,7 @@ class MetadataTest extends TestCase {
 	 * IDelegatedSettings — occ admin-delegation:add refuses anything else.
 	 */
 	public function testTheRegisteredAdminSectionIsDelegable(): void {
-		$settings = $this->infoXml()->getElementsByTagName('settings');
-		self::assertGreaterThan(0, $settings->length, 'info.xml must carry <settings>');
-		$admin = $settings->item(0)->getElementsByTagName('admin');
-		self::assertGreaterThan(0, $admin->length, 'info.xml <settings> must carry <admin>');
-		self::assertSame(AdminSettings::class, trim((string)$admin->item(0)->textContent));
+		self::assertSame(AdminSettings::class, $this->text($this->infoXml(), 'admin'));
 		self::assertContains(IDelegatedSettings::class, class_implements(AdminSettings::class));
 	}
 

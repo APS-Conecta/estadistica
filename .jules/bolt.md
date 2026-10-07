@@ -1,9 +1,9 @@
-## 2026-10-07 - Avoid JSON.stringify and array allocations in chart/table hot loops
+## 2026-10-07 - Avoid JSON.stringify and array allocations in chart indexing
 
-When indexing and rendering query results with up to 5,000 group entries across 3 series (~15,000 points), `JSON.stringify` on group arrays in lookup maps and `.map().find()` in label resolution created significant allocation and serialization overhead.
+When indexing query results with up to 5,000 group entries across 3 series (~15,000 points), calling `JSON.stringify` on group arrays in lookup maps and sort callbacks created significant serialization and object allocation overhead.
 
 Key takeaways:
-- Use primitive key functions (`toKey`) for group tuples (length 0, 1, or 2) instead of `JSON.stringify(grupo)`.
-- Use separate `Map` instances per series (`points[serie.id]`) to eliminate string key concatenation (`${serie.id}|${key}`).
+- Use primitive key helpers (`keyOf` / `toKey`) for group tuples instead of `JSON.stringify(grupo)`.
+- Use one `Map` per series (`points[serie.id]`) to eliminate string key concatenation (`${serie.id}|${key}`).
 - Use index-based comparisons (`compareGroups`) instead of `.reduce()` inside sort callbacks.
-- Memoize `groupLabel` calls across `tableOf` row generation and use early-return `for..of` loops instead of `.map().find()`.
+- Compute maximum values in `panelsOf` with direct O(N) iteration over point values.
