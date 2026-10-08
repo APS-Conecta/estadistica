@@ -75,6 +75,23 @@ describe('panelsOf — what is drawn', () => {
 	})
 })
 
+describe('tableOf — equivalence pinning', () => {
+	it('pins row order and missing cells on two dimensions with a null grupo value', () => {
+		const table = tableOf(answer({
+			local: [point(['CESFAM', '2026-01'], 10), point([null, '2026-02'], 20)],
+			nacional: [point(['CESFAM', '2026-01'], 100), point(['CESFAM', '2026-02'], 200)],
+		}), { agrupar: ['tipo', 'mes'] })
+
+		expect(table.filas.map((f) => f.grupo)).toStrictEqual([
+			['CESFAM', 'enero de 2026'],
+			['CESFAM', 'febrero de 2026'],
+			['sin dato', 'febrero de 2026'],
+		])
+		expect(table.filas[1].celdas[0]).toBeNull()
+		expect(table.filas[2].celdas[1]).toBeNull()
+	})
+})
+
 describe('tableOf — the side-by-side table (a22)', () => {
 	it('has one row per grupo and one column per series, with an empty cell where a series has no point', () => {
 		const table = tableOf(answer({
