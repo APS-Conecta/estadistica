@@ -42,7 +42,7 @@ export function formatValue(value) {
 	return Number(value).toLocaleString('es-CL', { maximumFractionDigits: 1 })
 }
 
-// Reuse a single Intl.Collator instance to avoid the heavy per-call overhead of String.prototype.localeCompare with options.
+// One collator for every comparison: localeCompare with options builds a new one per call.
 const esCollator = new Intl.Collator('es', { numeric: true })
 
 /** null last, numbers by value, text in Spanish order with numbers inside. */
