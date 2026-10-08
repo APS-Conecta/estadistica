@@ -228,11 +228,7 @@ class ApiController extends OCSController {
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/preguntas')]
 	public function crearPregunta(string $titulo, array $consulta, string $tipo = 'barra'): DataResponse {
-		try {
-			return new DataResponse($this->saved->createQuestion($titulo, $consulta, $tipo), Http::STATUS_CREATED);
-		} catch (RefusedException $e) {
-			return $this->refuse($e->getMessage());
-		}
+		return $this->write(fn (): DataResponse => new DataResponse($this->saved->createQuestion($titulo, $consulta, $tipo), Http::STATUS_CREATED));
 	}
 
 	/**
@@ -332,11 +328,7 @@ class ApiController extends OCSController {
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/tableros')]
 	public function crearTablero(string $titulo, array $tarjetas = []): DataResponse {
-		try {
-			return new DataResponse($this->saved->createDashboard($titulo, $tarjetas), Http::STATUS_CREATED);
-		} catch (RefusedException $e) {
-			return $this->refuse($e->getMessage());
-		}
+		return $this->write(fn (): DataResponse => new DataResponse($this->saved->createDashboard($titulo, $tarjetas), Http::STATUS_CREATED));
 	}
 
 	/**

@@ -79,10 +79,16 @@
 						:style="{ gridColumn: `span ${card.ancho}` }">
 						<QuestionCard :pregunta="preguntaOf(card.pregunta)">
 							<template v-if="tablero.editable" #actions>
-								<NcButton variant="tertiary" :disabled="index === 0 || saving" @click="move(index, -1)">
+								<NcButton variant="tertiary"
+									:aria-label="`Subir la tarjeta «${cardName(card)}»`"
+									:disabled="index === 0 || saving"
+									@click="move(index, -1)">
 									Subir
 								</NcButton>
-								<NcButton variant="tertiary" :disabled="index === cards.length - 1 || saving" @click="move(index, 1)">
+								<NcButton variant="tertiary"
+									:aria-label="`Bajar la tarjeta «${cardName(card)}»`"
+									:disabled="index === cards.length - 1 || saving"
+									@click="move(index, 1)">
 									Bajar
 								</NcButton>
 								<select :value="card.ancho"
@@ -93,7 +99,10 @@
 										{{ ancho === 1 ? '1 columna' : `${ancho} columnas` }}
 									</option>
 								</select>
-								<NcButton variant="tertiary" :disabled="saving" @click="drop(index)">
+								<NcButton variant="tertiary"
+									:aria-label="`Quitar la tarjeta «${cardName(card)}»`"
+									:disabled="saving"
+									@click="drop(index)">
 									Quitar
 								</NcButton>
 							</template>
@@ -175,6 +184,10 @@ export default {
 	methods: {
 		preguntaOf(id) {
 			return this.preguntas.find((pregunta) => pregunta.id === id) ?? null
+		},
+
+		cardName(card) {
+			return this.preguntaOf(card.pregunta)?.titulo ?? 'Pregunta eliminada'
 		},
 
 		open(id) {

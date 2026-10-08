@@ -141,7 +141,10 @@ describe('Dashboard — its creator or an administrator arranges it', () => {
 		const wrapper = await opened()
 		axios.put.mockReturnValueOnce(ok({ ...TABLERO, actualizado: 2 }))
 
-		await wrapper.findAllComponents(QuestionCard)[0].findAll('button').find((button) => button.text() === 'Bajar').trigger('click')
+		const firstCardDownButton = wrapper.findAllComponents(QuestionCard)[0].findAll('button').find((button) => button.text() === 'Bajar')
+		expect(firstCardDownButton.attributes('aria-label')).toBe('Bajar la tarjeta «Pregunta 1»')
+
+		await firstCardDownButton.trigger('click')
 		await flushPromises()
 
 		expect(axios.put).toHaveBeenCalledWith(`${OCS}/tableros/9`, {

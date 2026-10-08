@@ -7,6 +7,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- **Docs alignment**: the README pins its OCS citation to server 34 and `appinfo/info.xml` gains a
+  `<documentation>` element with user, admin and developer links; `docs/index.md` stays the
+  four-column exemplar, unchanged.
+
 ## [0.1.0] - 2026-09-29
 
 The first version: M1, the REM pillar. The 0.0.x versions before it were its slices, and none was released.
