@@ -92,7 +92,7 @@
 									Bajar
 								</NcButton>
 								<select :value="card.ancho"
-									aria-label="Ancho de la tarjeta"
+									:aria-label="`Ancho de la tarjeta «${cardName(card)}»`"
 									:disabled="saving"
 									@change="resize(index, Number($event.target.value))">
 									<option v-for="ancho in WIDTHS" :key="ancho" :value="ancho">

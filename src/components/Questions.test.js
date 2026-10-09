@@ -54,12 +54,18 @@ describe('Questions — every pregunta, everyone\'s to read (a8)', () => {
 		wrapper.unmount()
 	})
 
-	it('offers Editar and Eliminar only where the person may change it', async () => {
+	it('offers Editar and Eliminar only where the person may change it, with accessible names containing item context', async () => {
 		const wrapper = await listed()
 
-		expect(button(item(wrapper, 0), 'Editar')).toBeDefined()
-		expect(button(item(wrapper, 1), 'Editar')).toBeUndefined()
-		expect(button(item(wrapper, 1), 'Eliminar')).toBeUndefined()
+		const firstItem = item(wrapper, 0)
+		expect(button(firstItem, 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Controles»')
+		expect(button(firstItem, 'Editar').attributes('aria-label')).toBe('Editar la pregunta «Controles»')
+		expect(button(firstItem, 'Eliminar').attributes('aria-label')).toBe('Eliminar la pregunta «Controles»')
+
+		const secondItem = item(wrapper, 1)
+		expect(button(secondItem, 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Visitas»')
+		expect(button(secondItem, 'Editar')).toBeUndefined()
+		expect(button(secondItem, 'Eliminar')).toBeUndefined()
 		wrapper.unmount()
 	})
 

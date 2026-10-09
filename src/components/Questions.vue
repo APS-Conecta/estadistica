@@ -32,14 +32,22 @@
 					<div class="estadistica-questions__row">
 						<strong>{{ pregunta.titulo }}</strong>
 						<span class="estadistica-questions__hint">de {{ pregunta.autor_nombre }}</span>
-						<NcButton variant="tertiary" @click="toggle(pregunta.id)">
+						<NcButton variant="tertiary"
+							:aria-label="`${shown.includes(pregunta.id) ? 'Ocultar' : 'Ver'} la pregunta «${pregunta.titulo}»`"
+							@click="toggle(pregunta.id)">
 							{{ shown.includes(pregunta.id) ? 'Ocultar' : 'Ver' }}
 						</NcButton>
 						<template v-if="pregunta.editable">
-							<NcButton variant="tertiary" :disabled="saving" @click="edit(pregunta)">
+							<NcButton variant="tertiary"
+								:aria-label="`Editar la pregunta «${pregunta.titulo}»`"
+								:disabled="saving"
+								@click="edit(pregunta)">
 								Editar
 							</NcButton>
-							<NcButton variant="tertiary" :disabled="saving" @click="remove(pregunta)">
+							<NcButton variant="tertiary"
+								:aria-label="`Eliminar la pregunta «${pregunta.titulo}»`"
+								:disabled="saving"
+								@click="remove(pregunta)">
 								Eliminar
 							</NcButton>
 						</template>
