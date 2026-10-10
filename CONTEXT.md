@@ -27,10 +27,10 @@ and says so. A código no dictionary names shows as «sin descripción», and is
 **Base de Establecimientos** — DEIS's register of establishments. It gives each code its tipo, dependencia, nivel de
 atención, servicio de salud, región and comuna, which is what a peer group chooses by.
 
-**Fuente** — one body of published figures the app keeps and can say the age of: `rem-a`, `rem-p` and `piv`. Each
-names its **origen** (the publisher, «datos públicos DEIS» or «FONASA») and its **fecha de corte**, the date its data
-was cut. The register is read beside them, not asked.
-_Avoid_: dataset, and the publisher as a synonym: one publisher has two fuentes here.
+**Fuente** — one body of published figures the app keeps and can say the age of: `rem-a`, `rem-p`, `establecimientos`
+(the Base de Establecimientos) and `piv`. Each names its **origen** (the publisher, «datos públicos DEIS» or «FONASA»)
+and its **fecha de corte**, the date its data was cut. No consulta asks the register: it is read beside the REM.
+_Avoid_: dataset, and the publisher as a synonym: one publisher has three fuentes here.
 
 **Incompleto** — a year and serie that loaded, but whose member failed a completeness or plausibility check. It is
 kept and shown with its reason. It never replaces a complete load of the same year and serie.
