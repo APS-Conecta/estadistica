@@ -10,6 +10,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 - **Docs alignment**: the README pins its OCS citation to server 34 and `appinfo/info.xml` gains a
   `<documentation>` element with user, admin and developer links; `docs/index.md` stays the
   four-column exemplar, unchanged.
+- **Saving without a session answers 403**: `POST /api/v1/preguntas` and `POST /api/v1/tableros`
+  return 403 with a message, not a server error, when no user is signed in.
+- **Dashboard card buttons name their card**: «Subir», «Bajar» and «Quitar» carry an aria-label
+  with the card's question title.
 
 ## [0.1.0] - 2026-09-29
 
