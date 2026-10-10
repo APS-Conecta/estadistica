@@ -171,7 +171,10 @@ describe('Dashboard — its creator or an administrator arranges it', () => {
 		const wrapper = await opened()
 		axios.put.mockImplementation((url, body) => ok({ ...TABLERO, tarjetas: body.tarjetas }))
 
-		await wrapper.findAll('select')[1].setValue('3')
+		const selectEl = wrapper.findAll('select')[1]
+		expect(selectEl.attributes('aria-label')).toBe('Ancho de la tarjeta «Pregunta 2»')
+
+		await selectEl.setValue('3')
 		await flushPromises()
 		expect(axios.put).toHaveBeenLastCalledWith(`${OCS}/tableros/9`, {
 			tarjetas: [{ pregunta: 1, ancho: 2 }, { pregunta: 2, ancho: 3 }, { pregunta: 3, ancho: 3 }],
