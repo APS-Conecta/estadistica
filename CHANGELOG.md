@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- **Accessibility**: question and dashboard card controls in Preguntas and Tableros carry specific
+  accessible names with item context.
 - **Docs alignment**: the README pins its OCS citation to server 34 and `appinfo/info.xml` gains a
   `<documentation>` element with user, admin and developer links; `docs/index.md` stays the
   four-column exemplar, unchanged.
