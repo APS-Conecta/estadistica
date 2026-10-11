@@ -112,7 +112,9 @@ Privilegios de administración or `occ admin-delegation:add 'OCA\Estadistica\Set
 ## For other apps
 
 OCS, with `OCS-APIRequest: true`, under `/ocs/v2.php/apps/estadistica/api/v1/`: `fuentes`, `fuentes/{id}`,
-`consultas` (POST), `preguntas`, `tableros` and `indicadores`. Every route is readable by any user and rate-limited.
+`consultas` (POST), `preguntas` and `tableros` (each with `{id}`, and POST, PUT and DELETE), and `indicadores`. Every
+route is open to any signed-in user and rate-limited, writes more tightly; only a pregunta's or tablero's author, or
+whoever administers Estadística, may change or delete it.
 `consultas` takes `{consulta, establecimiento?}`: without `establecimiento`, the local series is the configured one.
 The OCS envelope and its `OCS-APIRequest: true` header are Nextcloud's own mechanism —
 [OCS API](https://docs.nextcloud.com/server/34/developer_manual/client_apis/OCS/index.html).
