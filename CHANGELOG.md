@@ -14,6 +14,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   return 403 with a message, not a server error, when no user is signed in.
 - **Dashboard card buttons name their card**: «Subir», «Bajar» and «Quitar» carry an aria-label
   with the card's question title.
+- **Question and card controls name their item**: «Ver»/«Ocultar», «Editar» and «Eliminar» in
+  Preguntas carry an aria-label with the question's title, and a card's width selector names its
+  card.
 
 ## [0.1.0] - 2026-09-29
 
