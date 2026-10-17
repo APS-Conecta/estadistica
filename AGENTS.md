@@ -2,15 +2,8 @@
 
 Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for every establishment in the country, a center's own beside the national ones and its peers', and the Metas Sanitarias month by month.
 
-## Scheduled Jules agents
+## Working rules
 
-One Jules agent visits this repo each night at 02:00 (Chile): Mon 🗡️ Breaker, Tue 🐞 Tracer,
-Wed ⚡ Bolt / ✂️ Simplifier (alternate weeks), Thu 🧹 Janitor, Fri 🎨 Palette, Sat 📚 Scribe,
-Sun 🔤 Lexicon. Claude reviews every PR. The rules below are this repo's own facts, and they bind every agent.
-
-- **Journals** live only in lowercase `.jules/` (`breaker.md`, `tracer.md`, `bolt.md`, `simplifier.md`,
-  `janitor.md`, `palette.md`, `scribe.md`, `lexicon.md`) — never create `.Jules/`.
-  Date each entry with today's `date +%F`, never a remembered or copied date.
 - **Names:** code is English, but a domain term keeps the spelling `CONTEXT.md` gives it (*Pregunta* and
   *Tablero* in new names and UI text, never *question* or *dashboard*). Rename an existing name only inside
   code a change already touches, and never a table, column, route, controller action (an OpenAPI operation
@@ -31,7 +24,4 @@ Sun 🔤 Lexicon. Claude reviews every PR. The rules below are this repo's own f
 - **Strings:** what a person reads — templates, `RefusedException` messages — is Spanish, written as literals the way the
   surrounding code does; this app uses no `t()` / `$l->t()`, so do not introduce them. Code, comments, commits and PR text English.
 - **One concern per PR**, under 50 lines of hand-written source (rebuilt bundle excluded), and it contains every change
-  its description claims — a journal-only PR is invalid. Nothing worthwhile → no PR. Never repeat a change an open or
-  recently closed PR already proposes.
-- **PR text:** keep the title prefix and body format your agent's prompt gives (emoji and name as above);
-  the maintainer gives the squash commit its Conventional Commits title and adds the `ai-assisted` label.
+  its description claims.
