@@ -1,4 +1,0 @@
-## 2026-10-02 - Unhandled ForbiddenException on Unauthenticated Controller Writes
-**Vulnerability:** `ApiController::crearPregunta` and `crearTablero` did not handle `ForbiddenException` thrown by `SavedContent::owner()` when unauthenticated users attempted to save questions or dashboards.
-**Learning:** `SavedContent` throws `ForbiddenException` when no user session is active (`$uid === null`), but while `editar*` and `eliminar*` methods used the `$this->write(...)` helper to catch `ForbiddenException` and return HTTP 403, `crearPregunta` and `crearTablero` only caught `RefusedException`.
-**Prevention:** Ensure all write endpoints in API controllers wrap business logic in error handling helpers that capture authorization and authentication exceptions (`ForbiddenException`) to return clean HTTP 403 status responses instead of triggering 500 server errors or leaking stack traces.

@@ -9,7 +9,7 @@ the one named here wins and the other should link to it.
 | [`manual.md`](manual.md) | how-to, **in Spanish** | staff, and whoever administers the app | How to use each view and the admin section, in the screens' own words |
 | [`../CONTEXT.md`](../CONTEXT.md) | reference | everyone | **The vocabulary**: serie, fuente, consulta, pares, informante, meta comprometida, PIV… |
 | [`adr/`](adr/) | explanation | developer | Each decision, and the reasoning that was live when it was taken (0001–0008, no gaps) |
-| [`threat-model.md`](threat-model.md) | reference | developer | What an attacker wants, the entry points and their guards; the Breaker agent starts here |
+| [`threat-model.md`](threat-model.md) | reference | developer | What an attacker wants, the entry points and their guards |
 | [`../ROADMAP.md`](../ROADMAP.md) | status | everyone | What is next and what is not planned |
 | [`../BUGS.md`](../BUGS.md) | history | developer | What went wrong, why, and where the fix lives |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | history | operator | What changed, per version |
