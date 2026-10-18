@@ -11,9 +11,9 @@ work.*
   `estadistica_goal`, `estadistica_commitment`, `estadistica_ingest` (`lib/Migration/`).
 - **Staff-saved content:** questions (preguntas) and dashboards (tableros), each owned by its creator
   (`estadistica_question`, `estadistica_dashboard`; `lib/Service/SavedContent.php`).
-- **No patient data.** The README says "It stores only aggregate counts that DEIS and FONASA publish,
-  and touches no patient data" (`README.md:10`), and `CONTEXT.md:4` says "no patient data enters
-  this context".
+- **No patient data.** The README says (in Spanish) that the app stores only aggregate counts that DEIS
+  and FONASA publish and touches no patient data (`## Qué es`), and `CONTEXT.md:4` says "no patient data
+  enters this context".
 
 ## What an attacker wants
 

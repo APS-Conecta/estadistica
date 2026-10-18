@@ -11,9 +11,9 @@ No contiene información de pacientes: guarda solo conteos agregados publicados 
     <author>Daniel Espinoza</author>
     <namespace>Estadistica</namespace>
     <documentation>
-        <user>https://github.com/APS-Conecta/estadistica/blob/main/docs/manual.md</user>
-        <admin>https://github.com/APS-Conecta/estadistica/blob/main/README.md#configuration</admin>
-        <developer>https://github.com/APS-Conecta/estadistica/blob/main/README.md#development</developer>
+        <user>https://aps-conecta.github.io/documentation/usuario/estadistica.html</user>
+        <admin>https://aps-conecta.github.io/documentation/usuario/estadistica.html#administrar-estadistica</admin>
+        <developer>https://aps-conecta.github.io/documentation/desarrollo/estadistica.html</developer>
     </documentation>
     <category>tools</category>
     <dependencies>

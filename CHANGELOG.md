@@ -15,6 +15,21 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 - **Dashboard card buttons name their card**: «Subir», «Bajar» and «Quitar» carry an aria-label
   with the card's question title.
 
+### Changed
+
+- **Docs in Spanish**: `README.md` is rewritten in Spanish to the five-section contract and points to the
+  documentation site; the repo opts into the Spanish-docs regime (`.github/docs-es`), with the checker and
+  profiles refreshed to the current canon (repo-docs ADR 0006). `appinfo/info.xml`'s `<documentation>`
+  links now point to the documentation site.
+
+### Removed
+
+- **`docs/manual.md`**: the staff manual moved to the documentation site (`usuario/estadistica`), including
+  the administration section.
+- **`docs/index.md`**: the in-repo documentation index, retired by the regime.
+- **`BUGS.md`** and **`ROADMAP.md`**: open items are now GitHub issues (#22 to #34); the technical debt is in the
+  documentation site's developer reference. The fixed-bug history stays in git.
+
 ## [0.1.0] - 2026-09-29
 
 The first version: M1, the REM pillar. The 0.0.x versions before it were its slices, and none was released.
