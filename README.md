@@ -1,155 +1,94 @@
 # Estadística
 
-## What this is
+Aplicación de Nextcloud 34 para APS Conecta Gestión: las cifras REM que el DEIS publica para todos los establecimientos del país, con las del propio centro al lado de las nacionales y de las de establecimientos parecidos, y las Metas Sanitarias de Atención Primaria mes a mes.
 
-Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for every establishment in the country,
-labelled from each year's own dictionary, so a center can set its own figures beside the national ones and beside
-establishments like it. It also follows the Metas Sanitarias de Atención Primaria month by month. UI in Spanish,
-everything else English. AGPL-3.0-or-later.
+## Qué es
 
-**It stores only aggregate counts that DEIS and FONASA publish, and touches no patient data.** It fills in no REM,
-validates no planilla, and reads no Serie BS, BM or D. Nothing in it chooses which establishment is «ours»: that is
-instance configuration ([gestion ADR-0013](https://github.com/APS-Conecta/gestion/blob/main/docs/adr/0013-the-establishment-is-instance-configuration.md)).
+Estadística guarda las cifras REM de todos los establecimientos del país, etiquetadas con el diccionario oficial de cada año, para que un centro ponga las suyas junto a las nacionales y a las de sus pares. También sigue mes a mes las Metas Sanitarias. La interfaz está en español; todo lo demás, en inglés. Licencia AGPL-3.0-or-later.
 
-| View | What it is | Where it comes from |
-| --- | --- | --- |
-| **Consultar** | A consulta built in four steps (Datos → Filtrar → Resumir → Visualizar): a REM hoja and sección, prestaciones and columns, grouped by up to two dimensions, the center beside the country and a peer group | DEIS REM Serie A and P, every establishment and month in the window; labels from that year's DICCIONARIO CODIGOS |
-| **Preguntas** | Saved consultas, readable by all staff | This app's own tables |
-| **Tableros** | Saved preguntas laid out as cards; each card asks its own consulta | This app's own tables |
-| **Metas Sanitarias** | Metas I–VIII of the year, one card each, month by month: the center's %, its gaps to the meta comprometida and the meta nacional, and the national and peer % | The year's metas file, the REM routes it names, and FONASA's Población Inscrita Validada |
+**Guarda solo conteos agregados que publican el DEIS y FONASA, y no toca datos de pacientes.** No llena ninguna planilla REM, no la valida y no lee las series BS, BM ni D. Nada en ella decide cuál es el establecimiento «propio»: es configuración de la instancia ([ADR-0013 de gestion](https://github.com/APS-Conecta/gestion/blob/main/docs/adr/0013-the-establishment-is-instance-configuration.md)).
 
-The admin section, **Administración → Estadística**, holds the window of years, the state of every load, FONASA's
-population, the commitments of each year's metas, and a door for files the app cannot fetch. An admin can delegate
-it to any group.
+Tiene cuatro vistas, más una sección de administración:
 
-## Status
+- **Consultar**: una consulta armada en cuatro pasos (Datos, Filtrar, Resumir, Visualizar) sobre las series REM A y P de todos los establecimientos y meses de la ventana de años, con el centro junto al país y a un grupo de pares.
+- **Preguntas**: consultas guardadas, visibles para todo el personal.
+- **Tableros**: preguntas guardadas dispuestas como tarjetas; cada tarjeta hace su propia consulta.
+- **Metas Sanitarias**: las Metas I a VIII del año, una tarjeta por meta, mes a mes.
+- **Administración → Estadística**: la ventana de años, el estado de cada carga, la población de FONASA, los compromisos de las metas de cada año y una puerta para los archivos que la aplicación no puede descargar. Un administrador puede delegarla a cualquier grupo.
 
-**0.1.0, M1: the REM pillar.** Every piece above is built and tested on synthetic data: the ingest by HTTP Range
-and by a dropped zip, the catalogue, the consulta engine and its OCS API, preguntas and tableros, the FONASA import,
-and the 2026 metas. `info.xml`, `package.json` and `openapi.json` all read 0.1.0. It is tagged `v0.1.0` and
-ships in gestion's `OWN_APPS` as a vendored tarball (APS-Conecta/gestion#198, 2026-09-30).
+## Documentación
 
-It went through a code review on 2026-09-29. Its fixes are in, and what it deferred is in [`BUGS.md`](BUGS.md)
-(B-015 to B-020).
+La documentación vive en el sitio de documentación de la organización:
 
-Not done yet:
+- [Guía de uso](https://aps-conecta.github.io/documentation/usuario/estadistica.html): cada vista y la administración, con las palabras de la pantalla.
+- [Referencia para desarrollo](https://aps-conecta.github.io/documentation/desarrollo/estadistica.html): la API OCS, la especificación de consulta, la carga REM por año y serie, las claves de configuración, los invariantes, los dominios de fallo y la deuda técnica.
+- [Aplicaciones propias](https://aps-conecta.github.io/documentation/administracion/aplicaciones.html): cómo gestion instala la aplicación.
+- [Novedades](https://aps-conecta.github.io/documentation/proyecto/novedades/estadistica.html): los cambios que ve una persona usuaria o administradora.
 
-- Real data went through it on the lab on 2026-09-29: DEIS's default window (27.3 million rows) and the owner's
-  FONASA export. What it found is B-030 to B-032 in [`BUGS.md`](BUGS.md). The owner still compares June 2026's
-  Metas I–VII with the Estadística-REM unit's own calculation before staff are told ([`ROADMAP.md`](ROADMAP.md)).
-- Staff files (CSV, XLSX) as a fuente are M2 ([`ROADMAP.md`](ROADMAP.md)).
+Dentro de este repositorio quedan los documentos que viajan con el código:
 
-## Quickstart
+- [`CONTEXT.md`](CONTEXT.md): el vocabulario (serie, fuente, consulta, pares, informante, meta comprometida, PIV), en inglés.
+- [`docs/adr/`](docs/adr/): las decisiones, de la 0001 a la 0008.
+- [`docs/threat-model.md`](docs/threat-model.md): qué busca un atacante, las entradas y sus protecciones.
+- [`openapi.json`](openapi.json): el contrato OCS para otras aplicaciones, generado por `make openapi` desde el controlador, nunca a mano. La respuesta de una consulta solo se extiende, nunca cambia de forma ([ADR-0006](docs/adr/0006-one-consulta-spec-compiled-to-bound-sql.md)). El [`docs/CONTRACTS.md` de gestion](https://github.com/APS-Conecta/gestion/blob/main/docs/CONTRACTS.md) lo registra.
+- [`seeds/metas-2026.json`](seeds/metas-2026.json): las Metas Sanitarias 2026 tal como se leyeron de las Orientaciones Técnicas, con notas sobre lo leído y no copiado.
+- [`CHANGELOG.md`](CHANGELOG.md): qué cambió y cuándo.
 
-On a machine with Docker, beside a checkout of [`aps-common`](https://github.com/APS-Conecta/aps-common)
-(`../aps-common`). This stands up a throwaway Nextcloud 34 with PostgreSQL 18 on port 8092; it is not the gestion
-stack.
+Los errores abiertos y el trabajo pendiente están en los issues de este repositorio.
 
-1. **Start the instance** (in this repo): `make instance-up`. It enables the app, restarts the web workers and
-   ends with `Instance ready at http://localhost:8092 (admin / admin)`.
-2. **Check the wiring**: `make smoke`. Every check reads `ok`, and it ends with `All good.`
-3. **Open `http://localhost:8092/apps/estadistica`** as `admin` / `admin`. Consultar shows «Todavía no hay cifras
-   REM» and the note that no establishment is configured: nothing is loaded yet, and that is right.
-4. **Load a year** in Administración → Estadística: put a DEIS zip (`SERIE_REM_<año>.zip`) in Files and choose it
-   under «Cargar un archivo a mano». It reports «Recibido: cifras de <año>…», and «Cifras REM cargadas» shows each
-   serie as it loads, one per hour. Without a file, the hourly job fetches the window from DEIS on its own,
-   wherever Nextcloud's background jobs run.
+## Estado
 
-`make instance-clean` removes the instance and its database.
+**0.1.0, hito M1: el pilar REM.** Todo lo anterior está construido y probado con datos sintéticos: la carga por rangos HTTP y por un zip dejado a mano, el catálogo, el motor de consultas y su API OCS, las preguntas y los tableros, la importación de FONASA y las metas 2026. `info.xml`, `package.json` y `openapi.json` dicen 0.1.0. Está etiquetada `v0.1.0` y se entrega en el conjunto `OWN_APPS` de gestion como un tarball fijado (APS-Conecta/gestion#198, 2026-09-30).
 
-## Install
+Pasó una revisión de código el 2026-09-29. Sus correcciones están dentro, y lo que dejó pendiente (B-015 a B-020 de la deuda técnica) figura en la referencia para desarrollo.
 
-A clinic gets Estadística through gestion, not from the app store: gestion's phase 12 unpacks the tarball it vendors
-under `provisioning/apps/estadistica/` (built from a tag of this repo), and phase 16 writes the establishment (below).
-A clinic needs no clone and no network for the app itself.
+Falta:
 
-To develop, clone it as `gestion/apps/estadistica` (the directory name is the app id). Phase 12 then leaves the live
-clone alone instead of unpacking over it. Both commands run from the gestion checkout:
+- Queda comparar las Metas I a VII de junio de 2026 con el cálculo de la unidad de Estadística-REM antes de avisar al personal. Con datos reales en el laboratorio el 2026-09-29 (la ventana por defecto, 27,3 millones de filas, y la exportación de FONASA) aparecieron tres hallazgos para el hito M2: una fecha de corte que un solo establecimiento puede mover, etiquetas prestadas del diccionario de otro año y consultas nacionales de hoja entera que llegan al límite de 10 s.
+- Los archivos del personal (CSV, XLSX) como fuente son el hito M2.
+
+## Inicio rápido de desarrollo
+
+Requiere una máquina con Docker y una copia de [`aps-common`](https://github.com/APS-Conecta/aps-common) como hermana (`../aps-common`). Levanta un Nextcloud 34 desechable con PostgreSQL 18 en el puerto 8092; no es la pila de gestion.
+
+1. **Levantar la instancia** (en este repositorio): `make instance-up`. Habilita la aplicación, reinicia los procesos web y termina con `Instance ready at http://localhost:8092 (admin / admin)`.
+2. **Revisar el cableado**: `make smoke`. Cada comprobación dice `ok` y termina con `All good.`
+3. **Abrir `http://localhost:8092/apps/estadistica`** como `admin` / `admin`. Consultar muestra «Todavía no hay cifras REM» y el aviso de que no hay establecimiento configurado: todavía no se carga nada, y eso es lo correcto.
+4. **Cargar un año** en Administración → Estadística: dejar un zip del DEIS (`SERIE_REM_<año>.zip`) en Archivos y elegirlo en «Cargar un archivo a mano». Informa «Recibido: cifras de <año>…», y «Cifras REM cargadas» muestra cada serie a medida que se carga, una por hora. Sin archivo, el trabajo horario descarga la ventana del DEIS por sí solo, donde corran los trabajos en segundo plano de Nextcloud.
+
+`make instance-clean` elimina la instancia y su base de datos.
+
+Una clínica recibe Estadística por gestion, no por la tienda de aplicaciones: la fase 12 desempaqueta el tarball fijado en `provisioning/apps/estadistica/` (construido desde una etiqueta de este repositorio) y la fase 16 escribe el establecimiento. Para desarrollar, clonarla como `gestion/apps/estadistica` (el nombre del directorio es el id de la aplicación); así la fase 12 deja intacto el clon en vez de desempaquetar encima. Ambos comandos se ejecutan desde el repositorio de gestion:
 
     git clone https://github.com/APS-Conecta/estadistica.git apps/estadistica
     make fix-mount-perms && make seed
 
-Nextcloud 34, PHP 8.2–8.5, **PostgreSQL only**: `info.xml` declares it, so an install on another engine is refused at
-enable time ([ADR-0002](docs/adr/0002-postgresql-only.md)). The default window of four years takes about 4.9 GB of
-database (27.3 million rows, measured on gestion's lab on 2026-09-29), and the same in each backup.
+Requiere Nextcloud 34, PHP 8.2–8.5 y **solo PostgreSQL**: `info.xml` lo declara, y una instalación sobre otro motor se rechaza al habilitar la aplicación ([ADR-0002](docs/adr/0002-postgresql-only.md)). La ventana por defecto de cuatro años ocupa unos 4,9 GB de base de datos (27,3 millones de filas, medido en el laboratorio de gestion el 2026-09-29), y lo mismo en cada respaldo.
 
-## Configuration
+La configuración de la aplicación se escribe con `occ config:app:set estadistica <clave> --value=<valor>`. Las claves `deis_code`, `establishment_type` y `comuna_cut` identifican el establecimiento: las escribe la fase 16 de gestion desde el archivo del sitio y la aplicación no tiene un método que las escriba; `first_year` es la ventana de años y se cambia en Administración → Estadística. Su tabla completa, y las claves de estado del trabajo (`deis_checked_at`, `deis_etags`, `deis_check_errors`, `deis_register`), están en la [referencia para desarrollo](https://aps-conecta.github.io/documentation/desarrollo/estadistica.html). Quién administra Estadística es el grupo de administradores de Nextcloud más cualquier grupo con la sección delegada, en Administración → Privilegios de administración o con `occ admin-delegation:add 'OCA\Estadistica\Settings\AdminSettings' <grupo>` ([ADR-0003](docs/adr/0003-every-admin-write-declares-its-delegation.md)).
 
-App config, `occ config:app:set estadistica <key> --value=<value>`:
+Otras aplicaciones leen la API OCS (con `OCS-APIRequest: true`) bajo `/ocs/v2.php/apps/estadistica/api/v1/`: `fuentes`, `fuentes/{id}`, `consultas` (POST), `preguntas`, `tableros` e `indicadores`. Toda ruta es legible por cualquier usuario y tiene límite de tasa. `consultas` recibe `{consulta, establecimiento?}`: sin `establecimiento`, la serie local es la configurada. El sobre OCS es un mecanismo de Nextcloud: [API OCS](https://docs.nextcloud.com/server/34/developer_manual/client_apis/OCS/index.html).
 
-| Key | What it does | Default | Who writes it |
-| --- | --- | --- | --- |
-| `deis_code` | The establishment this install serves: six digits. Anything else reads as no establishment | unset: the country and the peers show, the local series does not | gestion phase 16, from `SITE_DEIS`. The app has no setter |
-| `establishment_type` | Its tipo, shown in the admin section | unset | gestion phase 16, from `SITE_TIPO` |
-| `comuna_cut` | Its comuna's five-digit CUT | unset | gestion phase 16, from `SITE_COMUNA_CUT` |
-| `first_year` | The first year of national history kept. Narrowing it deletes the years left out | the current year − 3 | Administración → Estadística, «Años de historia nacional» |
+Las pruebas y compuertas:
 
-gestion's divergence gate (`scripts/divergence.sh`) reads the three identity keys back against the site file. The job's own keys
-(`deis_checked_at`, `deis_etags`, `deis_check_errors`, `deis_register`) are state, not settings.
+- `make test`: la batería unitaria en un contenedor PHP básico, sin Nextcloud.
+- `npm run lint-js` y `npm test`: ESLint y Vitest.
+- `make aps-drift`: las copias vendorizadas de `aps-common` están al día (`make aps-sync` las refresca).
+- `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
+- `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
+- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, en Chromium (Playwright para Python en el host). Tampoco la ejecuta CI.
+- `npm run build` y confirmar `js/`: los paquetes se confirman, y CI falla cuando difieren de `src/`.
 
-Who administers Estadística is Nextcloud's admin group plus any group delegated the section, under Administración →
-Privilegios de administración or `occ admin-delegation:add 'OCA\Estadistica\Settings\AdminSettings' <group>`
-([ADR-0003](docs/adr/0003-every-admin-write-declares-its-delegation.md)).
+La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío.
 
-## How it works
+Tres trampas que esta aplicación ya pagó:
 
-- **One importer, two sources.** The same importer reads DEIS over HTTP Range (central directory first, then only
-  the Serie A, Serie P and dictionary members) or a zip an admin dropped. Each (año, serie) loads in one transaction:
-  a failure keeps the last good load and says why in the admin section
-  ([ADR-0004](docs/adr/0004-rem-is-a-lean-typed-table-over-a-window.md),
-  [ADR-0005](docs/adr/0005-the-app-calls-deis-at-run-time.md)).
-- **One job.** An hourly `TimedJob` checks DEIS at most once a day and loads one pending member per tick. Nothing
-  runs on the host's scheduler.
-- **One consulta spec.** The builder, the tableros, the metas and the API all send the same spec. It compiles to
-  parameter-only SQL, run `READ ONLY` under a 10 s `statement_timeout`; a spec that names anything else is a Spanish
-  422 ([ADR-0006](docs/adr/0006-one-consulta-spec-compiled-to-bound-sql.md)).
-- **FONASA by hand.** Its Población Inscrita Validada has no download, so the admin uploads the «Inscritos APS» CSV or
-  types the center's own figures; a year with no corte of its own reads the latest earlier one × 1.03
-  ([ADR-0007](docs/adr/0007-piv-is-uploaded-and-pro-rated.md)).
-- **Metas as a yearly file.** `seeds/metas-2026.json` ships with the app; a later year is a file an admin loads, with
-  no release ([ADR-0008](docs/adr/0008-metas-are-a-yearly-seed.md)).
+- **Reiniciar los procesos web tras `occ app:enable`.** Guardan las rutas en caché durante una hora, y toda ruta responde 404 hasta que se reinician. `make instance-up` lo hace.
+- **La configuración de la aplicación llega al proceso web unos 3 s tarde**, y un borrado también. Una comprobación justo después de `occ config:app:set` ve el valor anterior.
+- **Cada bloque `<style>` de un componente incluye todo el archivo `.vue`** como mapa de fuente en línea. Un componente sin bloque `<style>` es mucho más barato (deuda técnica B-013 en la referencia para desarrollo).
 
-## For other apps
+## Licencia
 
-OCS, with `OCS-APIRequest: true`, under `/ocs/v2.php/apps/estadistica/api/v1/`: `fuentes`, `fuentes/{id}`,
-`consultas` (POST), `preguntas`, `tableros` and `indicadores`. Every route is readable by any user and rate-limited.
-`consultas` takes `{consulta, establecimiento?}`: without `establecimiento`, the local series is the configured one.
-The OCS envelope and its `OCS-APIRequest: true` header are Nextcloud's own mechanism —
-[OCS API](https://docs.nextcloud.com/server/34/developer_manual/client_apis/OCS/index.html).
+AGPL-3.0-or-later ([`LICENSE`](LICENSE)). Las cifras REM son datos públicos del DEIS, la población es de FONASA y las metas son las Orientaciones Técnicas del MINSAL; ninguna viaja en este repositorio: la aplicación descarga la primera y un administrador carga la segunda. El archivo de metas 2026 reformula las rutas y las metas nacionales de las Orientaciones Técnicas.
 
-The contract is [`openapi.json`](openapi.json), generated by `make openapi` from the controller, never by hand; the
-answer of a consulta is only extended, never reshaped ([ADR-0006](docs/adr/0006-one-consulta-spec-compiled-to-bound-sql.md)).
-gestion's [`docs/CONTRACTS.md`](https://github.com/APS-Conecta/gestion/blob/main/docs/CONTRACTS.md) lists it.
-
-## Development
-
-- `make test`: the unit suite in a bare PHP container, no Nextcloud.
-- `npm run lint-js` and `npm test`: ESLint and Vitest.
-- `make aps-drift`: the vendored `aps-common` copies are current (`make aps-sync` refreshes them).
-- `make smoke`: the wiring against the dev instance, including «openapi.json regenerates without drift».
-- `make test-integration`: the integration suite against the dev instance's PostgreSQL (needs `make deps` first).
-  No CI job runs it; run it before a change to `lib/`.
-- `make test-browser`: a tablero card's figures against the API's, in Chromium (Playwright for Python on the host).
-  No CI job runs it either.
-- `npm run build` and commit `js/`: the bundles are committed, and CI fails when they differ from `src/`.
-
-CI (`.github/workflows/ci.yml`) runs `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, the bundle check,
-and `make smoke` on a cold instance.
-
-Three traps this app has already paid for:
-
-- **Restart the web workers after `occ app:enable`.** They cache the routes for an hour, and every route answers
-  404 until they restart. `make instance-up` does it.
-- **App config reaches the web process about 3 s late**, and so does a delete. A check right after `occ
-  config:app:set` sees the old value.
-- **Every `<style>` block in a component ships the whole `.vue` file** as an inline source map. A component without
-  one is much cheaper ([`BUGS.md`](BUGS.md)).
-
-## Licence
-
-AGPL-3.0-or-later ([`LICENSE`](LICENSE)). The REM figures are DEIS's public data, the population is FONASA's, and
-the metas are MINSAL's Orientaciones Técnicas. None of them ships in this repository: the app fetches the first, and
-an admin loads the second. The 2026 metas file restates the OOTT's routes and metas nacionales.
-
-The notices of the third-party code in the bundles (Vue, Chart.js, the Nextcloud libraries) are
-`js/estadistica-main.js.LICENSE.txt` and `js/estadistica-admin.js.LICENSE.txt`, which the build writes beside them.
+Los avisos del código de terceros incluido en los paquetes (Vue, Chart.js, las bibliotecas de Nextcloud) están en `js/estadistica-main.js.LICENSE.txt` y `js/estadistica-admin.js.LICENSE.txt`, que la compilación escribe a su lado. Los avisos y licencias de la organización viven en [Aviso y licencias](https://aps-conecta.github.io/documentation/aviso.html).
