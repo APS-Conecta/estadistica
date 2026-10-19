@@ -25,3 +25,19 @@ Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for ev
   surrounding code does; this app uses no `t()` / `$l->t()`, so do not introduce them. Code, comments, commits and PR text English.
 - **One concern per PR**, under 50 lines of hand-written source (rebuilt bundle excluded), and it contains every change
   its description claims.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `APS-Conecta/estadistica`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical vocabulary, unmodified: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
+`wontfix`. All five exist on the repo. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: [`CONTEXT.md`](CONTEXT.md) for the vocabulary, [`docs/adr/`](docs/adr/) for the
+decisions. See `docs/agents/domain.md`.
