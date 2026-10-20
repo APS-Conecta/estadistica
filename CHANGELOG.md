@@ -8,8 +8,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 - **Docs alignment**: the README pins its OCS citation to server 34 and `appinfo/info.xml` gains a
-  `<documentation>` element with user, admin and developer links; `docs/index.md` stays the
-  four-column exemplar, unchanged.
+  `<documentation>` element with user, admin and developer links.
 - **Saving without a session answers 403**: `POST /api/v1/preguntas` and `POST /api/v1/tableros`
   return 403 with a message, not a server error, when no user is signed in.
 - **Dashboard card buttons name their card**: «Subir», «Bajar» and «Quitar» carry an aria-label
@@ -21,14 +20,6 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   documentation site; the repo opts into the Spanish-docs regime (`.github/docs-es`), with the checker and
   profiles refreshed to the current canon (repo-docs ADR 0006). `appinfo/info.xml`'s `<documentation>`
   links now point to the documentation site.
-
-### Removed
-
-- **`docs/manual.md`**: the staff manual moved to the documentation site (`usuario/estadistica`), including
-  the administration section.
-- **`docs/index.md`**: the in-repo documentation index, retired by the regime.
-- **`BUGS.md`** and **`ROADMAP.md`**: open items are now GitHub issues (#22 to #34); the technical debt is in the
-  documentation site's developer reference. The fixed-bug history stays in git.
 
 ## [0.1.0] - 2026-09-29
 

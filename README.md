@@ -40,8 +40,6 @@ Los errores abiertos y el trabajo pendiente están en los issues de este reposit
 
 **0.1.0, hito M1: el pilar REM.** Todo lo anterior está construido y probado con datos sintéticos: la carga por rangos HTTP y por un zip dejado a mano, el catálogo, el motor de consultas y su API OCS, las preguntas y los tableros, la importación de FONASA y las metas 2026. `info.xml`, `package.json` y `openapi.json` dicen 0.1.0. Está etiquetada `v0.1.0` y se entrega en el conjunto `OWN_APPS` de gestion como un tarball fijado (APS-Conecta/gestion#198, 2026-09-30).
 
-Pasó una revisión de código el 2026-09-29. Sus correcciones están dentro, y lo que dejó pendiente (B-015 a B-020 de la deuda técnica) figura en la referencia para desarrollo.
-
 Falta:
 
 - Queda comparar las Metas I a VII de junio de 2026 con el cálculo de la unidad de Estadística-REM antes de avisar al personal. Con datos reales en el laboratorio el 2026-09-29 (la ventana por defecto, 27,3 millones de filas, y la exportación de FONASA) aparecieron tres hallazgos para el hito M2: una fecha de corte que un solo establecimiento puede mover, etiquetas prestadas del diccionario de otro año y consultas nacionales de hoja entera que llegan al límite de 10 s.
