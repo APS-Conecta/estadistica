@@ -11,10 +11,10 @@ use OCA\Estadistica\Exception\RefusedException;
 
 /**
  * The establishment this install serves: its DEIS code, its tipo and its
- * comuna's CUT. Exactly one per instance (gestion ADR-0013).
+ * comuna's CUT. Exactly one per instance (suite ADR-0009).
  *
- * The installer chooses it (Región → Comuna → Centro), gestion's phase 16
- * writes it into app config, and the app only ever reads it. Everything
+ * The installer chooses it (Región → Comuna → Centro), the suite's
+ * provisioner writes it into app config, and the app only ever reads it. Everything
  * national works without it: an unconfigured install still shows the country
  * and the peer groups, it just has no «local» series to set beside them.
  *

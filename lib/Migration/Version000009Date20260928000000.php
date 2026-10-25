@@ -26,7 +26,7 @@ use OCP\Migration\SimpleMigrationStep;
  *   comprometido (people) and, for a manual meta, its cumplimiento (percent).
  *   Each is null until an admin types it. estab keeps the commitments of
  *   another establishment out of this one's metas if the install is ever
- *   configured anew (gestion ADR-0013).
+ *   configured anew (suite ADR-0009).
  *
  * Every NOT NULL column has no default, and each table has one writer
  * (Goals), whose INSERT names every column (lesson #74). No foreign keys,

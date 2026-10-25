@@ -80,7 +80,7 @@ A **denominador comprometido** is one the center committed to instead; it wins, 
 
 ## What this context has no word for
 
-- **«Nuestro centro»** as a choice. The establishment is configuration (gestion ADR-0013); a clinic selector is a
+- **«Nuestro centro»** as a choice. The establishment is configuration (suite ADR-0009); a clinic selector is a
   governance decision nobody has taken.
 - **COMGES** and REM validation. Other goals and other checks belong to whatever builds them.
 - **Paciente**, RUT, nombre. A FONASA file that carries a person is refused whole.

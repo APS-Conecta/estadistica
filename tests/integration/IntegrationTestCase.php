@@ -97,7 +97,7 @@ abstract class IntegrationTestCase extends TestCase {
 	}
 
 	/**
-	 * Writes a key exactly the way gestion's phase 16 does: `occ config:app:set`
+	 * Writes a key exactly the way the suite's provisioner does: `occ config:app:set`
 	 * with no --type, which stores VALUE_MIXED (core SetConfig, "VALUE_MIXED as
 	 * default"). Through occ itself, because OCP's IAppConfig has no mixed
 	 * setter, and an app that only read keys it had typed itself would pass a

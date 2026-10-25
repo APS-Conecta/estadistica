@@ -29,8 +29,8 @@ use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 
 /**
- * Estadística over OCS: the contract suite apps and M3 read (gestion
- * docs/CONTRACTS.md, Slice 10). farmacia's resource-per-endpoint shape (the
+ * Estadística over OCS: the contract suite apps and M3 read (the contracts
+ * page on the documentation site, Slice 10). farmacia's resource-per-endpoint shape (the
  * OCS decision), under Spanish resource names: fuentes, consultas,
  * preguntas, tableros and indicadores.
  *
@@ -148,7 +148,7 @@ class ApiController extends OCSController {
 	 *
 	 * The local series is this install's establishment (app config), unless
 	 * the request names another DEIS code: a parameter, not an implicit
-	 * «ours» (gestion ADR-0013). The app's own pages never send one, because a
+	 * «ours» (suite ADR-0009). The app's own pages never send one, because a
 	 * clinic selector is a governance decision nobody has taken.
 	 *
 	 * It is a POST because the spec is a JSON document, and it spends the read
@@ -389,8 +389,8 @@ class ApiController extends OCSController {
 	 * REM dictionaries they cite (docs/adr/0008). Percentages are percentages:
 	 * 90 is 90 %.
 	 *
-	 * The local series is this install's establishment (app config, gestion
-	 * ADR-0013). The peers are the register's establishments that share the
+	 * The local series is this install's establishment (app config, suite
+	 * ADR-0009). The peers are the register's establishments that share the
 	 * chosen traits with it; aviso says why there are none when some were
 	 * asked for.
 	 *

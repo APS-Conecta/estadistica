@@ -82,7 +82,7 @@ final class ApiControllerTest extends TestCase {
 		self::assertSame([Http::STATUS_OK, ['series' => []]], [$response->getStatus(), $response->getData()]);
 	}
 
-	/** gestion ADR-0013: the DEIS code is a parameter, and a named one is the local series instead. */
+	/** suite ADR-0009: the DEIS code is a parameter, and a named one is the local series instead. */
 	public function testANamedDeisCodeIsTheLocalSeries(): void {
 		$this->config->expects(self::never())->method('get');
 		$this->executor->expects(self::once())->method('answer')

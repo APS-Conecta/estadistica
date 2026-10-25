@@ -263,7 +263,7 @@ export function loadSource(id, anio = null) {
 /**
  * Asks one consulta (ApiController::consultas). The body never names an
  * establishment: the local series is this install's, from app config
- * (gestion ADR-0013) — there is no «ours» to choose in the page.
+ * (suite ADR-0009) — there is no «ours» to choose in the page.
  */
 export function consult(spec) {
 	return ocsPost('consultas', { consulta: spec })

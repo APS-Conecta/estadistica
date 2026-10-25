@@ -6,7 +6,7 @@ Aplicación de Nextcloud 34 para APS Conecta Gestión: las cifras REM que el DEI
 
 Estadística guarda las cifras REM de todos los establecimientos del país, etiquetadas con el diccionario oficial de cada año, para que un centro ponga las suyas junto a las nacionales y a las de sus pares. También sigue mes a mes las Metas Sanitarias. La interfaz está en español; todo lo demás, en inglés. Licencia AGPL-3.0-or-later.
 
-**Guarda solo conteos agregados que publican el DEIS y FONASA, y no toca datos de pacientes.** No llena ninguna planilla REM, no la valida y no lee las series BS, BM ni D. Nada en ella decide cuál es el establecimiento «propio»: es configuración de la instancia ([ADR-0013 de gestion](https://github.com/APS-Conecta/gestion/blob/main/docs/adr/0013-the-establishment-is-instance-configuration.md)).
+**Guarda solo conteos agregados que publican el DEIS y FONASA, y no toca datos de pacientes.** No llena ninguna planilla REM, no la valida y no lee las series BS, BM ni D. Nada en ella decide cuál es el establecimiento «propio»: es configuración de la instancia ([ADR-0009 de la suite](https://github.com/APS-Conecta/instalador/blob/main/docs/adr/0009-the-establishment-is-instance-configuration.md)).
 
 Tiene cuatro vistas, más una sección de administración:
 
@@ -30,7 +30,7 @@ Dentro de este repositorio quedan los documentos que viajan con el código:
 - [`CONTEXT.md`](CONTEXT.md): el vocabulario (serie, fuente, consulta, pares, informante, meta comprometida, PIV), en inglés.
 - [`docs/adr/`](docs/adr/): las decisiones, de la 0001 a la 0008.
 - [`docs/threat-model.md`](docs/threat-model.md): qué busca un atacante, las entradas y sus protecciones.
-- [`openapi.json`](openapi.json): el contrato OCS para otras aplicaciones, generado por `make openapi` desde el controlador, nunca a mano. La respuesta de una consulta solo se extiende, nunca cambia de forma ([ADR-0006](docs/adr/0006-one-consulta-spec-compiled-to-bound-sql.md)). El [`docs/CONTRACTS.md` de gestion](https://github.com/APS-Conecta/gestion/blob/main/docs/CONTRACTS.md) lo registra.
+- [`openapi.json`](openapi.json): el contrato OCS para otras aplicaciones, generado por `make openapi` desde el controlador, nunca a mano. La respuesta de una consulta solo se extiende, nunca cambia de forma ([ADR-0006](docs/adr/0006-one-consulta-spec-compiled-to-bound-sql.md)). El [sitio de documentación](https://aps-conecta.github.io/documentation/desarrollo/apis/plataforma-y-rest-interno.html) lo indexa.
 - [`seeds/metas-2026.json`](seeds/metas-2026.json): las Metas Sanitarias 2026 tal como se leyeron de las Orientaciones Técnicas, con notas sobre lo leído y no copiado.
 - [`CHANGELOG.md`](CHANGELOG.md): qué cambió y cuándo.
 
