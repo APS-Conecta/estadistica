@@ -75,9 +75,9 @@ Las pruebas y compuertas:
 - `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
 - `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
 - `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, en Chromium (Playwright para Python en el host). Tampoco la ejecuta CI.
-- `npm run build` y confirmar `js/`: los paquetes se confirman, y CI falla cuando difieren de `src/`.
+- `npm run build`: genera los dos paquetes de `js/` (no se confirman; el flujo de release los compila y CI falla si la compilación no los produce).
 
-La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío.
+La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío; el flujo de release (`.github/workflows/release.yml`) compila y empaqueta en cada PR.
 
 Tres trampas que esta aplicación ya pagó:
 

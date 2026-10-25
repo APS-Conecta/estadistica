@@ -27,8 +27,8 @@
 #   - preguntas and tableros: any user saves one, a second user reads it and
 #     is refused a change (403), a delegate of the section and an admin change
 #     it, and its creator deletes it (a8, a14)
-#   - the icon serves, the .htaccess holes stay shut, the bundle matches src/,
-#     and openapi.json regenerates without drift once the OCS surface exists
+#   - the icon serves, the .htaccess holes stay shut, the bundles build, and
+#     openapi.json regenerates without drift once the OCS surface exists
 #
 # Output of every command is captured before it is matched, never piped into
 # `grep -q` (epidemiologia's SIGPIPE lesson), and every curl carries --max-time.
@@ -534,18 +534,23 @@ for path in package.json openapi.json src/main.js scripts/smoke.sh lib/AppInfo/A
 done
 
 # --- the bundle is the deployment --------------------------------------------
-# CI runs the same assertion and does NOT skip; this copy is the local answer.
+# js/ is built, not committed (the release packs it), so the failure this guards
+# is a build that produces no bundle at all — the same refusal pack-app makes, and
+# CI's js job runs the same assertion. This copy stays for the local answer.
 if command -v npm >/dev/null 2>&1 && [ -d node_modules ]; then
 	npm run build --silent >/dev/null 2>&1
-	drift="$(git status --porcelain js/ 2>/dev/null)"
-	if [ -z "$drift" ]; then
-		pass "the js/ bundle matches src/"
+	missing=0
+	for f in js/$APP-main.js js/$APP-main.js.LICENSE.txt \
+	         js/$APP-admin.js js/$APP-admin.js.LICENSE.txt; do
+		[ -s "$f" ] || missing="$missing $f"
+	done
+	if [ "$missing" = 0 ]; then
+		pass "the build produces the js/ bundles"
 	else
-		fail "js/ is behind src/ — run 'npm run build' and commit the result"
-		printf '%s\n' "$drift" | sed 's/^/        /'
+		fail "npm run build produced no$missing — the release packer would refuse this tree"
 	fi
 else
-	printf '  --    no node_modules: not checking whether the bundle is current\n'
+	printf '  --    no node_modules: not checking whether the bundles build\n'
 fi
 
 # --- the contract is generated, not hand-edited ------------------------------

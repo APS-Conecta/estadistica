@@ -29,8 +29,8 @@ test-integration:
 	$(COMPOSE) exec --user www-data -w /var/www/html/custom_apps/estadistica nextcloud \
 		php vendor/bin/phpunit --configuration phpunit.integration.xml --testdox
 
-# farmacia's short name, on its own line: repo-docs reads a Makefile target only
-# where a line starts with it, and `test-integration integration:` hid both.
+# farmacia's short name, on its own line, kept as an alias even though nothing reads
+# the Makefile for targets any more: `make integration` is the shape a person types.
 integration: test-integration
 
 # A tablero card's figures against the API's, in a real browser (a15), and a
@@ -81,7 +81,8 @@ aps-sync:
 	rm -f src/aps/*.test.js
 
 # vendor/aps/common/src and src/aps are committed, so they can drift from the
-# package the way js/ can drift from src/. `git status --porcelain` (not
+# package the way js/ used to drift from src/ (js/ is built and ignored now; the
+# release workflow packs it). `git status --porcelain` (not
 # diff --exit-code) so a rename that deletes one file and adds another is seen.
 aps-drift: aps-sync
 	@drift="$$(git status --porcelain -- vendor/aps/common/src src/aps tests/stubs/OC/Hooks/Emitter.php)"; \

@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
+The first signed release: the suite installs the app from this repository's own GitHub Release (instalador #40), and only when the establishment chooses it in the wizard's «Aplicaciones opcionales» — its DEIS figures arrive when the app does, downloaded by the app itself after install.
+
+### Added
+
 - **Docs alignment**: the README pins its OCS citation to server 34 and `appinfo/info.xml` gains a
   `<documentation>` element with user, admin and developer links.
 - **Saving without a session answers 403**: `POST /api/v1/preguntas` and `POST /api/v1/tableros`
@@ -16,6 +22,31 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **First signed release (0.2.0).** Releases are built and signed by the org's shared
+  workflow (instalador #31), called from `.github/workflows/release.yml` pinned by commit
+  SHA: a pull request builds the frontend and packs the tarball; a `v*` tag — which must
+  equal `v` + the `appinfo/info.xml` version — signs `SHA256SUMS` with the app key inside
+  the repo's `release` environment and publishes exactly four assets (`estadistica.tar.gz`,
+  `info.xml`, `SHA256SUMS`, `SHA256SUMS.minisig`), proven against the suite's `apps.pub`.
+  The tarball's contents come from `.nextcloudignore`, added with this change: the
+  development tree (`src/`, `tests/`, `docs/`, `scripts/`, `tools/`, the agent files, the
+  configs) stays out; `appinfo/`, `lib/`, `templates/`, `img/`, `seeds/` (the Metas
+  Sanitarias the migrations load at enable), the built `js/`, the vendored
+  `vendor/aps/common/src` and the licences travel.
+
+  **`js/` is build output now, not a committed artifact.** The four tracked bundle files
+  (two bundles and their terser `.LICENSE.txt` notices) leave git and `js/` is ignored:
+  the release builds the bundles before packing, and `pack-app` refuses a committed one.
+  CI's rebuild-no-drift arm goes with them — CI now fails a PR whose build produces no
+  bundle, the same refusal the packer makes — and installing from a clone needs
+  `npm ci && npm run build` first (README says so).
+
+  **The vendored docs checker and canon are gone** (instalador #40, S2a — aps-common#10's
+  shape): the checker, its profiles, the `docs-es` marker and the documentation workflow
+  under `.github/`, the issue forms, the pull-request template and the code-owners file —
+  the org defaults in `APS-Conecta/.github` serve the community files now. No `guard.yml`:
+  the repo is public, so secret scanning and push protection are GitHub's, not a
+  workflow's. Every mention fixed; the history above keeps its own words.
 - **Docs in Spanish**: `README.md` is rewritten in Spanish to the five-section contract and points to the
   documentation site; the repo opts into the Spanish-docs regime (`.github/docs-es`), with the checker and
   profiles refreshed to the current canon (repo-docs ADR 0006). `appinfo/info.xml`'s `<documentation>`
