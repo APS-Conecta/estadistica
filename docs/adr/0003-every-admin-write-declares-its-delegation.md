@@ -32,7 +32,7 @@ setter, so every delegate is refused. Core evaluates the attribute as a class-st
 
 ## Consequences
 
-- Who may administer Estadística is instance configuration, like the establishment (gestion ADR-0013).
+- Who may administer Estadística is instance configuration, like the establishment (suite ADR-0009).
 - The first delegated write (the history window) lands before any data exists, so later slices build on a mechanism
   already proven end to end.
 

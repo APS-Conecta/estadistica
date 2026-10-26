@@ -43,7 +43,7 @@ statement.
   each year's own, or the nearest later year's (`Catalog::scope`). A peer trait of `true` becomes the local
   establishment's register value. Either one is refused in Spanish when nothing resolves.
 - **The local establishment is a parameter.** It defaults to app config: `establecimiento` in the request, else
-  `deis_code` (gestion ADR-0013). The app's own pages never send one.
+  `deis_code` (suite ADR-0009). The app's own pages never send one.
 
 ## Consequences
 
