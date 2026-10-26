@@ -26,7 +26,7 @@ use OCP\IDBConnection;
  *
  * ponytail: ≈ 32k rows/s is the ceiling inside OCP (2024 Serie A, 6.56M rows,
  * ≈ 3.4 min). The upgrade is COPY over a second connection, which the suite's
- * OCP-only rule (gestion apps/README.md, AD-9) and the owner rejected.
+ * OCP-only rule (app doctrine AD-9, on the documentation site) and the owner rejected.
  *
  * @psalm-import-type Row from RemReader
  */

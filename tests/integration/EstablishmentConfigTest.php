@@ -11,7 +11,7 @@ use OCP\Server;
 
 /**
  * The seam a1 rests on, end to end on a real instance: keys written the way
- * gestion's phase 16 writes them are read back by the app. Fabricated codes
+ * the suite's provisioner writes them are read back by the app. Fabricated codes
  * only (acceptance a2).
  */
 class EstablishmentConfigTest extends IntegrationTestCase {

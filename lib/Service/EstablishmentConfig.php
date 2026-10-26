@@ -15,10 +15,10 @@ use OCP\IAppConfig;
  * Reads which establishment this install serves. All the judgement lives in
  * {@see Establishment}; this is only the part that needs Nextcloud.
  *
- * There is no set(). gestion's phase 16 writes these keys from the site file
- * the installer produced, and that is the only writer: a second one here
+ * There is no set(). The suite's provisioner writes these keys from the site
+ * file the installer produced, and that is the only writer: a second one here
  * would be a way for the installer's choice and the app to disagree, and the
- * divergence gate reads the keys back against the site file (gestion
+ * divergence gate reads the keys back against the site file (the suite's
  * scripts/divergence.sh).
  */
 class EstablishmentConfig {

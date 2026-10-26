@@ -4,7 +4,7 @@
 	other caller uses, so what the page shows is what the API answers (a15).
 
 	No control names an establishment: the local series is this install's, from
-	app config (gestion ADR-0013), and «pares» are chosen by register traits.
+	app config (suite ADR-0009), and «pares» are chosen by register traits.
 	A consulta runs on «Consultar», never on every change: a national series
 	costs about two seconds, and the route spends the read limit.
 
