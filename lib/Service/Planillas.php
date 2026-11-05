@@ -201,7 +201,7 @@ class Planillas {
 
 		$local = $this->localCopy($file);
 		if ($local === null) {
-			// Ours, not the file's (a save in progress locks it): judged again at the next run.
+			// Ours, not the file's (a save in progress locks it, or its storage is down): judged again at the next run.
 			$this->record($file, '', null, 'No se pudo leer el archivo de Nextcloud; se vuelve a intentar en la próxima hora.');
 			return;
 		}
@@ -223,12 +223,20 @@ class Planillas {
 		}
 	}
 
-	/** A local copy of $file for XlsxReader, which reads a path; null when Nextcloud would not hand it over. */
+	/**
+	 * A local copy of $file for XlsxReader, which reads a path; null when
+	 * Nextcloud would not hand it over. A denied or locked file is expected;
+	 * any other failure to open it (its storage is unavailable, its encryption
+	 * fails) is logged.
+	 */
 	private function localCopy(File $file): ?string {
 		$local = $this->tempManager->getTemporaryFile('.xlsx');
 		try {
 			$source = $file->fopen('r');
 		} catch (NotPermittedException|LockedException) {
+			$source = false;
+		} catch (Throwable $e) {
+			$this->logger->warning('Opening the planilla {name} failed', ['name' => $file->getName(), 'exception' => $e]);
 			$source = false;
 		}
 		$target = $local === false ? false : fopen($local, 'wb');

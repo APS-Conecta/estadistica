@@ -17,6 +17,8 @@ use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * The only scheduled work in the app, declared in info.xml (acceptance a18:
@@ -24,8 +26,9 @@ use OCP\BackgroundJob\TimedJob;
  *
  * Each hourly tick first reads the establishment's planilla folder
  * (Planillas::scan): only its new and changed files are read, so a quiet
- * folder costs a listing and two small queries. Then it does at most ONE unit
- * of REM work, the first of these that applies:
+ * folder costs a listing and two small queries. A failure there is logged and
+ * never stops the REM work. Then it does at most ONE unit of REM work, the
+ * first of these that applies:
  *
  * 1. **Forget a year the window no longer keeps**, the oldest first. Its rows,
  *    its state and its kept ETag go together. Narrowing happens here, never in
@@ -54,6 +57,7 @@ class RemJob extends TimedJob {
 		private DeisRepository $deis,
 		private YearWindow $window,
 		private Planillas $planillas,
+		private LoggerInterface $logger,
 	) {
 		parent::__construct($time);
 
@@ -72,7 +76,11 @@ class RemJob extends TimedJob {
 
 	#[\Override]
 	protected function run($argument): void {
-		$this->planillas->scan();
+		try {
+			$this->planillas->scan();
+		} catch (Throwable $e) {
+			$this->logger->warning('Reading the planilla folder failed', ['exception' => $e]);
+		}
 
 		$outside = $this->oldestOutsideTheWindow();
 		if ($outside !== null) {

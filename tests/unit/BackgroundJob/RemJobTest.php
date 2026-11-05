@@ -21,6 +21,7 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Http\Client\IClient;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use ReflectionMethod;
 
@@ -40,19 +41,22 @@ class RemJobTest extends TestCase {
 
 	private Planillas&MockObject $planillas;
 
+	private LoggerInterface&MockObject $logger;
+
 	protected function setUp(): void {
 		$this->states = $this->createMock(IngestStateMapper::class);
 		$this->drops = $this->createMock(DroppedFiles::class);
 		$this->importer = $this->createMock(RemImporter::class);
 		$this->deis = $this->createMock(DeisRepository::class);
 		$this->planillas = $this->createMock(Planillas::class);
+		$this->logger = $this->createMock(LoggerInterface::class);
 	}
 
 	private function job(): RemJob {
 		$window = $this->createMock(YearWindow::class);
 		$window->method('firstYear')->willReturn(2023);
 
-		return new RemJob($this->createMock(ITimeFactory::class), $this->states, $this->drops, $this->importer, $this->deis, $window, $this->planillas);
+		return new RemJob($this->createMock(ITimeFactory::class), $this->states, $this->drops, $this->importer, $this->deis, $window, $this->planillas, $this->logger);
 	}
 
 	private function tick(): void {
@@ -96,6 +100,18 @@ class RemJobTest extends TestCase {
 		$this->tick();
 
 		self::assertSame(['scan', 'check'], $calls);
+	}
+
+	/** The planilla folder failing is logged, and the tick's REM work still runs. */
+	public function testAPlanillaFolderThatFailsNeverStopsTheRemWork(): void {
+		$failure = new \RuntimeException('storage unavailable');
+		$this->planillas->method('scan')->willThrowException($failure);
+		$this->logger->expects(self::once())->method('warning')
+			->with(self::anything(), self::identicalTo(['exception' => $failure]));
+		$this->deis->method('checkDue')->willReturn(true);
+		$this->deis->expects(self::once())->method('check');
+
+		$this->tick();
 	}
 
 	public function testAYearTheWindowLetGoIsForgottenBeforeAnythingElse(): void {

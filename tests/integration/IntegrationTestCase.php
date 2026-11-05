@@ -76,12 +76,12 @@ abstract class IntegrationTestCase extends TestCase {
 		);
 	}
 
-	/** The planilla folder as the app wires it, chosen by $uid the way the FilePicker drives it. */
-	final protected function planillasFor(string $uid): Planillas {
+	/** The planilla folder as the app wires it, chosen by $uid the way the FilePicker drives it; $rootFolder stands in for the instance's Files. */
+	final protected function planillasFor(string $uid, ?IRootFolder $rootFolder = null): Planillas {
 		return new Planillas(
 			Server::get(IDBConnection::class),
 			Server::get(IAppConfig::class),
-			Server::get(IRootFolder::class),
+			$rootFolder ?? Server::get(IRootFolder::class),
 			$this->sessionOf($uid),
 			Server::get(EstablishmentConfig::class),
 			Server::get(Catalog::class),

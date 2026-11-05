@@ -158,6 +158,30 @@ final class PlanillasTest extends IntegrationTestCase {
 		self::assertSame([], $this->figures($ajena));
 	}
 
+	/**
+	 * A file Nextcloud cannot open (its storage is unavailable, its encryption
+	 * fails) is ours to retry, and the files listed after it are still read.
+	 */
+	public function testAFileNextcloudCannotOpenIsRetriedAndTheFilesAfterItAreStillRead(): void {
+		$marzo = $this->save('marzo.xlsm', ['01010101' => [1 => 7]], 1790000000);
+		$unreadable = $this->createMock(File::class);
+		$unreadable->method('getId')->willReturn(PHP_INT_MAX);
+		$unreadable->method('getName')->willReturn('sin acceso.xlsm');
+		$unreadable->method('getMTime')->willReturn(1790000000);
+		$unreadable->method('fopen')->willThrowException(new \RuntimeException('storage unavailable'));
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getDirectoryListing')->willReturn([$unreadable, $marzo]);
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturn($folder);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->planillasFor(self::UID, $rootFolder)->scan();
+
+		self::assertSame([['marzo.xlsm', 'leido', 'A', 3], ['sin acceso.xlsm', 'rechazado', null, null]], $this->states());
+		self::assertSame('No se pudo leer el archivo de Nextcloud; se vuelve a intentar en la próxima hora.', $this->planillas()->status()['files'][1]['error']);
+	}
+
 	public function testAFileIsNotAFolder(): void {
 		$this->save('marzo.xlsm', [], 1790000000);
 
