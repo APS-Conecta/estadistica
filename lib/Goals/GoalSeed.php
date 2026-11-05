@@ -150,6 +150,21 @@ final class GoalSeed {
 	}
 
 	/**
+	 * @param Indicador $indicador
+	 * @return list<QuerySpec> every consulta of its ruta: the numerador's, then the denominador's, each sumar then restar
+	 */
+	public static function terms(array $indicador): array {
+		$terms = [];
+		foreach ([$indicador['numerador'], $indicador['denominador']] as $part) {
+			if ($part !== null) {
+				$terms = [...$terms, ...$part['sumar'], ...$part['restar']];
+			}
+		}
+
+		return $terms;
+	}
+
+	/**
 	 * @return Indicador
 	 * @throws RefusedException
 	 */

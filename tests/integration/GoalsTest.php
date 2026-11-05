@@ -632,6 +632,25 @@ class GoalsTest extends IntegrationTestCase {
 	}
 
 	/**
+	 * #48, CONTEXT.md (Cierre, Sin informar): a Serie P point of the
+	 * histórico is that month's own corte. 2098 reported June (21) and no
+	 * December: Meta T's June is 21 ÷ 350 = 6 %, its December is sin
+	 * informar rather than June's corte again, and the year has no cierre.
+	 */
+	public function testAPastYearWithoutItsDecemberCorteHasNoCierre(): void {
+		$this->fonasa('31-12-2097');
+		$this->load(2098, 'P', ZipFixture::row(2098, 6, '900001', 'P1206010', [1 => '21']), self::LABELS_P);
+
+		$t = self::historico(array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['T'])[2098];
+
+		self::assertSame([['2098-06', 21.0, 350.0, 6.0], ['2098-12', null, 350.0, null]], array_map(
+			static fn (array $mes): array => [$mes['mes'], $mes['numerador'], $mes['denominador'], $mes['porcentaje']],
+			$t['meses'],
+		));
+		self::assertNull($t['cierre']);
+	}
+
+	/**
 	 * docs/adr/0009: the newest metas may come before any figures of their
 	 * year (2100's, in October). The Resumen's current year is then the
 	 * latest year with figures, 2099, with the 2100 rutas moved onto it.

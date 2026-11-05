@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Goals;
 
+use APS\Common\Text;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\RefusedException;
@@ -47,13 +48,14 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   plurals are folded (sameLabel). A borrowed diccionario never compares.
  *   Any other year is «sin datos comparables» and shows nothing. Serie A
  *   shows each month's running sum, Serie P its June and December cortes,
- *   and a year already over carries its cierre: December's %.
+ *   each only in its own month: a corte not reported is sin informar, never
+ *   the one before it. A year already over carries its cierre: December's %.
  *
  * ponytail: built on request. Storing it once per change is its own ticket (#47).
  *
  * @psalm-import-type Meta from GoalEvaluator
+ * @psalm-import-type Carried from GoalEvaluator
  * @psalm-import-type Metas from GoalSeed
- * @psalm-import-type Indicador from GoalSeed
  * @psalm-import-type Label from Catalog
  * @psalm-type Cifra = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float}
  * @psalm-type Historico = array{anio: int, estado: ?string, cierre: ?float, meses: list<Cifra>}
@@ -62,9 +64,6 @@ use OCP\AppFramework\Db\DoesNotExistException;
  */
 class Resumen {
 	public const NOT_COMPARABLE = 'sin datos comparables';
-
-	/** What folding accents takes away, once lowercased. */
-	private const ACCENTS = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u'];
 
 	public function __construct(
 		private Goals $goals,
@@ -94,8 +93,8 @@ class Resumen {
 		foreach ($metas['indicadores'] as $i => $indicador) {
 			$historico = [];
 			foreach ($history as $year => $counted) {
-				$comparable = $year === $current || self::comparable(self::terms($indicador), $labels, $year, $current, $year - $anio, $firstYear);
-				$historico[] = self::year($counted['indicadores'][$i], $year, $comparable, $year < $this->window->currentYear());
+				$comparable = $year === $current || self::comparable(GoalSeed::terms($indicador), $labels, $year, $current, $year - $anio, $firstYear);
+				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear());
 			}
 			$cards[] = self::card($history[$current]['indicadores'][$i], $current, $history[$current]['fecha_corte_local'], $historico);
 		}
@@ -152,13 +151,14 @@ class Resumen {
 
 	/**
 	 * One year of a meta's histórico: nothing when it does not compare, else
-	 * its months (Serie P's at its cortes, June and December) and, when the
-	 * year is over, its cierre.
+	 * its months (Serie P's at its cortes, June and December, a carried one
+	 * sin informar) and, when the year is over, its cierre.
 	 *
 	 * @param Meta $meta the newest metas' meta, counted over $anio
+	 * @param Carried $carried the months its Serie P figures only carry an earlier corte (GoalEvaluator::history)
 	 * @return Historico
 	 */
-	public static function year(array $meta, int $anio, bool $comparable, bool $over): array {
+	public static function year(array $meta, array $carried, int $anio, bool $comparable, bool $over): array {
 		if (!$comparable) {
 			return ['anio' => $anio, 'estado' => self::NOT_COMPARABLE, 'cierre' => null, 'meses' => []];
 		}
@@ -167,14 +167,16 @@ class Resumen {
 		$meses = [];
 		foreach ($meta['meses'] as $mes) {
 			if (!$cortes || in_array(substr($mes['mes'], 5), ['06', '12'], true)) {
-				$meses[] = ['mes' => $mes['mes'], 'numerador' => $mes['numerador'], 'denominador' => $mes['denominador'], 'porcentaje' => $mes['porcentaje']];
+				$numerador = in_array($mes['mes'], $carried['numerador'], true) ? null : $mes['numerador'];
+				$denominador = in_array($mes['mes'], $carried['denominador'], true) ? null : $mes['denominador'];
+				$meses[] = ['mes' => $mes['mes'], 'numerador' => $numerador, 'denominador' => $denominador, 'porcentaje' => $numerador === null || $denominador === null ? null : $mes['porcentaje']];
 			}
 		}
 
 		return [
 			'anio' => $anio,
 			'estado' => self::missing($meta, $anio),
-			'cierre' => $over ? $meta['meses'][11]['porcentaje'] ?? null : null,
+			'cierre' => $over ? array_column($meses, 'porcentaje', 'mes')["$anio-12"] ?? null : null,
 			'meses' => $meses,
 		];
 	}
@@ -182,11 +184,12 @@ class Resumen {
 	/**
 	 * Whether two labels read the same once case, accents and plurals are
 	 * folded (docs/adr/0009): «EVALUACIONES INICIALES» is «Evaluación
-	 * inicial». Word by word, where one word may be the other plus «s» or
-	 * «es»; everything between the words must match as written.
+	 * inicial». Case and accents by Text::fold, the es-CL rule (L0-03); then
+	 * word by word, where one word may be the other plus «s» or «es», and
+	 * everything between the words must match as folded.
 	 */
 	public static function sameLabel(string $a, string $b): bool {
-		$words = static fn (string $label): array => preg_split('/(\P{L}+)/u', strtr(mb_strtolower($label), self::ACCENTS), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+		$words = static fn (string $label): array => preg_split('/(\P{L}+)/u', Text::fold($label), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
 		[$x, $y] = [$words($a), $words($b)];
 		if (count($x) !== count($y)) {
 			return false;
@@ -254,7 +257,7 @@ class Resumen {
 	private function labels(array $metas, array $years): array {
 		$codigos = [];
 		foreach ($metas['indicadores'] as $indicador) {
-			foreach (self::terms($indicador) as $spec) {
+			foreach (GoalSeed::terms($indicador) as $spec) {
 				$codigos[$spec->serie] = [...$codigos[$spec->serie] ?? [], ...$spec->codigos];
 			}
 		}
@@ -267,21 +270,6 @@ class Resumen {
 		}
 
 		return $labels;
-	}
-
-	/**
-	 * @param Indicador $indicador
-	 * @return list<QuerySpec> every consulta of its ruta
-	 */
-	private static function terms(array $indicador): array {
-		$terms = [];
-		foreach ([$indicador['numerador'], $indicador['denominador']] as $part) {
-			foreach ($part === null ? [] : [...$part['sumar'], ...$part['restar']] as $spec) {
-				$terms[] = $spec;
-			}
-		}
-
-		return $terms;
 	}
 
 	/** @param Meta $meta */
