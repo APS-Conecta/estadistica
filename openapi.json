@@ -3066,7 +3066,8 @@
                                                                     },
                                                                     "peso": {
                                                                         "type": "number",
-                                                                        "format": "double"
+                                                                        "format": "double",
+                                                                        "nullable": true
                                                                     },
                                                                     "nota": {
                                                                         "type": "string",

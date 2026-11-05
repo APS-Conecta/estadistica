@@ -228,7 +228,7 @@ class Goals {
 	 * What the admin section shows: each year's metas, newest first, and this
 	 * install's establishment's commitments (null when none is configured).
 	 *
-	 * @return array{years: list<array{anio: int, version: int, nombre: string, loadedAt: int, indicadores: list<array{codigo: string, nombre: string, metaNacional: float, peso: float, base: ?string, manual: bool}>}>, local: ?array{deisCode: string, commitments: list<array{anio: int, codigo: string, meta: ?float, denominador: ?float, cumplimiento: ?float}>}}
+	 * @return array{years: list<array{anio: int, version: int, nombre: string, loadedAt: int, indicadores: list<array{codigo: string, nombre: string, metaNacional: float, peso: ?float, base: ?string, manual: bool}>}>, local: ?array{deisCode: string, commitments: list<array{anio: int, codigo: string, meta: ?float, denominador: ?float, cumplimiento: ?float}>}}
 	 * @throws RefusedException
 	 */
 	public function status(): array {

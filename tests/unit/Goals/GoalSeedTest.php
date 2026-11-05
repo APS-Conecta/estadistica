@@ -18,11 +18,11 @@ use PHPUnit\Framework\TestCase;
  * naming the meta.
  */
 final class GoalSeedTest extends TestCase {
-	private const SHIPPED = __DIR__ . '/../../../seeds/metas-2026.json';
+	private const SEEDS = __DIR__ . '/../../../seeds';
 
 	/** @return array<string, mixed> */
-	private static function shipped(): array {
-		return json_decode((string)file_get_contents(self::SHIPPED), true, 512, JSON_THROW_ON_ERROR);
+	private static function shipped(int $anio = 2026): array {
+		return json_decode((string)file_get_contents(self::SEEDS . "/metas-$anio.json"), true, 512, JSON_THROW_ON_ERROR);
 	}
 
 	/** @return array<string, mixed> the smallest seed that is one: a REM meta and a manual one */
@@ -134,6 +134,71 @@ final class GoalSeedTest extends TestCase {
 			}
 		}
 		self::assertCount(19, array_unique($serieP));
+	}
+
+	/**
+	 * #50: the 2027 file is Res. Exenta 732's Metas I–VIII, with its metas
+	 * nacionales and no pesos. Every REM ruta is prepared, not yet the OOTT
+	 * 2027's, and II, III and IV count FONASA's inscritos.
+	 */
+	public function testTheShipped2027SeedIsRes732sMetasIToViii(): void {
+		$metas = GoalSeed::parse(self::shipped(2027), 2026);
+
+		self::assertSame([2027, 1], [$metas['anio'], $metas['version']]);
+		self::assertStringContainsString('Res. Exenta N° 732', $metas['referencia']);
+		self::assertSame(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'], array_column($metas['indicadores'], 'codigo'));
+		self::assertSame([90.0, 80.0, 65.0, 26.0, 50.0, 72.0, 80.0, 100.0], array_column($metas['indicadores'], 'meta_nacional'));
+		self::assertSame(array_fill(0, 8, null), array_column($metas['indicadores'], 'peso'), 'Res. 732 fixes no pesos');
+		self::assertSame(['rem', 'poblacion', 'poblacion', 'poblacion', 'rem', 'rem', 'rem', null], array_column($metas['indicadores'], 'base'));
+		self::assertTrue($metas['indicadores'][7]['manual']);
+
+		$byCode = array_column($metas['indicadores'], null, 'codigo');
+		self::assertSame([202701, 202712, 202610, 202709], [$byCode['I']['numerador']['desde'], $byCode['I']['numerador']['hasta'], $byCode['I']['denominador']['desde'], $byCode['I']['denominador']['hasta']]);
+		self::assertSame([['desde' => 25, 'hasta' => 64, 'sexo' => 'M', 'prevalencia' => 100.0]], $byCode['II']['poblacion']);
+		self::assertSame([['desde' => 0, 'hasta' => 2, 'sexo' => null, 'prevalencia' => 100.0]], $byCode['III']['poblacion'], 'menores de 3 años');
+		self::assertSame([['desde' => 6, 'hasta' => 6, 'sexo' => null, 'prevalencia' => 100.0]], $byCode['IV']['poblacion']);
+
+		foreach ($metas['indicadores'] as $meta) {
+			foreach (array_filter($meta['ruta']) as $side => $ruta) {
+				if (!array_key_exists('poblacion', $ruta)) {
+					self::assertFalse($ruta['oficial'] ?? true, "Meta {$meta['codigo']}, $side: prepared, not yet oficial");
+				}
+			}
+		}
+	}
+
+	/**
+	 * #50: every código × columna a 2027 ruta prepares is in the 2026
+	 * diccionario, and its meta's nota cites the labels it reads: each
+	 * código's prestación, and its columnas as the span from the first one's
+	 * label to the last one's. The fixture holds only the rows the rutas
+	 * cite, as DictionaryParser reads them from DEIS's DICCIONARIO CODIGOS
+	 * SA_26_V1.2 and SP_26_V1.2.
+	 */
+	public function testEvery2027RutaReadsThe2026DiccionarioAsItsNotaCites(): void {
+		$metas = GoalSeed::parse(self::shipped(2027), 2026);
+		$diccionario = json_decode((string)file_get_contents(__DIR__ . '/diccionario-2026.json'), true, 512, JSON_THROW_ON_ERROR);
+		self::assertSame($metas['diccionarios'], array_column($diccionario, 'diccionario', 'fuente'));
+		$rows = array_column($diccionario, 'codigos', 'fuente');
+
+		$cited = 0;
+		foreach ($metas['indicadores'] as $meta) {
+			foreach (GoalSeed::terms($meta) as $term) {
+				$first = min($term->columnas);
+				$last = max($term->columnas);
+				self::assertSame(range($first, $last), $term->columnas, "Meta {$meta['codigo']}: its columnas are one span");
+				foreach ($term->codigos as $codigo) {
+					$row = $rows[$term->fuente][$codigo] ?? null;
+					self::assertIsArray($row, "Meta {$meta['codigo']}: $codigo is in the 2026 diccionario");
+					self::assertSame([], array_diff($term->columnas, array_keys($row['columnas'])), "Meta {$meta['codigo']}: $codigo has every columna");
+					foreach ([$row['prestacion'], $row['columnas'][$first], $row['columnas'][$last]] as $label) {
+						self::assertStringContainsString("«{$label}»", (string)$meta['nota'], "Meta {$meta['codigo']} cites what $codigo reads");
+					}
+					$cited++;
+				}
+			}
+		}
+		self::assertSame(28, $cited, 'every código of every term');
 	}
 
 	/** a9: a later year is another file. It may arrive in the year before, when the metas are fixed. */
