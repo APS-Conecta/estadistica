@@ -25,8 +25,8 @@ It makes everything it needs and removes it all however it ends:
   window's floor: outside the default window the REM job neither loads that
   year (which would replace its rows) nor forgets it (which reads the ingest
   state these rows have none of);
-- for the metas, four rows of the metas view's year (GET indicadores' anio)
-  under that year's Meta VI códigos, for the fabricated establishment only;
+- for the metas, four rows in 2026 under the 2026 seed's Meta VI códigos,
+  for the fabricated establishment only;
 - the establishment code, set to a fabricated one and put back after;
 - a pregunta, a tablero, an app password and a throwaway user.
 
@@ -68,8 +68,9 @@ LOCAL = "900001"
 # February's national promedio divides by the two that reported.
 ROWS = [(900001, 1, 4), (900001, 2, 6), (900002, 1, 3), (900002, 2, 5), (900003, 1, 2)]
 
-# The metas view opens on the current year's metas, the shipped 2026 seed's:
-# Meta VI is A0200002 over A0200001, col06. (código, mes, col06): 5 de 8 by February.
+# The metas rows sit in 2026, the year whose shipped seed names their códigos:
+METAS_YEAR = 2026  # the shipped 2026 seed's Meta VI: A0200002 over A0200001, col06
+# (código, mes, col06): 5 de 8 by February.
 METAS_ROWS = [("A0200002", 1, 3), ("A0200001", 1, 4), ("A0200002", 2, 2), ("A0200001", 2, 4)]
 
 SPEC = {
@@ -279,11 +280,9 @@ def main():
         token = occ("user:add-app-password", ADMIN, f"--name=browser-{RUN}", "-n").stdout.strip().splitlines()[-1]
         made["token"] = True
 
-        # The year the code under test opens the metas view on, not the clock's.
-        metas_year = ocs("GET", "indicadores?pares=", token)["anio"]
         psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col06) VALUES "
-             + ", ".join(f"('A', {metas_year}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in METAS_ROWS) + ";")
-        made["metas_year"] = metas_year
+             + ", ".join(f"('A', {METAS_YEAR}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in METAS_ROWS) + ";")
+        made["metas"] = True
 
         # App config values reach the web workers within seconds, not at once:
         # ask until the local series is the one just configured.
@@ -304,10 +303,10 @@ def main():
         made["reader"] = True
 
         expected = api_figures(answer)
-        meta_vi = next(meta for meta in ocs("GET", "indicadores?pares=", token)["indicadores"] if meta["codigo"] == "VI")
-        february = next(mes for mes in meta_vi["meses"] if mes["mes"] == f"{metas_year}-02")
+        meta_vi = next(meta for meta in ocs("GET", f"indicadores?anio={METAS_YEAR}&pares=", token)["indicadores"] if meta["codigo"] == "VI")
+        february = next(mes for mes in meta_vi["meses"] if mes["mes"] == f"{METAS_YEAR}-02")
         if (february["numerador"], february["denominador"], february["porcentaje"]) != (5, 8, 62.5):
-            failures.append(f"the metas view did not answer the seeded {metas_year} figures for Meta VI: {february}")
+            failures.append(f"the metas view did not answer the seeded {METAS_YEAR} figures for Meta VI: {february}")
         resumen_answer = ocs("GET", "resumen", token)
         resumen = resumen_api_figures(resumen_answer)
         failures += resumen_against_indicadores(resumen_answer, ocs("GET", f"indicadores?anio={resumen_answer['anio']}&pares=", token))
@@ -379,8 +378,8 @@ def main():
             occ("user:delete", READER, check=False)
         if made.get("rows"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE codigo = '{CODE}';")
-        if "metas_year" in made:
-            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {made['metas_year']} AND codigo IN ('A0200002', 'A0200001');")
+        if made.get("metas"):
+            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {METAS_YEAR} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
             occ("config:app:set", "estadistica", "deis_code", f"--value={previous_code.stdout.strip()}", check=False)
         else:
