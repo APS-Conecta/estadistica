@@ -4,7 +4,7 @@
 			<!-- Tabs, not NcAppNavigation (owner, Slice 7): the sidebar and its
 			     items weighed 176 KB of a 700 KB bundle for three links.
 			     ponytail: the view lives in the page, so a reload returns to
-			     Consultar and a tablero cannot be linked; hash links
+			     the Resumen and a tablero cannot be linked; hash links
 			     (#/tableros/<id>) are the upgrade when one must be sent. -->
 			<nav class="estadistica-app__tabs" aria-label="Estadística">
 				<NcButton v-for="item in VIEWS"
@@ -30,9 +30,11 @@
 						cifras nacionales y de pares, pero no las propias.
 					</NcNoteCard>
 
-					<!-- The builder stays mounted, so a consulta half-built survives a look
-					     at the tableros; the lists are read afresh each time they open. -->
-					<QueryBuilder v-show="view === 'consultar'" :establishment="establishment" />
+					<EstadisticaResumen v-if="view === 'resumen'" />
+					<!-- The builder mounts when Consultar first opens and then stays mounted,
+					     so a consulta half-built survives a look at the tableros; the lists
+					     are read afresh each time they open. -->
+					<QueryBuilder v-if="builderOpened" v-show="view === 'consultar'" :establishment="establishment" />
 					<SavedQuestions v-if="view === 'preguntas'" />
 					<EstadisticaDashboard v-if="view === 'tableros'" />
 					<SanitaryGoals v-if="view === 'metas'" :establishment="establishment" />
@@ -63,13 +65,15 @@ const TabLoadFailed = {
 // the tab opens, so the main bundle carries only the shell (#43, #23).
 const lazyTab = (loader) => defineAsyncComponent({ loader, errorComponent: TabLoadFailed })
 
+const EstadisticaResumen = lazyTab(() => import(/* webpackChunkName: "resumen" */ './components/Resumen.vue'))
 const EstadisticaDashboard = lazyTab(() => import(/* webpackChunkName: "tableros" */ './components/Dashboard.vue'))
 const SanitaryGoals = lazyTab(() => import(/* webpackChunkName: "metas" */ './components/Goals.vue'))
 const QueryBuilder = lazyTab(() => import(/* webpackChunkName: "consultar" */ './components/QueryBuilder.vue'))
 const SavedQuestions = lazyTab(() => import(/* webpackChunkName: "preguntas" */ './components/Questions.vue'))
 
-/** The page's views. */
+/** The page's views; the first opens with the page (docs/adr/0009). */
 const VIEWS = [
+	{ id: 'resumen', nombre: 'Resumen' },
 	{ id: 'consultar', nombre: 'Consultar' },
 	{ id: 'preguntas', nombre: 'Preguntas' },
 	{ id: 'tableros', nombre: 'Tableros' },
@@ -79,10 +83,10 @@ const VIEWS = [
 export default {
 	name: 'App',
 
-	components: { EstadisticaDashboard, NcAppContent, NcButton, NcContent, NcNoteCard, QueryBuilder, SanitaryGoals, SavedQuestions },
+	components: { EstadisticaDashboard, EstadisticaResumen, NcAppContent, NcButton, NcContent, NcNoteCard, QueryBuilder, SanitaryGoals, SavedQuestions },
 
 	data() {
-		const shared = { VIEWS, view: 'consultar' }
+		const shared = { VIEWS, view: VIEWS[0].id, builderOpened: false }
 		try {
 			return {
 				...shared,
@@ -93,6 +97,12 @@ export default {
 			safeError('could not read the initial state', error)
 			return { ...shared, stateFailed: true, establishment: { configured: false } }
 		}
+	},
+
+	watch: {
+		view(id) {
+			this.builderOpened ||= id === 'consultar'
+		},
 	},
 }
 </script>

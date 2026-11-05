@@ -97,7 +97,7 @@ aps-drift: aps-sync
 # tab's chunk (#43) — pack-app itself refuses only an empty js/.
 # CI's js job, the release's build and the smoke run this one list.
 BUNDLES := main.js main.js.LICENSE.txt admin.js admin.js.LICENSE.txt \
-	consultar.js preguntas.js tableros.js metas.js
+	resumen.js consultar.js preguntas.js tableros.js metas.js
 
 bundles:
 	npm run build

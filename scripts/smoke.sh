@@ -18,7 +18,8 @@
 #   - the metas: the shipped 2026 seed is loaded, any user reads it month by
 #     month over OCS, a metas file goes through the same door, and a delegate
 #     commits a meta comprometida (200) where an outsider gets 403 (a9, a10,
-#     a12, a14)
+#     a12, a14); any user reads the Resumen, and a DEIS code that is not one
+#     is a Spanish 400 (docs/adr/0009)
 #   - the OCS surface answers every user, attribute routes and all: the
 #     fuentes list with the PIV from FONASA, a Spanish 400 for a year DEIS
 #     never published, a 404 for a fuente that does not exist (a14)
@@ -328,6 +329,25 @@ is "$CODE" '400' \
 	"a peer trait that is not one was NOT refused with 400"
 expect "$BODY" 'Los pares se eligen por' \
 	"the 400 is the Spanish sentence" \
+	"the 400 does NOT carry the Spanish sentence"
+
+# The Resumen: the newest metas' cards, built on request (docs/adr/0009).
+RESUMEN="$BASE/ocs/v2.php/apps/$APP/api/v1/resumen"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: application/json' "$RESUMEN"
+is "$CODE" '200' \
+	"any user reads the Resumen over OCS (200)" \
+	"the Resumen did NOT answer 200 — is the route registered?"
+expect "$BODY" '"codigo":"VIII"' \
+	"the Resumen carries a card per meta, to Meta VIII" \
+	"the Resumen does NOT reach Meta VIII"
+
+fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: application/json' "$RESUMEN?establecimiento=9001"
+is "$CODE" '400' \
+	"a Resumen for a DEIS code that is not one is refused with 400" \
+	"a Resumen for a DEIS code that is not one was NOT refused with 400"
+expect "$BODY" 'DEIS de establecimiento: se esperan seis d' \
+	"the 400 names what a DEIS code is, in Spanish" \
 	"the 400 does NOT carry the Spanish sentence"
 
 # A metas file is told apart by its opening brace and judged by the seed's
