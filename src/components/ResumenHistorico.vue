@@ -39,7 +39,7 @@
 								<button v-if="figureOf(year, month)"
 									type="button"
 									class="estadistica-cifra"
-									@click="$emit('fuente', { ...figureOf(year, month), ruta: year.ruta }, $event)">
+									@click="$emit('open', { ...figureOf(year, month), ruta: year.ruta }, $event)">
 									{{ cell(year, month) }}
 								</button>
 								<template v-else>
@@ -57,7 +57,7 @@
 								<button v-if="year.cierre !== null"
 									type="button"
 									class="estadistica-cifra"
-									@click="$emit('fuente', { ...figureOf(year, '12'), ruta: year.ruta }, $event)">
+									@click="$emit('open', { ...figureOf(year, '12'), ruta: year.ruta }, $event)">
 									{{ percent(year.cierre) }}
 								</button>
 								<template v-else>
@@ -88,7 +88,7 @@ export default {
 		meta: { type: Object, required: true },
 	},
 
-	emits: ['fuente'],
+	emits: ['open'],
 
 	computed: {
 		/** The years drawn: those with figures to show. */

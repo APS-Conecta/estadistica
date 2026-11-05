@@ -75,16 +75,16 @@
 							</p>
 						</div>
 
-						<ResumenHistorico v-if="meta.historico.length" :meta="meta" @fuente="(cifra, event) => open(meta, cifra, event)" />
+						<ResumenHistorico v-if="meta.historico.length" :meta="meta" @open="(cifra, event) => open(meta, cifra, event)" />
 					</article>
 				</li>
 			</ul>
 
 			<!-- Mounted afresh on each figure, so each opening moves the focus into the panel. -->
-			<ResumenFuente v-if="fuente"
-				:key="fuente.opening"
-				:meta="fuente.meta"
-				:cifra="fuente.cifra"
+			<ResumenFuente v-if="panel"
+				:key="panel.opening"
+				:meta="panel.meta"
+				:cifra="panel.cifra"
 				:anio="resumen.anio"
 				:referencia="resumen.referencia"
 				@close="close" />
@@ -113,8 +113,8 @@ export default {
 			resumen: null,
 			missing: false,
 			failed: '',
-			/** The open source panel's card and month ({meta, cifra, opening}), and the figure that opened it. */
-			fuente: null,
+			/** The open panel's card, figure and opening count ({meta, cifra, opening}); opener is the figure that opened it. */
+			panel: null,
 			opener: null,
 		}
 	},
@@ -141,12 +141,12 @@ export default {
 		},
 
 		open(meta, cifra, event) {
-			this.fuente = { meta, cifra, opening: (this.fuente?.opening ?? 0) + 1 }
+			this.panel = { meta, cifra, opening: (this.panel?.opening ?? 0) + 1 }
 			this.opener = event.currentTarget
 		},
 
 		async close() {
-			this.fuente = null
+			this.panel = null
 			await this.$nextTick()
 			this.opener?.focus()
 		},
