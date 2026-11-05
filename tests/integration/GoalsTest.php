@@ -412,7 +412,7 @@ class GoalsTest extends IntegrationTestCase {
 
 		foreach ([
 			'no metas that year' => [2098, [['codigo' => 'I', 'meta' => 50]], 'No hay Metas Sanitarias cargadas para 2098.'],
-			'a meta the year lacks' => [2099, [['codigo' => 'IX', 'meta' => 50]], 'Cada compromiso nombra una meta de 2099: I, II, C, VIII.'],
+			'a meta the year lacks' => [2099, [['codigo' => 'IX', 'meta' => 50]], 'Cada compromiso nombra una meta de 2099: I, II, T, C, VIII.'],
 			'a REM denominator' => [2099, [['codigo' => 'I', 'denominador' => 10]], 'El denominador de la Meta I sale de las cifras REM: no se compromete.'],
 			'a computed meta\'s cumplimiento' => [2099, [['codigo' => 'II', 'cumplimiento' => 80]], 'La Meta II se calcula de las cifras: su cumplimiento no se escribe a mano.'],
 			'a manual meta\'s denominator' => [2099, [['codigo' => 'VIII', 'denominador' => 1]], 'La Meta VIII se informa a mano: no tiene denominador.'],

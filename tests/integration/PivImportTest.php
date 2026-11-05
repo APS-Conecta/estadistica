@@ -230,7 +230,7 @@ class PivImportTest extends IntegrationTestCase {
 
 		$grown = $population->local(2099, self::LOCAL);
 		self::assertSame(['2096-12-31', Population::GROWTH], [$grown['corte'], $grown['factor']]);
-		self::assertEqualsWithDelta(206.0, Population::count($grown, 20, 29, 'M')['valor'], 1e-9, '200 × 1.03');
+		self::assertEqualsWithDelta(206.0, Population::count($grown, 20, 29, 'M'), 1e-9, '200 × 1.03');
 
 		self::assertNull($population->local(2096, self::LOCAL), 'the 2096 corte is later than the one 2096 needs');
 	}
