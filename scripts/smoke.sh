@@ -18,7 +18,8 @@
 #   - the metas: the shipped 2026 seed is loaded, any user reads it month by
 #     month over OCS, a metas file goes through the same door, and a delegate
 #     commits a meta comprometida (200) where an outsider gets 403 (a9, a10,
-#     a12, a14); any user reads the Resumen, a DEIS code that is not one is
+#     a12, a14); any user reads the Resumen, the shipped 2027 seed's cards
+#     waiting for their ruta oficial (#50), a DEIS code that is not one is
 #     a Spanish 400, and the commitment queues the Resumen's rebuild, which
 #     the background work stores (docs/adr/0009)
 #   - the OCS surface answers every user, attribute routes and all: the
@@ -342,6 +343,12 @@ is "$CODE" '200' \
 expect "$BODY" '"codigo":"VIII"' \
 	"the Resumen carries a card per meta, to Meta VIII" \
 	"the Resumen does NOT reach Meta VIII"
+expect "$BODY" '"anio":2027' \
+	"the Resumen is the newest metas, the shipped 2027 seed (Res. Exenta 732)" \
+	"the Resumen is NOT the 2027 metas — did EnsureSeedData load metas-2027.json?"
+expect "$BODY" '"estado":"esperando ruta oficial"' \
+	"the 2027 REM metas wait for their ruta oficial" \
+	"the 2027 REM metas do NOT wait for their ruta oficial"
 
 fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: application/json' "$RESUMEN?establecimiento=9001"
 is "$CODE" '400' \

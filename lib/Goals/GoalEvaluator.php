@@ -59,7 +59,7 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * @psalm-type Mes = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}
  * @psalm-type Poblacion = array{comprometida: bool, corte: ?string, factor: ?float, falta_oficial: bool}
  * @psalm-type Carried = array{numerador: list<string>, denominador: list<string>}
- * @psalm-type Meta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?Poblacion, meses: list<Mes>}
+ * @psalm-type Meta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: ?float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?Poblacion, meses: list<Mes>}
  * @psalm-type Respuesta = array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<Fuente>, fecha_corte_local: ?array<string, ?string>, indicadores: list<Meta>}
  */
 class GoalEvaluator {

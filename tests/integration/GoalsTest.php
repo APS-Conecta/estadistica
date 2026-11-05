@@ -167,6 +167,8 @@ class GoalsTest extends IntegrationTestCase {
 		}
 		if ($this->droppedYear !== null) {
 			$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_goal WHERE anio = ?', [$this->droppedYear]);
+			// A year the app ships metas for gets them back (2027's).
+			Server::get(EnsureSeedData::class)->run($this->createStub(IOutput::class));
 		}
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_commitment WHERE estab BETWEEN ? AND ?', [900001, 900099]);
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_piv WHERE estab BETWEEN ? AND ?', [900001, 900099]);
@@ -184,6 +186,13 @@ class GoalsTest extends IntegrationTestCase {
 		ZipFixture::cleanup();
 		XlsxFixture::cleanup();
 		parent::tearDown();
+	}
+
+	/** @return ?array<string, mixed> the metas the app ships for $anio, as the file writes them; null when it ships none */
+	private static function shipped(int $anio): ?array {
+		$file = dirname(__DIR__, 2) . "/seeds/metas-$anio.json";
+
+		return is_file($file) ? json_decode((string)file_get_contents($file), true, 64, JSON_THROW_ON_ERROR) : null;
 	}
 
 	/** @return array<string, mixed> 2099's metas: I and II on the 2026 routes, T over whole bands, C counted only against a commitment, VIII manual */
@@ -740,6 +749,37 @@ class GoalsTest extends IntegrationTestCase {
 	}
 
 	/**
+	 * #50: the shipped 2027 metas (Res. Exenta 732), as the newest, are the
+	 * Resumen's «Meta … 2027» cards, counted over 2026, the latest year with
+	 * figures: Meta I's datos al is 900001's own October 2026. Every REM meta
+	 * waits for its ruta oficial, the OOTT 2027's, and shows no figure and
+	 * no histórico; Meta VIII is its cumplimiento informado.
+	 */
+	public function testTheShipped2027MetasWaitForTheirRutasOficiales(): void {
+		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_goal WHERE anio = 2099');
+		$this->goals()->store(self::shipped(2027));
+		$this->goals()->commit(2027, [['codigo' => 'VIII', 'cumplimiento' => 100]]);
+		$this->load(2026, 'A', ZipFixture::row(2026, 10, '900001', '02010420', [8 => '1']), null);
+
+		try {
+			$resumen = $this->api()->resumen()->getData();
+		} finally {
+			foreach (['estadistica_rem', 'estadistica_ingest', 'estadistica_code', 'estadistica_dictionary'] as $table) {
+				$this->db()->executeStatement("DELETE FROM *PREFIX*$table WHERE anio = 2026 AND serie = 'A'");
+			}
+		}
+
+		self::assertSame([2027, 'Metas Sanitarias de Atención Primaria 2027 (Ley 19.813)'], [$resumen['anio'], $resumen['nombre']]);
+		$cards = array_column($resumen['metas'], null, 'codigo');
+		self::assertSame(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'], array_keys($cards));
+		self::assertSame('2026-10', $cards['I']['datos_al'], 'counted over 2026, the latest year with figures');
+		foreach (['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as $codigo) {
+			self::assertSame([null, null, null, null, null, 'esperando ruta oficial', []], [...self::card($cards[$codigo]), $cards[$codigo]['historico']], "Meta $codigo 2027");
+		}
+		self::assertSame([true, null, null, null, 100.0, true, null], [$cards['VIII']['manual'], ...self::card($cards['VIII'])]);
+	}
+
+	/**
 	 * @param array<string, mixed> $card
 	 * @return array<int, array<string, mixed>> a card's histórico, by year
 	 */
@@ -938,15 +978,17 @@ class GoalsTest extends IntegrationTestCase {
 	}
 
 	/**
-	 * a9: the app ships 2026's metas, loaded when it was enabled; running the
-	 * step again changes nothing, and a year left without them is loaded anew.
+	 * a9: the app ships 2026's and 2027's metas, loaded when it was enabled;
+	 * running the step again changes nothing, and a year left without them is
+	 * loaded anew.
 	 */
 	public function testTheShippedMetasAreLoadedOnceAndAgainWhenMissing(): void {
 		$goals = Server::get(Goals::class);
-		$shipped = json_decode((string)file_get_contents(dirname(__DIR__, 2) . '/seeds/metas-2026.json'), true, 64, JSON_THROW_ON_ERROR);
-		if ($goals->version(2026) !== $shipped['version']) {
-			self::markTestSkipped('this instance holds 2026 metas of another version than the shipped file; run the integration suite on a throwaway instance');
+		$shipped = self::shipped(2026);
+		if ($goals->version(2026) !== $shipped['version'] || $goals->version(2027) !== self::shipped(2027)['version']) {
+			self::markTestSkipped('this instance holds metas of another version than the shipped files; run the integration suite on a throwaway instance');
 		}
+		self::assertSame(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'], array_column($goals->get(2027)['indicadores'], 'codigo'), 'Res. Exenta 732\'s');
 		$loadedAt = static fn (IDBConnection $db): int => (int)$db->executeQuery('SELECT loaded_at FROM *PREFIX*estadistica_goal WHERE anio = 2026')->fetchOne();
 		$before = $loadedAt($this->db());
 		self::assertSame(['I', 'II', 'III.A', 'III.B', 'IV.A', 'IV.B', 'V', 'VI', 'VII', 'VIII'], array_column($goals->get(2026)['indicadores'], 'codigo'));
@@ -970,8 +1012,8 @@ class GoalsTest extends IntegrationTestCase {
 	 */
 	public function testALaterYearsMetasArriveThroughTheDoor(): void {
 		$next = (int)gmdate('Y') + 1;
-		if (Server::get(Goals::class)->version($next) !== null) {
-			self::markTestSkipped("this instance already holds metas for $next");
+		if (Server::get(Goals::class)->version($next) !== (self::shipped($next)['version'] ?? null)) {
+			self::markTestSkipped("this instance already holds metas for $next other than the shipped ones");
 		}
 		$this->putInFiles('admin', self::DROPPED, ZipFixture::file(json_encode(self::seed($next), JSON_THROW_ON_ERROR)));
 		$this->droppedYear = $next;

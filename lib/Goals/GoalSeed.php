@@ -44,14 +44,15 @@ use OCA\Estadistica\Service\YearWindow;
  *   {"comprometido": true}, a figure only the establishment's commitment gives.
  * - A manual meta (VIII) has neither: an admin types its cumplimiento.
  * - Percentages are written as percentages: meta_nacional 90 is 90 %, peso
- *   12.5 is 12.5 %, prevalencia 1.8 is 1.8 %.
+ *   12.5 is 12.5 %, prevalencia 1.8 is 1.8 %. A meta without peso has none:
+ *   the resolución de metas fixes none (2027).
  *
  * parse() is the only way in. It refuses in Spanish whatever it does not
  * understand, an unknown key included, and names the meta. It is pure.
  *
  * @psalm-type Parte = array{fuente: string, serie: string, desde: int, hasta: int, sumar: non-empty-list<QuerySpec>, restar: list<QuerySpec>}
  * @psalm-type Grupo = array{desde: int, hasta: ?int, sexo: ?string, prevalencia: float}
- * @psalm-type Indicador = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, peso: float, nota: ?string, manual: bool, base: ?string, numerador: ?Parte, denominador: ?Parte, poblacion: list<Grupo>, ruta: array{numerador: ?array<string, mixed>, denominador: ?array<string, mixed>}}
+ * @psalm-type Indicador = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, peso: ?float, nota: ?string, manual: bool, base: ?string, numerador: ?Parte, denominador: ?Parte, poblacion: list<Grupo>, ruta: array{numerador: ?array<string, mixed>, denominador: ?array<string, mixed>}}
  * @psalm-type Metas = array{anio: int, version: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, indicadores: non-empty-list<Indicador>}
  */
 final class GoalSeed {
@@ -189,7 +190,7 @@ final class GoalSeed {
 			'nombre' => self::text($raw['nombre'] ?? null, 200, sprintf('%s: nombre es su título corto.', $meta)),
 			'indicador' => self::text($raw['indicador'] ?? null, 500, sprintf('%s: indicador es el nombre del indicador, como lo escriben las orientaciones.', $meta)),
 			'meta_nacional' => self::percent($raw['meta_nacional'] ?? null, sprintf('%s: meta_nacional', $meta)),
-			'peso' => self::percent($raw['peso'] ?? null, sprintf('%s: peso', $meta)),
+			'peso' => ($raw['peso'] ?? null) === null ? null : self::percent($raw['peso'], sprintf('%s: peso', $meta)),
 			'nota' => self::note($raw['nota'] ?? null, sprintf('%s: nota', $meta)),
 			'manual' => $manual,
 			'base' => null,
@@ -339,7 +340,7 @@ final class GoalSeed {
 
 	/** @throws RefusedException */
 	private static function note(mixed $value, string $what): ?string {
-		return $value === null ? null : self::text($value, 500, sprintf('%s es un texto de hasta 500 caracteres.', $what));
+		return $value === null ? null : self::text($value, 1000, sprintf('%s es un texto de hasta 1000 caracteres.', $what));
 	}
 
 	/**
