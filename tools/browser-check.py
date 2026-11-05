@@ -15,18 +15,18 @@ delegated group, opens the same tablero and sees the same figures with no
 controls to change it.
 
 And the Resumen (docs/adr/0009), the tab the app opens on: each card shows
-the figures GET resumen answers, which are GET indicadores' local series for
-the card's month, a keyboard reaches every card, and the cards fit a phone's
-width.
+the figure, or the state, GET resumen answers, its figures are GET
+indicadores' local series for the card's month, a keyboard reaches every
+card, and the cards fit a phone's width. The metas view still answers its
+own year's figures.
 
 It makes everything it needs and removes it all however it ends:
 - a few synthetic REM rows under a código of its own. They sit in 2009, the
   window's floor: outside the default window the REM job neither loads that
   year (which would replace its rows) nor forgets it (which reads the ingest
   state these rows have none of);
-- for the Resumen, four rows of the newest metas' year (GET resumen's anio)
-  under the shipped seed's Meta VI códigos, for the fabricated establishment
-  only;
+- for the metas, four rows of the metas view's year (GET indicadores' anio)
+  under that year's Meta VI códigos, for the fabricated establishment only;
 - the establishment code, set to a fabricated one and put back after;
 - a pregunta, a tablero, an app password and a throwaway user.
 
@@ -68,9 +68,9 @@ LOCAL = "900001"
 # February's national promedio divides by the two that reported.
 ROWS = [(900001, 1, 4), (900001, 2, 6), (900002, 1, 3), (900002, 2, 5), (900003, 1, 2)]
 
-# The Resumen reads the newest metas, the shipped seed's in its own year: Meta
-# VI is A0200002 over A0200001, col06. (código, mes, col06): 5 de 8 by February.
-RESUMEN_ROWS = [("A0200002", 1, 3), ("A0200001", 1, 4), ("A0200002", 2, 2), ("A0200001", 2, 4)]
+# The metas view opens on the current year's metas, the shipped 2026 seed's:
+# Meta VI is A0200002 over A0200001, col06. (código, mes, col06): 5 de 8 by February.
+METAS_ROWS = [("A0200002", 1, 3), ("A0200001", 1, 4), ("A0200002", 2, 2), ("A0200001", 2, 4)]
 
 SPEC = {
     "fuente": "rem-a",
@@ -200,29 +200,41 @@ def api_figures(answer):
 
 
 def resumen_figures(page):
-    """{card title: (percentage, «N de D»)} as the Resumen's cards show them; None where a card has none."""
+    """{card title: (percentage, «N de D», state)} as the Resumen's cards show them; None where a card has none."""
     cards = page.locator(".estadistica-resumen__meta")
     cards.first.wait_for(timeout=30_000)
     figures = {}
     for i in range(cards.count()):
         card = cards.nth(i)
         shown = card.locator(".estadistica-resumen__porcentaje")
+        state = card.locator(".estadistica-resumen__estado")
         figures[card.locator("h3").inner_text().strip()] = (
             (shown.inner_text().strip(), card.locator(".estadistica-resumen__cuenta").inner_text().strip())
-            if shown.count() else (None, None))
+            if shown.count() else (None, None)) + (state.inner_text().strip() if state.count() else None,)
     return figures
+
+
+def resumen_state(meta):
+    """The line a card shows instead of a figure (Resumen.vue), or None when it shows one."""
+    if meta["estado"]:
+        return f"Sin porcentaje: {meta['estado']}."
+    if meta["manual"]:
+        return ("Todavía no se ha informado su cumplimiento." if meta["porcentaje"] is None
+                else f"Cumplimiento informado: {es_cl(meta['porcentaje'])} %")
+    return None if meta["mes"] is not None else "Sin informar"
 
 
 def resumen_api_figures(answer):
     """The same, from GET resumen, formatted as the cards format them."""
     return {f"Meta {meta['codigo']} {answer['anio']}": (
         (f"{es_cl(meta['porcentaje'])} %", f"{es_cl(meta['numerador'])} de {es_cl(meta['denominador'])}")
-        if meta["mes"] is not None else (None, None)) for meta in answer["metas"]}
+        if meta["mes"] is not None else (None, None)) + (resumen_state(meta),) for meta in answer["metas"]}
 
 
 def resumen_against_indicadores(resumen, indicadores):
     """Each card's N, D and % are GET indicadores' local series for its month; a card with no
-    month is a manual meta or one whose local series has no porcentaje (AC 2)."""
+    month is a manual meta, one waiting for its ruta oficial, or one whose local series has no
+    porcentaje (AC 2)."""
     series = {meta["codigo"]: {mes["mes"]: mes for mes in meta["meses"]} for meta in indicadores["indicadores"]}
     failures = []
     for card in resumen["metas"]:
@@ -233,7 +245,7 @@ def resumen_against_indicadores(resumen, indicadores):
             expected = {key: local.get(key) for key in shown}
             if shown != expected:
                 failures.append(f"Meta {card['codigo']}'s card shows {shown} for {card['mes']}, GET indicadores' local series {expected}")
-        elif not card["manual"] and any(mes["porcentaje"] is not None for mes in meses.values()):
+        elif not card["manual"] and card["estado"] is None and any(mes["porcentaje"] is not None for mes in meses.values()):
             failures.append(f"Meta {card['codigo']}'s card has no month, while GET indicadores' local series has a porcentaje")
     return failures
 
@@ -267,11 +279,11 @@ def main():
         token = occ("user:add-app-password", ADMIN, f"--name=browser-{RUN}", "-n").stdout.strip().splitlines()[-1]
         made["token"] = True
 
-        # The year the code under test reads its metas in, not the clock's.
-        resumen_year = ocs("GET", "resumen", token)["anio"]
+        # The year the code under test opens the metas view on, not the clock's.
+        metas_year = ocs("GET", "indicadores?pares=", token)["anio"]
         psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col06) VALUES "
-             + ", ".join(f"('A', {resumen_year}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in RESUMEN_ROWS) + ";")
-        made["resumen_year"] = resumen_year
+             + ", ".join(f"('A', {metas_year}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in METAS_ROWS) + ";")
+        made["metas_year"] = metas_year
 
         # App config values reach the web workers within seconds, not at once:
         # ask until the local series is the one just configured.
@@ -292,10 +304,12 @@ def main():
         made["reader"] = True
 
         expected = api_figures(answer)
+        meta_vi = next(meta for meta in ocs("GET", "indicadores?pares=", token)["indicadores"] if meta["codigo"] == "VI")
+        february = next(mes for mes in meta_vi["meses"] if mes["mes"] == f"{metas_year}-02")
+        if (february["numerador"], february["denominador"], february["porcentaje"]) != (5, 8, 62.5):
+            failures.append(f"the metas view did not answer the seeded {metas_year} figures for Meta VI: {february}")
         resumen_answer = ocs("GET", "resumen", token)
         resumen = resumen_api_figures(resumen_answer)
-        if resumen.get(f"Meta VI {resumen_year}") != ("62,5 %", "5 de 8"):
-            failures.append(f"the API did not answer the seeded Resumen figures for Meta VI: {resumen}")
         failures += resumen_against_indicadores(resumen_answer, ocs("GET", f"indicadores?anio={resumen_answer['anio']}&pares=", token))
         if expected != {"enero de 2009": ("4", "3"), "febrero de 2009": ("6", "5,5")}:
             failures.append(f"the API did not answer the seeded figures: {expected}")
@@ -365,8 +379,8 @@ def main():
             occ("user:delete", READER, check=False)
         if made.get("rows"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE codigo = '{CODE}';")
-        if "resumen_year" in made:
-            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {made['resumen_year']} AND codigo IN ('A0200002', 'A0200001');")
+        if "metas_year" in made:
+            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {made['metas_year']} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
             occ("config:app:set", "estadistica", "deis_code", f"--value={previous_code.stdout.strip()}", check=False)
         else:
