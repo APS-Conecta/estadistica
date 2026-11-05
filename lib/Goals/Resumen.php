@@ -51,7 +51,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   each only in its own month: a corte not reported is sin informar, never
  *   the one before it. A year already over carries its cierre: December's %.
  *
- * ponytail: built on request. Storing it once per change is its own ticket (#47).
+ * Built here, the one way; ResumenStore keeps the configured
+ * establishment's once per change.
  *
  * @psalm-import-type Meta from GoalEvaluator
  * @psalm-import-type Carried from GoalEvaluator

@@ -300,6 +300,15 @@ describe('AdminSettings — the metas (a9, a10, a12)', () => {
 		wrapper.unmount()
 	})
 
+	it('says when the stored Resumen was computed, and why its last rebuild failed (docs/adr/0009)', async () => {
+		const error = 'La consulta tardó más de 10 s y se canceló: acote el periodo, las prestaciones o la comparación.'
+		const wrapper = await section({ ...noMore, metas: { years: [year(2026)], local: null }, resumen: { builtAt: 1790000000, error } })
+
+		expect(wrapper.text()).toContain('El Resumen en uso se calculó el')
+		expect(wrapper.text()).toContain(`No se pudo volver a calcular el Resumen: ${error} Sigue en uso el anterior.`)
+		wrapper.unmount()
+	})
+
 	it('shows what was committed, and offers each meta only what it can commit', async () => {
 		const wrapper = await section({
 			...noMore,

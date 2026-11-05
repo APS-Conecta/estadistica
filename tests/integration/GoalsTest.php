@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Tests\Integration;
 
+use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Controller\AdminController;
 use OCA\Estadistica\Controller\ApiController;
@@ -15,6 +16,7 @@ use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Goals\Resumen;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Migration\EnsureSeedData;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Piv\Population;
@@ -34,6 +36,7 @@ use OCA\Estadistica\Tests\Unit\Xlsx\XlsxFixture;
 use OCA\Estadistica\Xlsx\XlsxReader;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IAppConfig;
@@ -41,6 +44,7 @@ use OCP\IDBConnection;
 use OCP\IRequest;
 use OCP\Migration\IOutput;
 use OCP\Server;
+use Psr\Log\LoggerInterface;
 
 /**
  * The Metas Sanitarias against the instance's real PostgreSQL (acceptance a9–a13).
@@ -138,8 +142,8 @@ class GoalsTest extends IntegrationTestCase {
 			self::markTestSkipped('this instance already holds a Base de Establecimientos; run the integration suite on a throwaway instance');
 		}
 		$this->ownsRegister = true;
-		$this->clock = $this->createStub(ITimeFactory::class);
-		$this->clock->method('getTime')->willReturn(gmmktime(12, 0, 0, 12, 15, 2099));
+		$this->clock = $this->at(gmmktime(12, 0, 0, 12, 15, 2099));
+		Server::get(IJobList::class)->remove(ResumenJob::class);
 
 		Server::get(Register::class)->replace(RegisterParser::parse(XlsxReader::open(XlsxFixture::register([
 			XlsxFixture::establishment(900001),
@@ -166,6 +170,8 @@ class GoalsTest extends IntegrationTestCase {
 		}
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_commitment WHERE estab BETWEEN ? AND ?', [900001, 900099]);
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_piv WHERE estab BETWEEN ? AND ?', [900001, 900099]);
+		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_resumen WHERE estab BETWEEN ? AND ?', [900001, 900099]);
+		Server::get(IJobList::class)->remove(ResumenJob::class);
 		if ($this->ownsRegister) {
 			$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_establishment');
 			Server::get(IAppConfig::class)->deleteKey('estadistica', Register::KEY);
@@ -285,23 +291,48 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertGreaterThan(0, $state->getRowCount(), "the $year $serie fixture loads");
 	}
 
-	private function window(): YearWindow {
-		return new YearWindow(Server::get(IAppConfig::class), $this->clock);
+	private function at(int $time): ITimeFactory {
+		$clock = $this->createStub(ITimeFactory::class);
+		$clock->method('getTime')->willReturn($time);
+
+		return $clock;
 	}
 
-	private function goals(): Goals {
-		return new Goals($this->db(), Server::get(EstablishmentConfig::class), $this->window(), $this->clock);
+	private function window(?ITimeFactory $clock = null): YearWindow {
+		return new YearWindow(Server::get(IAppConfig::class), $clock ?? $this->clock);
 	}
 
-	private function evaluator(): GoalEvaluator {
+	private function goals(?ITimeFactory $clock = null): Goals {
+		return new Goals($this->db(), Server::get(EstablishmentConfig::class), $this->window($clock), $clock ?? $this->clock, Server::get(IJobList::class));
+	}
+
+	private function evaluator(?ITimeFactory $clock = null): GoalEvaluator {
 		return new GoalEvaluator(
-			$this->goals(),
+			$this->goals($clock),
 			Server::get(QueryExecutor::class),
 			Server::get(Population::class),
 			Server::get(Register::class),
-			new Sources(Server::get(IngestStateMapper::class), Server::get(Catalog::class), Server::get(Register::class), $this->window(), Server::get(PivImporter::class)),
-			$this->clock,
+			new Sources(Server::get(IngestStateMapper::class), Server::get(Catalog::class), Server::get(Register::class), $this->window($clock), Server::get(PivImporter::class)),
+			$clock ?? $this->clock,
 		);
+	}
+
+	/** The stored Resumen, on this test's clock unless $clock says otherwise. */
+	private function resumen(?ITimeFactory $clock = null): ResumenStore {
+		$clock ??= $this->clock;
+
+		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
+	}
+
+	/** How many rebuilds wait in the background work. */
+	private static function queued(): int {
+		return iterator_count(Server::get(IJobList::class)->getJobsIterator(ResumenJob::class, null, 0));
+	}
+
+	/** The queued rebuild, run the way ResumenJob runs it, on $clock. */
+	private function rebuild(?ITimeFactory $clock = null): void {
+		Server::get(IJobList::class)->remove(ResumenJob::class);
+		$this->resumen($clock)->rebuild();
 	}
 
 	/** @return array<string, array<string, mixed>> 2099's metas for this install's establishment, by codigo */
@@ -675,6 +706,139 @@ class GoalsTest extends IntegrationTestCase {
 		return array_column($card['historico'], null, 'anio');
 	}
 
+	/**
+	 * docs/adr/0009, computed once per change: a committed REM load, an admin
+	 * write of the commitments or of the typed population (the PIV, the
+	 * denominador of the metas that count people) and a new metas seed each
+	 * queue one rebuild in the background work. FONASA's file, a refused
+	 * write and a reading queue none.
+	 */
+	public function testEachChangeQueuesOneRebuildAndNothingElseDoes(): void {
+		self::assertSame(1, self::queued(), 'the REM loads and the seed of setUp wait as one rebuild');
+		$this->rebuild();
+
+		$this->fonasa('31-12-2098');
+		$this->admin()->goals(2099, [['codigo' => 'IX', 'meta' => 50]]);
+		$this->admin()->piv(2098, [['edad' => 25, 'sexo' => 'M', 'inscritos' => 1]]);
+		$this->api()->resumen();
+		$this->api()->resumen('900002');
+		self::assertSame(0, self::queued(), 'FONASA\'s file, a refused write and a reading are not changes the Resumen waits for');
+
+		$seed = self::seed();
+		$seed['version'] = 2;
+		foreach ([
+			'a REM load' => fn () => Server::get(RemImporter::class)->import(new LocalRange(ZipFixture::zip(['SerieA2097.csv' => ZipFixture::header() . ZipFixture::row(2097, 3, '900001', '02010420', [11 => '4'])])), 2097, 'A', IngestState::ORIGIN_FILE),
+			'an admin write' => fn () => $this->admin()->goals(2099, [['codigo' => 'I', 'meta' => 50]]),
+			'a typed population' => fn () => $this->admin()->piv(2098, [['edad' => 20, 'sexo' => 'M', 'inscritos' => 120]]),
+			'a new metas seed' => fn () => $this->goals()->store($seed),
+		] as $change => $make) {
+			$make();
+			self::assertSame(1, self::queued(), "$change queues one rebuild");
+			$this->rebuild();
+		}
+	}
+
+	/**
+	 * docs/adr/0009: once stored, every reader sees the same Resumen until a
+	 * change rebuilds it. FONASA's file gives Meta T its 350 mujeres, but the
+	 * answer stays the stored one; the next rebuild, after the commitment,
+	 * reads both.
+	 */
+	public function testTheStoredResumenStaysUntilAChangeRebuildsIt(): void {
+		$this->rebuild();
+		$stored = $this->api()->resumen()->getData();
+		self::assertSame([null, null, null, null, null, null], self::card(array_column($stored['metas'], null, 'codigo')['T']), 'no corte yet, so no denominador');
+
+		$this->fonasa('31-12-2098');
+		self::assertSame($stored, $this->api()->resumen()->getData(), 'FONASA\'s file alone does not move the stored Resumen');
+		$this->commit([['codigo' => 'I', 'meta' => 50]]);
+		self::assertSame($stored, $this->api()->resumen()->getData(), 'the rebuild runs in the background work, not in the request');
+
+		$this->rebuild();
+		$cards = array_column($this->api()->resumen()->getData()['metas'], null, 'codigo');
+		self::assertSame(['2099-12', 45.0, 350.0, 12.86, false, null], self::card($cards['T']));
+		self::assertSame(50.0, $cards['I']['meta_comprometida']);
+	}
+
+	/**
+	 * docs/adr/0009: two builds from the same inputs store the same bytes and
+	 * the same fingerprint. The build time sits beside the document, in the
+	 * admin section, and never in it.
+	 */
+	public function testTheSameInputsGiveTheSameDocument(): void {
+		$stored = fn (): array => $this->db()->executeQuery('SELECT document, fingerprint FROM *PREFIX*estadistica_resumen WHERE estab = 900001')->fetchAll();
+		$this->rebuild();
+		$first = $stored();
+
+		$this->rebuild($this->at(gmmktime(13, 0, 0, 12, 15, 2099)));
+
+		self::assertCount(1, $first);
+		self::assertSame($first, $stored());
+		self::assertSame(['builtAt' => gmmktime(13, 0, 0, 12, 15, 2099), 'error' => null], $this->admin()->ingests()->getData()['resumen']);
+	}
+
+	/**
+	 * A rebuild that fails keeps the stored Resumen serving, and the admin
+	 * section shows why, in Spanish, until a rebuild succeeds. Here the
+	 * metas themselves are refused: on a clock in 2097, 2099 cannot be a
+	 * metas year.
+	 */
+	public function testAFailedRebuildKeepsTheStoredResumenAndSaysWhy(): void {
+		$this->rebuild();
+		$stored = $this->api()->resumen()->getData();
+		$this->fonasa('31-12-2098');
+
+		$this->rebuild($this->at(gmmktime(12, 0, 0, 12, 15, 2097)));
+
+		self::assertSame($stored, $this->api()->resumen()->getData());
+		self::assertSame(['builtAt' => gmmktime(12, 0, 0, 12, 15, 2099), 'error' => 'El año de las metas (anio) debe estar entre 2009 y 2098.'], $this->admin()->ingests()->getData()['resumen']);
+
+		$this->rebuild();
+		self::assertNull($this->admin()->ingests()->getData()['resumen']['error'], 'a rebuild that succeeds clears the reason');
+		self::assertNotSame($stored, $this->api()->resumen()->getData());
+	}
+
+	/**
+	 * suite ADR-0009: another establishment's Resumen is built on each
+	 * request and never stored. FONASA's file reaches 900002's Meta T at
+	 * once: its June 300 over its 1,000 mujeres.
+	 */
+	public function testAnotherEstablishmentIsBuiltOnRequestAndNeverStored(): void {
+		$this->rebuild();
+		$t = static fn (array $resumen): array => array_column($resumen['metas'], null, 'codigo')['T'];
+		self::assertNull($t($this->api()->resumen('900002')->getData())['porcentaje']);
+
+		$this->fonasa('31-12-2098');
+
+		$other = $t($this->api()->resumen('900002')->getData());
+		self::assertSame([300.0, 1000.0, 30.0], [$other['numerador'], $other['denominador'], $other['porcentaje']]);
+		self::assertSame(0, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_resumen WHERE estab = 900002')->fetchOne());
+	}
+
+	/**
+	 * Only the configured establishment's Resumen is stored. A rebuild for
+	 * 900002 drops 900001's, so switching back to 900001 builds its Resumen
+	 * on request, with what changed meanwhile (FONASA's file gives Meta T its
+	 * 350 mujeres), never its stale stored one. Without an establishment, a
+	 * rebuild drops every row.
+	 */
+	public function testOnlyTheConfiguredEstablishmentsResumenIsStored(): void {
+		$this->rebuild();
+		$this->provision(EstablishmentConfig::KEY_DEIS, '900002');
+		$this->fonasa('31-12-2098');
+		$this->rebuild();
+
+		$this->provision(EstablishmentConfig::KEY_DEIS, '900001');
+
+		$t = array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['T'];
+		self::assertSame(['2099-12', 45.0, 350.0, 12.86, false, null], self::card($t));
+		self::assertNull($this->resumen()->status(), 'nothing stored for 900001');
+
+		$this->provision(EstablishmentConfig::KEY_DEIS, '');
+		$this->rebuild();
+		self::assertSame(0, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_resumen')->fetchOne());
+	}
+
 	/** @param array<string, mixed> $card @return list<mixed> what a Resumen card shows: mes, N, D, %, cumple and estado */
 	private static function card(array $card): array {
 		return [$card['mes'], $card['numerador'], $card['denominador'], $card['porcentaje'], $card['cumple'], $card['estado']];
@@ -690,7 +854,7 @@ class GoalsTest extends IntegrationTestCase {
 			$this->window(),
 			Server::get(SavedContent::class),
 			$this->evaluator(),
-			new Resumen($this->goals(), $this->evaluator(), Server::get(Catalog::class), $this->window()),
+			$this->resumen(),
 		);
 	}
 
@@ -801,7 +965,7 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertStringStartsWith('Meta I, numerador: «col51» no es una columna del REM', $response->getData()['message']);
 	}
 
-	/** The admin section's controller, acting for admin through the same door. */
+	/** The admin section's controller, acting for admin through the same door; the PIV's year window on this test's clock. */
 	private function admin(): AdminController {
 		return new AdminController(
 			Server::get(IRequest::class),
@@ -811,9 +975,10 @@ class GoalsTest extends IntegrationTestCase {
 			Server::get(DeisRepository::class),
 			Server::get(Catalog::class),
 			Server::get(Register::class),
-			Server::get(PivImporter::class),
+			new PivImporter($this->db(), Server::get(EstablishmentConfig::class), $this->window(), $this->clock, Server::get(IJobList::class)),
 			$this->goals(),
 			$this->planillasFor('admin'),
+			$this->resumen(),
 		);
 	}
 }

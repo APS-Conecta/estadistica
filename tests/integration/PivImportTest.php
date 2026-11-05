@@ -11,6 +11,7 @@ use OCA\Estadistica\Controller\AdminController;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\Goals;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Piv\Population;
 use OCA\Estadistica\Register\Register;
@@ -88,6 +89,7 @@ class PivImportTest extends IntegrationTestCase {
 			Server::get(PivImporter::class),
 			Server::get(Goals::class),
 			$this->planillasFor(self::UID),
+			Server::get(ResumenStore::class),
 		);
 	}
 
