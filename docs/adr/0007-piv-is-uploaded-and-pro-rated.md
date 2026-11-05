@@ -69,3 +69,15 @@
   share, although its numerator counts col02 (Decisions → Metas 2026 specifics).
 - A comuna's administrative codes in FONASA's file count in the national total and in no peer group, because the
   register does not have them.
+
+## Amendment (2026-11-05, owner grill): no prorrateo
+
+- **Context.** The owner ruled that every figure must be official, with no estimates anywhere. A prorrateado band is
+  this app's estimate, not FONASA's figure.
+- **Decision.**
+  - The band rule is withdrawn. A PIV figure counts only when the meta's age range is a sum of whole bands.
+  - A meta whose range cuts a band has no denominador until a denominador comprometido is typed for that year. In
+    2027 that covers Metas II, III and IV.
+  - The 1.03 growth for a missing corte stays, because the OOTT prescribe it.
+- **Consequences.** Metas II–IV show no percentage, local, national or peer, until the admin types their official
+  denominators. The metas view and the Resumen (docs/adr/0009) name what is missing.
