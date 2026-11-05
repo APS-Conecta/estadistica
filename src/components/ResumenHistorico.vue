@@ -2,7 +2,8 @@
 	A Resumen card's histórico (docs/adr/0009): a chart with one line per year
 	with figures, the most recent emphasised and the meta as a line, and the
 	table under it, which holds every figure the chart draws. A year that does
-	not compare, or waits for its official denominator, says so in words.
+	not compare, or waits for its official denominator, says so in words. A
+	figure of the table asks for its source panel, with its year's ruta.
 -->
 <template>
 	<div class="estadistica-historico">
@@ -35,7 +36,15 @@
 								{{ monthName(`2000-${month}`).split(' ')[0] }}
 							</th>
 							<td v-for="year in lines" :key="year.anio">
-								{{ cell(year, month) }}
+								<button v-if="figureOf(year, month)"
+									type="button"
+									class="estadistica-cifra"
+									@click="$emit('fuente', { ...figureOf(year, month), ruta: year.ruta }, $event)">
+									{{ cell(year, month) }}
+								</button>
+								<template v-else>
+									{{ cell(year, month) }}
+								</template>
 							</td>
 						</tr>
 					</tbody>
@@ -45,7 +54,15 @@
 								Cierre
 							</th>
 							<td v-for="year in lines" :key="year.anio">
-								{{ year.cierre === null ? '—' : percent(year.cierre) }}
+								<button v-if="year.cierre !== null"
+									type="button"
+									class="estadistica-cifra"
+									@click="$emit('fuente', { ...figureOf(year, '12'), ruta: year.ruta }, $event)">
+									{{ percent(year.cierre) }}
+								</button>
+								<template v-else>
+									—
+								</template>
 							</td>
 						</tr>
 					</tfoot>
@@ -70,6 +87,8 @@ export default {
 		/** A GET resumen card (Resumen::card), with its historico. */
 		meta: { type: Object, required: true },
 	},
+
+	emits: ['fuente'],
 
 	computed: {
 		/** The years drawn: those with figures to show. */
@@ -113,6 +132,12 @@ export default {
 
 		percent(value) {
 			return `${formatValue(value)} %`
+		},
+
+		/** The year's month 'MM' when it has a figure. */
+		figureOf(year, month) {
+			const mes = year.meses.find((one) => one.mes.endsWith(`-${month}`))
+			return mes && mes.porcentaje !== null ? mes : null
 		},
 
 		/** A month's figure: sin informar, never 0; — for a month that has not come yet. */

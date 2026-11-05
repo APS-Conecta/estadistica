@@ -3333,7 +3333,7 @@
             "get": {
                 "operationId": "api-resumen",
                 "summary": "The Resumen (docs/adr/0009): one card per meta of the newest metas, for the establishment. Each card is the meta's last month with a figure (mes, YYYY-MM): its numerador, denominador and %, the same as GET indicadores' local series for that month, and whether it cumple against its meta comprometida when one is typed, else the meta nacional. A manual meta (VIII) is its cumplimiento informado, with no mes. A month with no written number in any of the meta's cells has no figure, never 0. datos_al (YYYY-MM) is the establishment's own last month in the meta's serie, the fecha_corte_local GET indicadores serves for its fuente: a Serie P mes shows its latest corte, so the two can differ. None for a manual meta. estado says why a meta shows none: «esperando ruta oficial» while its seed marks a ruta \"oficial\": false, or «falta el denominador oficial de <año>» while its ages cut a PIV band and no denominador comprometido is typed. Only the establishment's own figures are asked: no country, no peers.",
-                "description": "The card's year is the latest with REM figures, never past the metas' own: next year's metas, loaded in October, are counted over this year. historico is the meta over each year of the ventana up to that one, oldest first, its periodos moved by whole years: each month's mes, numerador, denominador and % (Serie P at its June and December cortes, each its own: a corte not reported is null, never the one before), and cierre, December's %, once the year is over. estado is «sin datos comparables» for a year whose own diccionario labels a código × columna of the ruta otherwise (case, accents and plurals aside), borrows its diccionario, or whose periodos reach before the ventana; such a year has no months. A manual meta, or one waiting for its ruta oficial, has none.\nThe establishment is this install's (app config), unless the request names another DEIS code (suite ADR-0009). This install's is the stored Resumen, rebuilt in the background after each change it reads (docs/adr/0009), so every reader sees the same figures until the next; another establishment's is built on each request and never stored.",
+                "description": "The card's year is the latest with REM figures, never past the metas' own: next year's metas, loaded in October, are counted over this year. historico is the meta over each year of the ventana up to that one, oldest first, its periodos moved by whole years: each month's mes, numerador, denominador and % (Serie P at its June and December cortes, each its own: a corte not reported is null, never the one before), and cierre, December's %, once the year is over. estado is «sin datos comparables» for a year whose own diccionario labels a código × columna of the ruta otherwise (case, accents and plurals aside), borrows its diccionario, or whose periodos reach before the ventana; such a year has no months. A manual meta, or one waiting for its ruta oficial, has none.\nWhat a figure's source panel shows (docs/adr/0009): origen and fecha_corte, on the card for its mes and on each month of historico, say where that month comes from («datos públicos DEIS», cut at that year's load's last month, YYYY-MM). Each year of historico carries its ruta: the numerador's and the denominador's fuente, its nombre as GET fuentes serves it, periodo (desde, hasta: YYYY-MM, moved to that year) and the códigos to add (sumar) and subtract (restar), one list per consulta, each labelled for its columns by that year's diccionario as POST consultas labels it. A denominador of FONASA's inscritos is fuente piv, named, with no periodo and no códigos; one only a commitment gives is null. referencia cites the metas' resolución and OOTT.\nThe establishment is this install's (app config), unless the request names another DEIS code (suite ADR-0009). This install's is the stored Resumen, rebuilt in the background after each change it reads (docs/adr/0009), so every reader sees the same figures until the next; another establishment's is built on each request and never stored.",
                 "tags": [
                     "api"
                 ],
@@ -3393,6 +3393,7 @@
                                                     "required": [
                                                         "anio",
                                                         "nombre",
+                                                        "referencia",
                                                         "establecimiento",
                                                         "metas"
                                                     ],
@@ -3402,6 +3403,9 @@
                                                             "format": "int64"
                                                         },
                                                         "nombre": {
+                                                            "type": "string"
+                                                        },
+                                                        "referencia": {
                                                             "type": "string"
                                                         },
                                                         "establecimiento": {
@@ -3426,7 +3430,9 @@
                                                                     "denominador",
                                                                     "porcentaje",
                                                                     "cumple",
-                                                                    "historico"
+                                                                    "historico",
+                                                                    "origen",
+                                                                    "fecha_corte"
                                                                 ],
                                                                 "properties": {
                                                                     "codigo": {
@@ -3489,7 +3495,8 @@
                                                                                 "anio",
                                                                                 "estado",
                                                                                 "cierre",
-                                                                                "meses"
+                                                                                "meses",
+                                                                                "ruta"
                                                                             ],
                                                                             "properties": {
                                                                                 "anio": {
@@ -3513,7 +3520,9 @@
                                                                                             "mes",
                                                                                             "numerador",
                                                                                             "denominador",
-                                                                                            "porcentaje"
+                                                                                            "porcentaje",
+                                                                                            "origen",
+                                                                                            "fecha_corte"
                                                                                         ],
                                                                                         "properties": {
                                                                                             "mes": {
@@ -3533,12 +3542,257 @@
                                                                                                 "type": "number",
                                                                                                 "format": "double",
                                                                                                 "nullable": true
+                                                                                            },
+                                                                                            "origen": {
+                                                                                                "type": "string",
+                                                                                                "nullable": true
+                                                                                            },
+                                                                                            "fecha_corte": {
+                                                                                                "type": "string",
+                                                                                                "nullable": true
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "ruta": {
+                                                                                    "type": "object",
+                                                                                    "required": [
+                                                                                        "numerador",
+                                                                                        "denominador"
+                                                                                    ],
+                                                                                    "properties": {
+                                                                                        "numerador": {
+                                                                                            "type": "object",
+                                                                                            "nullable": true,
+                                                                                            "required": [
+                                                                                                "fuente",
+                                                                                                "nombre",
+                                                                                                "desde",
+                                                                                                "hasta",
+                                                                                                "sumar",
+                                                                                                "restar"
+                                                                                            ],
+                                                                                            "properties": {
+                                                                                                "fuente": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "nombre": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "desde": {
+                                                                                                    "type": "string",
+                                                                                                    "nullable": true
+                                                                                                },
+                                                                                                "hasta": {
+                                                                                                    "type": "string",
+                                                                                                    "nullable": true
+                                                                                                },
+                                                                                                "sumar": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "required": [
+                                                                                                                "codigo",
+                                                                                                                "hoja",
+                                                                                                                "seccion",
+                                                                                                                "prestacion",
+                                                                                                                "columnas",
+                                                                                                                "nota"
+                                                                                                            ],
+                                                                                                            "properties": {
+                                                                                                                "codigo": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "hoja": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "seccion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "prestacion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "columnas": {
+                                                                                                                    "type": "object",
+                                                                                                                    "additionalProperties": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "nota": {
+                                                                                                                    "type": "string",
+                                                                                                                    "nullable": true
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "restar": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "required": [
+                                                                                                                "codigo",
+                                                                                                                "hoja",
+                                                                                                                "seccion",
+                                                                                                                "prestacion",
+                                                                                                                "columnas",
+                                                                                                                "nota"
+                                                                                                            ],
+                                                                                                            "properties": {
+                                                                                                                "codigo": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "hoja": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "seccion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "prestacion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "columnas": {
+                                                                                                                    "type": "object",
+                                                                                                                    "additionalProperties": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "nota": {
+                                                                                                                    "type": "string",
+                                                                                                                    "nullable": true
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "denominador": {
+                                                                                            "type": "object",
+                                                                                            "nullable": true,
+                                                                                            "required": [
+                                                                                                "fuente",
+                                                                                                "nombre",
+                                                                                                "desde",
+                                                                                                "hasta",
+                                                                                                "sumar",
+                                                                                                "restar"
+                                                                                            ],
+                                                                                            "properties": {
+                                                                                                "fuente": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "nombre": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "desde": {
+                                                                                                    "type": "string",
+                                                                                                    "nullable": true
+                                                                                                },
+                                                                                                "hasta": {
+                                                                                                    "type": "string",
+                                                                                                    "nullable": true
+                                                                                                },
+                                                                                                "sumar": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "required": [
+                                                                                                                "codigo",
+                                                                                                                "hoja",
+                                                                                                                "seccion",
+                                                                                                                "prestacion",
+                                                                                                                "columnas",
+                                                                                                                "nota"
+                                                                                                            ],
+                                                                                                            "properties": {
+                                                                                                                "codigo": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "hoja": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "seccion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "prestacion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "columnas": {
+                                                                                                                    "type": "object",
+                                                                                                                    "additionalProperties": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "nota": {
+                                                                                                                    "type": "string",
+                                                                                                                    "nullable": true
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "restar": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "required": [
+                                                                                                                "codigo",
+                                                                                                                "hoja",
+                                                                                                                "seccion",
+                                                                                                                "prestacion",
+                                                                                                                "columnas",
+                                                                                                                "nota"
+                                                                                                            ],
+                                                                                                            "properties": {
+                                                                                                                "codigo": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "hoja": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "seccion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "prestacion": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "columnas": {
+                                                                                                                    "type": "object",
+                                                                                                                    "additionalProperties": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "nota": {
+                                                                                                                    "type": "string",
+                                                                                                                    "nullable": true
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
                                                                                             }
                                                                                         }
                                                                                     }
                                                                                 }
                                                                             }
                                                                         }
+                                                                    },
+                                                                    "origen": {
+                                                                        "type": "string",
+                                                                        "nullable": true
+                                                                    },
+                                                                    "fecha_corte": {
+                                                                        "type": "string",
+                                                                        "nullable": true
                                                                     }
                                                                 }
                                                             }

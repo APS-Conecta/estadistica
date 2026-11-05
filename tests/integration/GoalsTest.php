@@ -312,16 +312,20 @@ class GoalsTest extends IntegrationTestCase {
 			Server::get(QueryExecutor::class),
 			Server::get(Population::class),
 			Server::get(Register::class),
-			new Sources(Server::get(IngestStateMapper::class), Server::get(Catalog::class), Server::get(Register::class), $this->window($clock), Server::get(PivImporter::class)),
+			$this->sources($clock),
 			$clock ?? $this->clock,
 		);
+	}
+
+	private function sources(?ITimeFactory $clock = null): Sources {
+		return new Sources(Server::get(IngestStateMapper::class), Server::get(Catalog::class), Server::get(Register::class), $this->window($clock), Server::get(PivImporter::class));
 	}
 
 	/** The stored Resumen, on this test's clock unless $clock says otherwise. */
 	private function resumen(?ITimeFactory $clock = null): ResumenStore {
 		$clock ??= $this->clock;
 
-		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
+		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock), $this->sources($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
 	}
 
 	/** How many rebuilds wait in the background work. */
@@ -619,6 +623,43 @@ class GoalsTest extends IntegrationTestCase {
 		));
 		self::assertSame(10.0, $t[2098]['cierre']);
 		self::assertSame([], self::historico($cards['VIII']), 'a manual meta has no figures to draw');
+	}
+
+	/**
+	 * docs/adr/0009: a click on any figure shows where it comes from. Each
+	 * month carries its origen and the fecha de corte of its year's load, the
+	 * card's own month too. Each year of the histórico carries its ruta, its
+	 * periodos moved onto that year and each código labelled by that year's
+	 * diccionario as POST consultas labels the same consulta: 2098's in
+	 * capitals. A denominador of FONASA's inscritos is the piv; one only a
+	 * commitment gives has no ruta.
+	 */
+	public function testEachFigureCarriesItsSource(): void {
+		$resumen = $this->api()->resumen()->getData();
+
+		self::assertSame('GoalsTest', $resumen['referencia']);
+		$cards = array_column($resumen['metas'], null, 'codigo');
+		self::assertSame(['2099-10', 'datos públicos DEIS', '2099-12'], [$cards['I']['mes'], $cards['I']['origen'], $cards['I']['fecha_corte']], 'October comes from the 2099 zip, which 900003 cut in December');
+		self::assertSame([null, null], [$cards['VIII']['origen'], $cards['VIII']['fecha_corte']], 'a manual meta has no month');
+		$i = self::historico($cards['I']);
+		$february = array_column($i[2098]['meses'], null, 'mes')['2098-02'];
+		self::assertSame([125.0, 'datos públicos DEIS', '2098-12'], [$february['porcentaje'], $february['origen'], $february['fecha_corte']], 'a 2098 month comes from the 2098 zip');
+
+		$numerador = $i[2099]['ruta']['numerador'];
+		self::assertSame(['rem-a', 'REM Serie A', '2099-01', '2099-12', []], [$numerador['fuente'], $numerador['nombre'], $numerador['desde'], $numerador['hasta'], $numerador['restar']], 'named as GET fuentes names it');
+		$consulta = $this->api()->consultas(['fuente' => 'rem-a', 'periodo' => ['desde' => '2099-01', 'hasta' => '2099-12'], 'filtros' => ['codigos' => ['02010420', '03500366'], 'columnas' => ['col08', 'col09', 'col10', 'col11']]])->getData();
+		self::assertSame([$consulta['etiquetas']['codigos']], $numerador['sumar'], 'labelled as the same consulta');
+		self::assertSame(['Evaluación de recuperación', 'Niños de 12 a 17 meses'], [$numerador['sumar'][0][0]['prestacion'], $numerador['sumar'][0][0]['columnas']['col08']]);
+		$moved = $i[2098]['ruta'];
+		self::assertSame('EVALUACIONES DE RECUPERACION', $moved['numerador']['sumar'][0][0]['prestacion'], 'by 2098\'s own diccionario');
+		self::assertSame(
+			['2097-10', '2098-09', ['02010321'], ['03500331', '03500334']],
+			[$moved['denominador']['desde'], $moved['denominador']['hasta'], array_column($moved['denominador']['sumar'][0], 'codigo'), array_column($moved['denominador']['restar'][0], 'codigo')],
+			'Meta I\'s window, moved onto 2098',
+		);
+
+		self::assertSame(['fuente' => 'piv', 'nombre' => 'Población inscrita validada (FONASA)', 'desde' => null, 'hasta' => null, 'sumar' => [], 'restar' => []], self::historico($cards['T'])[2099]['ruta']['denominador']);
+		self::assertNull(self::historico($cards['C'])[2099]['ruta']['denominador'], 'only a commitment gives it');
 	}
 
 	/**
