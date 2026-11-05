@@ -48,11 +48,15 @@ import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import EstadisticaDashboard from './components/Dashboard.vue'
-import SanitaryGoals from './components/Goals.vue'
-import QueryBuilder from './components/QueryBuilder.vue'
-import SavedQuestions from './components/Questions.vue'
+import { defineAsyncComponent } from 'vue'
 import { safeError } from './api.js'
+
+// Each tab is its own chunk (js/estadistica-<view>.js), fetched the first time
+// the tab opens, so the main bundle carries only the shell (#43, #23).
+const EstadisticaDashboard = defineAsyncComponent(() => import(/* webpackChunkName: "tableros" */ './components/Dashboard.vue'))
+const SanitaryGoals = defineAsyncComponent(() => import(/* webpackChunkName: "metas" */ './components/Goals.vue'))
+const QueryBuilder = defineAsyncComponent(() => import(/* webpackChunkName: "consultar" */ './components/QueryBuilder.vue'))
+const SavedQuestions = defineAsyncComponent(() => import(/* webpackChunkName: "preguntas" */ './components/Questions.vue'))
 
 /** The page's views. */
 const VIEWS = [

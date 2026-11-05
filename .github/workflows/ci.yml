@@ -58,16 +58,10 @@ jobs:
       - run: npm ci
       - run: npm run lint-js
       - run: npm test
-      # js/ is built, not committed (the release packs it), so the failure this guards
-      # is a build that produces no bundle at all — the same refusal pack-app makes.
+      # js/ is built, not committed (the release packs it): the bundles, their license
+      # files and the tabs' chunks, the list `make bundles` owns.
       - name: The build produces the bundles
-        run: |
-          npm run build
-          for f in js/estadistica-main.js js/estadistica-main.js.LICENSE.txt \
-                   js/estadistica-admin.js js/estadistica-admin.js.LICENSE.txt; do
-            test -s "$f" \
-              || { echo "::error::npm run build produced no $f — the release packer would refuse this tree"; exit 1; }
-          done
+        run: make bundles
 
   smoke:
     name: Smoke — the wiring no unit test can see (compose instance)
