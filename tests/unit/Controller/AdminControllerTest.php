@@ -11,6 +11,7 @@ use OCA\Estadistica\Controller\AdminController;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\Goals;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
@@ -52,7 +53,7 @@ final class AdminControllerTest extends TestCase {
 	private function controller(): AdminController {
 		return new AdminController($this->createMock(IRequest::class), $this->window, $this->drops,
 			$this->createMock(IngestStateMapper::class), $this->deis, $this->createMock(Catalog::class),
-			$this->createMock(Register::class), $this->piv, $this->goals, $this->planillas);
+			$this->createMock(Register::class), $this->piv, $this->goals, $this->planillas, $this->createMock(ResumenStore::class));
 	}
 
 	/** The choice is recorded first; only then is DEIS asked again, and the window answered as stored. */

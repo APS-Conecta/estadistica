@@ -6,11 +6,13 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Rem;
 
+use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Exception\RefusedException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -22,7 +24,8 @@ use Throwable;
  * and records the outcome on its state row, which the admin section lists
  * (a4):
  *
- * - **Loaded.** The rows and the state commit together.
+ * - **Loaded.** The rows, the state and a queued rebuild of the stored
+ *   Resumen (ResumenJob, docs/adr/0009) commit together.
  * - **Incomplete** (Completeness). The member is loaded and flagged
  *   «incompleto»: the owner's decision for a member of which no complete copy
  *   exists, like 2025 Serie A. The exception is when a complete load of that
@@ -59,6 +62,7 @@ class RemImporter {
 		private Catalog $catalog,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
+		private IJobList $jobs,
 	) {
 	}
 
@@ -118,6 +122,7 @@ class RemImporter {
 			$state->setLastSuccess($this->time->getTime());
 			$state->setLastError(null);
 			$this->states->save($state);
+			$this->jobs->add(ResumenJob::class);
 			$this->db->commit();
 
 			return $state;

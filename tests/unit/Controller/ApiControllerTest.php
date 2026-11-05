@@ -11,7 +11,7 @@ use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\ForbiddenException;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\GoalEvaluator;
-use OCA\Estadistica\Goals\Resumen;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\EstablishmentConfig;
@@ -51,7 +51,7 @@ final class ApiControllerTest extends TestCase {
 
 	private GoalEvaluator&MockObject $goals;
 
-	private Resumen&MockObject $resumen;
+	private ResumenStore&MockObject $resumen;
 
 	private ApiController $controller;
 
@@ -60,7 +60,7 @@ final class ApiControllerTest extends TestCase {
 		$this->executor = $this->createMock(QueryExecutor::class);
 		$this->saved = $this->createMock(SavedContent::class);
 		$this->goals = $this->createMock(GoalEvaluator::class);
-		$this->resumen = $this->createMock(Resumen::class);
+		$this->resumen = $this->createMock(ResumenStore::class);
 		$window = $this->createStub(YearWindow::class);
 		$window->method('currentYear')->willReturn(2026);
 
@@ -274,7 +274,7 @@ final class ApiControllerTest extends TestCase {
 		$configured = Establishment::of('900001');
 		$this->config->method('get')->willReturn($configured);
 		$built = [];
-		$this->resumen->expects(self::exactly(2))->method('build')
+		$this->resumen->expects(self::exactly(2))->method('read')
 			->willReturnCallback(static function (Establishment $local) use (&$built): array {
 				$built[] = $local->deisCode;
 				return ['anio' => 2026];
@@ -287,7 +287,7 @@ final class ApiControllerTest extends TestCase {
 	}
 
 	public function testAResumenForACodeThatIsNotOneIsA400InSpanish(): void {
-		$this->resumen->expects(self::never())->method('build');
+		$this->resumen->expects(self::never())->method('read');
 
 		$response = $this->controller->resumen('9001');
 
@@ -297,7 +297,7 @@ final class ApiControllerTest extends TestCase {
 
 	public function testAResumenWithoutMetasIs404AndARefusalIs422(): void {
 		$this->config->method('get')->willReturn(Establishment::none());
-		$this->resumen->method('build')->willReturnOnConsecutiveCalls(
+		$this->resumen->method('read')->willReturnOnConsecutiveCalls(
 			self::throwException(new DoesNotExistException('')),
 			self::throwException(new RefusedException('La consulta tardó más de 10 s y se canceló: acote el periodo, las prestaciones o la comparación.')),
 		);

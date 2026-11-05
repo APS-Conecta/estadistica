@@ -12,7 +12,7 @@ use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\ForbiddenException;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\GoalEvaluator;
-use OCA\Estadistica\Goals\Resumen;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\EstablishmentConfig;
@@ -72,7 +72,7 @@ class ApiController extends OCSController {
 		private YearWindow $window,
 		private SavedContent $saved,
 		private GoalEvaluator $goals,
-		private Resumen $resumen,
+		private ResumenStore $resumen,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -455,9 +455,10 @@ class ApiController extends OCSController {
 	 * peers.
 	 *
 	 * The establishment is this install's (app config), unless the request
-	 * names another DEIS code (suite ADR-0009).
-	 *
-	 * ponytail: built on each request, where docs/adr/0009 stores it once per change.
+	 * names another DEIS code (suite ADR-0009). This install's is the stored
+	 * Resumen, rebuilt in the background after each change it reads
+	 * (docs/adr/0009), so every reader sees the same figures until the next;
+	 * another establishment's is built on each request and never stored.
 	 *
 	 * @param ?string $establecimiento the six-digit DEIS code whose Resumen to build; this install's when omitted
 	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
@@ -479,7 +480,7 @@ class ApiController extends OCSController {
 		}
 
 		try {
-			return new DataResponse($this->resumen->build($local));
+			return new DataResponse($this->resumen->read($local));
 		} catch (DoesNotExistException) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		} catch (RefusedException $e) {

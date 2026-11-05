@@ -6,10 +6,12 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Piv;
 
+use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Service\EstablishmentConfig;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\IDBConnection;
 use Throwable;
 
@@ -27,7 +29,9 @@ use Throwable;
  *   admin section for the corte of 31 December of a year. They win over
  *   FONASA's for that establishment's own series only; the country and the
  *   peer groups stay FONASA's published counts (owner, Slice 8). A file
- *   loaded later does not touch them.
+ *   loaded later does not touch them. Typing them queues a rebuild of the
+ *   stored Resumen in the same transaction (ResumenJob, docs/adr/0009); a
+ *   FONASA file does not.
  *
  * @psalm-import-type Row from PivReader
  * @psalm-type Corte = array{corte: string, rows: int, establishments: int, inscritos: int, loadedAt: int}
@@ -42,6 +46,7 @@ class PivImporter {
 		private EstablishmentConfig $establishment,
 		private YearWindow $window,
 		private ITimeFactory $time,
+		private IJobList $jobs,
 	) {
 	}
 
@@ -127,6 +132,7 @@ class PivImporter {
 		try {
 			$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_piv WHERE corte = ? AND estab = ? AND manual = 1', [$corte, $estab]);
 			$this->insert(array_values($rows), 1);
+			$this->jobs->add(ResumenJob::class);
 			$this->db->commit();
 		} catch (Throwable $e) {
 			$this->db->rollBack();
