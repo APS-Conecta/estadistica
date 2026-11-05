@@ -59,6 +59,7 @@ class PopulationTest extends TestCase {
 	public function testARangeOfWholeBandsCountsFonasasFigures(): void {
 		self::assertSame(211.0, Population::count(self::INSCRITOS, 0, 9));
 		self::assertSame(2000.0, Population::count(self::INSCRITOS, 20, 69, 'M'));
+		self::assertSame(2100.0, Population::count(self::INSCRITOS, 60, null, 'M'), 'an open range runs to the last band');
 		self::assertSame(1500.0, Population::count(self::INSCRITOS, 80, null), '«80 a más» is 80–89, so 80+ is the whole band');
 	}
 
