@@ -75,7 +75,7 @@ Las pruebas y compuertas:
 - `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
 - `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
 - `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, en Chromium (Playwright para Python en el host). Tampoco la ejecuta CI.
-- `npm run build`: genera los dos paquetes de `js/` (no se confirman; el flujo de release los compila y CI falla si la compilación no los produce).
+- `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada pestaña (no se confirman; CI y el flujo de release ejecutan lo mismo).
 
 La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío; el flujo de release (`.github/workflows/release.yml`) compila y empaqueta en cada PR.
 
@@ -89,4 +89,4 @@ Tres trampas que esta aplicación ya pagó:
 
 AGPL-3.0-or-later ([`LICENSE`](LICENSE)). Las cifras REM son datos públicos del DEIS, la población es de FONASA y las metas son las Orientaciones Técnicas del MINSAL; ninguna viaja en este repositorio: la aplicación descarga la primera y un administrador carga la segunda. El archivo de metas 2026 reformula las rutas y las metas nacionales de las Orientaciones Técnicas.
 
-Los avisos del código de terceros incluido en los paquetes (Vue, Chart.js, las bibliotecas de Nextcloud) están en `js/estadistica-main.js.LICENSE.txt` y `js/estadistica-admin.js.LICENSE.txt`, que la compilación escribe a su lado. Los avisos y licencias de la organización viven en [Aviso y licencias](https://aps-conecta.github.io/documentation/aviso.html).
+Los avisos del código de terceros incluido en los paquetes (Vue, Chart.js, las bibliotecas de Nextcloud) están en los archivos `js/*.LICENSE.txt` que la compilación escribe junto a cada paquete y fragmento. Los avisos y licencias de la organización viven en [Aviso y licencias](https://aps-conecta.github.io/documentation/aviso.html).

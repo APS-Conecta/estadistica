@@ -24,6 +24,8 @@ jobs:
       contents: write
     with:
       app-id: estadistica
+      # The default build, plus the assertion that it made every bundle and chunk.
+      build: npm ci && make bundles
     secrets:
       APP_SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
       APP_SIGNING_KEY_PASSWORD: ${{ secrets.APP_SIGNING_KEY_PASSWORD }}

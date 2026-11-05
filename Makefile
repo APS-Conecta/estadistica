@@ -12,7 +12,7 @@ DOCKER := docker run --rm -v "$(CURDIR)":/app -v "$(APS)":/aps-common -w /app $(
 COMPOSE := docker compose -f compose.dev.yaml
 OCC := $(COMPOSE) exec --user www-data nextcloud php occ
 
-.PHONY: test build-test-image deps test-integration integration test-browser instance-up instance-occ instance-down instance-clean openapi smoke clean aps-sync aps-drift
+.PHONY: test bundles build-test-image deps test-integration integration test-browser instance-up instance-occ instance-down instance-clean openapi smoke clean aps-sync aps-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
@@ -91,6 +91,19 @@ aps-drift: aps-sync
 		echo "::error::aps-common artifacts are behind the package. Run 'make aps-sync' and commit the result."; \
 		exit 1; \
 	fi
+
+# Build, then assert the bundles the release packs. js/ is built, not committed, so
+# the failure this guards is a build that drops a bundle, its license file or a
+# tab's chunk (#43) — pack-app itself refuses only an empty js/.
+# CI's js job, the release's build and the smoke run this one list.
+BUNDLES := main.js main.js.LICENSE.txt admin.js admin.js.LICENSE.txt \
+	consultar.js preguntas.js tableros.js metas.js
+
+bundles:
+	npm run build
+	@for f in $(BUNDLES:%=js/estadistica-%); do \
+		test -s "$$f" || { echo "::error::npm run build produced no $$f — the release packer would refuse this tree"; exit 1; }; \
+	done
 
 # The wiring no unit test can see, against the throwaway instance.
 smoke:
