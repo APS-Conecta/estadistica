@@ -233,6 +233,38 @@ class Catalog {
 	}
 
 	/**
+	 * (año, serie)'s own diccionario as a planilla is read through it: its
+	 * file name, which carries its version, and where each código's figures
+	 * sit. Null when the year has no diccionario of its own, or one stored
+	 * before the layout was kept: a planilla is never read through another
+	 * year's.
+	 *
+	 * @return ?array{name: string, entries: list<array{codigo: string, hoja: string, fila: int, celdas: array<int, int>}>}
+	 */
+	public function layout(int $anio, string $serie): ?array {
+		$result = $this->db->executeQuery(
+			'SELECT d.name, c.codigo, c.hoja, c.fila, c.celdas FROM *PREFIX*estadistica_dictionary d '
+			. 'JOIN *PREFIX*estadistica_code c ON c.anio = d.anio AND c.serie = d.serie '
+			. 'WHERE d.anio = ? AND d.serie = ? AND c.fila IS NOT NULL ORDER BY c.orden',
+			[$anio, $serie],
+		);
+		$name = null;
+		$entries = [];
+		while (($row = $result->fetch()) !== false) {
+			$name = (string)$row['name'];
+			$entries[] = [
+				'codigo' => (string)$row['codigo'],
+				'hoja' => (string)$row['hoja'],
+				'fila' => (int)$row['fila'],
+				'celdas' => array_map('intval', self::columns((string)$row['celdas'])),
+			];
+		}
+		$result->closeCursor();
+
+		return $name === null ? null : ['name' => $name, 'entries' => $entries];
+	}
+
+	/**
 	 * The códigos a consulta's hoja filter (and sección, when named) covers
 	 * over a periodo. They are the ones that the dictionaries the periodo
 	 * reads put there: each year's own or, for a year without one, the
@@ -432,6 +464,8 @@ class Catalog {
 				'seccion' => $entry['seccion'],
 				'prestacion' => $entry['prestacion'],
 				'columnas' => json_encode($entry['columnas'], JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+				'fila' => $entry['fila'],
+				'celdas' => json_encode($entry['celdas'], JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR),
 			];
 		}
 
@@ -439,9 +473,9 @@ class Catalog {
 		try {
 			$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_code WHERE anio = ? AND serie = ?', [$anio, $serie]);
 			$this->db->executeStatement(
-				'INSERT INTO *PREFIX*estadistica_code (anio, serie, codigo, orden, hoja, seccion, prestacion, columnas) '
-				. 'SELECT CAST(? AS smallint), ?, t.codigo, t.orden, t.hoja, t.seccion, t.prestacion, t.columnas '
-				. 'FROM jsonb_to_recordset(CAST(? AS jsonb)) AS t(codigo text, orden integer, hoja text, seccion text, prestacion text, columnas text)',
+				'INSERT INTO *PREFIX*estadistica_code (anio, serie, codigo, orden, hoja, seccion, prestacion, columnas, fila, celdas) '
+				. 'SELECT CAST(? AS smallint), ?, t.codigo, t.orden, t.hoja, t.seccion, t.prestacion, t.columnas, t.fila, t.celdas '
+				. 'FROM jsonb_to_recordset(CAST(? AS jsonb)) AS t(codigo text, orden integer, hoja text, seccion text, prestacion text, columnas text, fila integer, celdas text)',
 				[$anio, $serie, json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)],
 			);
 			$this->db->executeStatement(

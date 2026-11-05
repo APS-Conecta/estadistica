@@ -9,6 +9,7 @@ export default [
 		// A flat config declares no browser globals of its own, so no-undef needs
 		// the surface the app actually uses named. Blob: the shared error-shape
 		// reader (src/aps/api.js) unwraps a blob body behind a typeof guard.
+		// __webpack_public_path__: main.js points the tabs' chunks at the app's js/.
 		languageOptions: {
 			globals: {
 				console: 'readonly',
@@ -16,6 +17,7 @@ export default [
 				document: 'readonly',
 				URL: 'readonly',
 				Blob: 'readonly',
+				__webpack_public_path__: 'writable',
 			},
 		},
 		rules: {

@@ -48,8 +48,9 @@ final class XlsxFixture {
 	 *
 	 * @param array<string, array<int, array<string, string|int>>> $sheets name → rows
 	 * @param array<string, list<string>> $merges name → ranges («B9:C10»)
+	 * @param array<string, string> $extra more parts, as they go inside the zip (xl/vbaProject.bin)
 	 */
-	public static function workbook(array $sheets, array $merges = []): string {
+	public static function workbook(array $sheets, array $merges = [], array $extra = []): string {
 		$strings = [];
 		$parts = [];
 		$entries = '';
@@ -94,7 +95,7 @@ final class XlsxFixture {
 			implode('', array_map(static fn (string $text): string => sprintf('<si><t xml:space="preserve">%s</t></si>', self::escape($text)), array_keys($strings))),
 		));
 
-		return self::raw($parts);
+		return self::raw($parts + $extra);
 	}
 
 	/**
@@ -138,6 +139,103 @@ final class XlsxFixture {
 			],
 			'Control' => [1 => ['A' => 'control']],
 		], ['A03' => ['B9:C11', 'D9:F10', 'G9:J9', 'G10:H10', 'I10:J10', 'B12:B13']]);
+	}
+
+	/**
+	 * DEIS's 2026 layouts as each serie's DICCIONARIO CODIGOS draws them: the
+	 * form, with the código inserted as column A and a «COLnn» marker in the
+	 * cell where each figure goes. The hojas, rows and columns are the real
+	 * dictionaries' (SA A01 and A05, SP P4); the labels and códigos are
+	 * invented.
+	 */
+	private const LAYOUT_2026 = [
+		'A' => [
+			'A01' => [
+				6 => ['B' => 'REM-A01. CONTROLES DE SALUD'],
+				8 => ['B' => 'SECCIÓN A: CONTROLES DE PRUEBA'],
+				9 => ['B' => 'TIPO DE CONTROL', 'C' => 'PROFESIONAL', 'D' => 'TOTAL', 'E' => 'RANGO ETARIO'],
+				10 => ['E' => 'Menos de 4 años', 'F' => '5 - 9 años'],
+				11 => ['A' => '01010101', 'B' => 'Preconcepcional', 'C' => 'Médico/a', 'D' => 'COL01', 'E' => 'COL02', 'F' => 'COL03'],
+				12 => ['A' => '01010201', 'C' => 'Matrón/a', 'D' => 'COL01', 'E' => 'COL02', 'F' => 'COL03'],
+			],
+			'A05' => [
+				6 => ['B' => 'REM-A05. INGRESOS'],
+				8 => ['B' => 'SECCIÓN A: INGRESOS DE PRUEBA'],
+				9 => ['B' => 'CONCEPTO', 'C' => 'TOTAL'],
+				10 => ['A' => '05225303', 'B' => 'Ingreso', 'C' => 'COL01'],
+			],
+		],
+		'P' => [
+			'P4' => [
+				6 => ['B' => 'REM-P4. PROGRAMA DE PRUEBA'],
+				8 => ['B' => 'SECCIÓN A: PERSONAS EN CONTROL'],
+				10 => ['B' => 'CONCEPTO', 'C' => 'TOTAL', 'D' => 'Hombres', 'E' => 'Mujeres'],
+				12 => ['A' => 'P4150100', 'B' => 'Personas en control', 'C' => 'COL01', 'D' => 'COL02', 'E' => 'COL03'],
+			],
+		],
+	];
+
+	/** The 2026 versions, as NOMBRE!A9 of each serie's form and dictionary writes them. */
+	private const VERSION_2026 = ['A' => 'Versión 1.2: Febrero 2026', 'P' => 'Versión 1.2: Junio 2026'];
+
+	/** The 2026 DICCIONARIO CODIGOS of Serie $serie (A or P), in DEIS's layout. */
+	public static function dictionary2026(string $serie): string {
+		return self::workbook(['NOMBRE' => self::nombre($serie, []), ...self::LAYOUT_2026[$serie]]);
+	}
+
+	/**
+	 * A 2026 REM form as an establishment fills it: the dictionary without its
+	 * código column, so every cell sits one column left of its marker, and
+	 * NOMBRE says who, when and which form (one digit of the code per cell in
+	 * C3:H3, the month by name in B6, the year in B7, the version in A9, the
+	 * serie in B17), as DEIS's form does.
+	 *
+	 * @param array<string, array<int, int|string>> $figures código → column number → value; any other cell is blank
+	 * @param array<string, int|string|null> $nombre NOMBRE's cells to change («B6» => 'JUNIO'), null to blank one
+	 * @param array<string, string> $extra more zip parts (xl/vbaProject.bin)
+	 */
+	public static function form2026(string $serie, array $figures, array $nombre = [], array $extra = []): string {
+		$sheets = ['NOMBRE' => self::nombre($serie, $nombre)];
+		foreach (self::LAYOUT_2026[$serie] as $hoja => $rows) {
+			foreach ($rows as $row => $cells) {
+				$codigo = $cells['A'] ?? '';
+				unset($cells['A']);
+				foreach ($cells as $column => $value) {
+					if (preg_match('/^COL(\d{2})$/', $value, $marker) === 1) {
+						$value = $figures[$codigo][(int)$marker[1]] ?? null;
+					}
+					if ($value !== null) {
+						$sheets[$hoja][$row][chr(ord($column) - 1)] = $value;
+					}
+				}
+			}
+		}
+
+		return self::workbook($sheets, [], $extra);
+	}
+
+	/**
+	 * @param array<string, int|string|null> $changes
+	 * @return array<int, array<string, int|string>>
+	 */
+	private static function nombre(string $serie, array $changes): array {
+		$cells = [
+			'A1' => 'DATOS DEL ESTABLECIMIENTO', 'C1' => 'CÓDIGOS',
+			'A3' => 'NOMBRE ESTABLECIMIENTO/ESTRATEGIA', 'B3' => 'Cesfam de Prueba',
+			'C3' => 9, 'D3' => 0, 'E3' => 0, 'F3' => 0, 'G3' => 0, 'H3' => 1,
+			'A6' => 'MES:', 'B6' => 'MARZO',
+			'A7' => 'AÑO:', 'B7' => 2026,
+			'A9' => self::VERSION_2026[$serie],
+			'B17' => "SERIE $serie",
+			...$changes,
+		];
+
+		$rows = [];
+		foreach (array_filter($cells, static fn (int|string|null $value): bool => $value !== null) as $reference => $value) {
+			$rows[(int)substr($reference, 1)][$reference[0]] = $value;
+		}
+
+		return $rows;
 	}
 
 	/**

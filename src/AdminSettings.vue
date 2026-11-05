@@ -105,6 +105,54 @@
 			</p>
 		</NcSettingsSection>
 
+		<NcSettingsSection name="Planillas del establecimiento"
+			description="El formulario REM del DEIS que su establecimiento llena cada mes (.xlsm o .xlsx),
+				guardado en una carpeta de Archivos. La carpeta se revisa cada hora, y por cada serie y mes
+				cuenta la planilla guardada más reciente. Por ahora la aplicación solo las lee y dice su
+				estado: las cifras que muestra siguen siendo las del DEIS.">
+			<p class="estadistica-admin__hint">
+				{{ planillas.folder === null ? 'Todavía no hay una carpeta de planillas elegida.'
+					: `Carpeta: «${planillas.folder}», en los archivos de ${planillas.owner}.` }}
+			</p>
+
+			<NcNoteCard v-if="planillas.error" type="warning">
+				{{ planillas.error }}
+			</NcNoteCard>
+
+			<NcNoteCard v-if="planillaFailed" type="error">
+				{{ planillaFailed }}
+			</NcNoteCard>
+
+			<NcNoteCard v-else-if="planillaChosen" type="success">
+				Carpeta guardada. Sus planillas se leen en la próxima hora.
+			</NcNoteCard>
+
+			<table v-if="planillas.files.length > 0" class="estadistica-admin__table estadistica-admin__planillas">
+				<thead>
+					<tr>
+						<th>Archivo</th>
+						<th>Guardado</th>
+						<th>Estado</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="file in planillas.files" :key="`${file.name}-${file.mtime}`">
+						<td>{{ file.name }}</td>
+						<td>{{ when(file.mtime) }}</td>
+						<td :class="{ 'estadistica-admin__error': file.state === 'rechazado' }">
+							{{ planillaState(file) }}
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<NcButton :disabled="planillaChoosing"
+				class="estadistica-admin__field"
+				@click="pickPlanillaFolder">
+				Elegir la carpeta en Archivos…
+			</NcButton>
+		</NcSettingsSection>
+
 		<NcSettingsSection name="Población inscrita validada (FONASA)"
 			description="La población que FONASA valida cada año por establecimiento, edad y sexo: el
 				denominador de varias Metas Sanitarias. FONASA no la publica en un archivo que se pueda
@@ -333,6 +381,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { messageFrom, warnError } from './api.js'
+import { monthName } from './query.js'
 
 /**
  * Upper bound per year of national Serie A + P in the lean typed table
@@ -400,6 +449,10 @@ export default {
 			dropping: false,
 			dropped: null,
 			dropFailed: '',
+			planillas: { folder: null, owner: null, error: null, files: [] },
+			planillaChoosing: false,
+			planillaChosen: false,
+			planillaFailed: '',
 			piv: { cortes: [], local: null },
 			pivYear: String(yearWindow.currentYear - 1),
 			pivCells: emptyCells(),
@@ -539,6 +592,7 @@ export default {
 				this.dictionaries = data.dictionaries
 				this.register = data.register
 				this.deis = data.deis
+				this.planillas = data.planillas
 				this.piv = data.piv
 				this.fillPivCells()
 				this.metas = data.metas
@@ -594,6 +648,47 @@ export default {
 			} finally {
 				this.dropping = false
 			}
+		},
+
+		/** The platform's picker, folders only: like pickZip, it hands back a path. */
+		pickPlanillaFolder() {
+			if (!window.OC?.dialogs?.filepicker) {
+				this.planillaFailed = 'Esta versión de Nextcloud no ofrece el selector de archivos.'
+				return
+			}
+
+			window.OC.dialogs.filepicker(
+				'Elegir la carpeta de las planillas',
+				(path) => this.choosePlanillaFolder(path),
+				false,
+				['httpd/unix-directory'],
+				true,
+				window.OC.dialogs.FILEPICKER_TYPE_CHOOSE,
+			)
+		},
+
+		async choosePlanillaFolder(path) {
+			this.planillaChoosing = true
+			this.planillaChosen = false
+			this.planillaFailed = ''
+			try {
+				const { data } = await axios.put(generateUrl('/apps/estadistica/admin/planillas'), { path })
+				this.planillas = data
+				this.planillaChosen = true
+			} catch (error) {
+				warnError('could not choose the planilla folder', error)
+				this.planillaFailed = await messageFrom(error, 'No se pudo guardar la carpeta. Revise la conexión e inténtelo de nuevo.')
+			} finally {
+				this.planillaChoosing = false
+			}
+		},
+
+		planillaState(file) {
+			if (file.state === 'rechazado') {
+				return `Rechazada: ${file.error}`
+			}
+			const month = `Serie ${file.serie}, ${monthName(`${file.anio}-${file.mes}`)}`
+			return file.state === 'leido' ? `Leída: ${month}` : `Reemplazada por una más reciente de la ${month}`
 		},
 
 		status(ingest) {
