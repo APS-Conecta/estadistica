@@ -380,6 +380,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { messageFrom, warnError } from './api.js'
+import { monthName } from './query.js'
 
 /**
  * Upper bound per year of national Serie A + P in the lean typed table
@@ -387,9 +388,6 @@ import { messageFrom, warnError } from './api.js'
  * are smaller, so the estimate errs on the side of the disk.
  */
 const GB_PER_YEAR = 1.1
-
-/** A planilla's month, as its form's NOMBRE!B6 names it. */
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 /** FONASA's age bands by their first year (PivReader::BANDS). */
 const BANDS = [
@@ -688,7 +686,7 @@ export default {
 			if (file.state === 'rechazado') {
 				return `Rechazada: ${file.error}`
 			}
-			const month = `Serie ${file.serie}, ${MONTHS[file.mes - 1]} de ${file.anio}`
+			const month = `Serie ${file.serie}, ${monthName(`${file.anio}-${file.mes}`)}`
 			return file.state === 'leido' ? `Leída: ${month}` : `Reemplazada por una más reciente de la ${month}`
 		},
 
