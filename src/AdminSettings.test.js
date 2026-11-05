@@ -368,7 +368,7 @@ describe('AdminSettings — the metas (a9, a10, a12)', () => {
 		const wrapper = await section({ ...noMore, metas: { years: [year(2026)], local: null } })
 		window.OC = { dialogs: { filepicker: (title, pick) => pick('/metas-2027.json') } }
 		axios.post.mockResolvedValueOnce({ data: { metas: { anio: 2027, version: 1, indicadores: 1 } } })
-		axios.get.mockResolvedValueOnce({ data: { ...noMore, piv: NO_PIV, metas: { years: [NEXT, year(2026)], local: null } } })
+		axios.get.mockResolvedValueOnce({ data: { ...noMore, piv: NO_PIV, metas: { years: [NEXT, year(2026)], local: null }, planillas: NO_PLANILLAS } })
 
 		await wrapper.findAll('button').find((button) => button.text() === 'Elegir un archivo en Archivos…').trigger('click')
 		await flushPromises()
