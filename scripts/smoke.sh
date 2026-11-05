@@ -18,8 +18,9 @@
 #   - the metas: the shipped 2026 seed is loaded, any user reads it month by
 #     month over OCS, a metas file goes through the same door, and a delegate
 #     commits a meta comprometida (200) where an outsider gets 403 (a9, a10,
-#     a12, a14); any user reads the Resumen, and a DEIS code that is not one
-#     is a Spanish 400 (docs/adr/0009)
+#     a12, a14); any user reads the Resumen, a DEIS code that is not one is
+#     a Spanish 400, and the commitment queues the Resumen's rebuild, which
+#     the background work stores (docs/adr/0009)
 #   - the OCS surface answers every user, attribute routes and all: the
 #     fuentes list with the PIV from FONASA, a Spanish 400 for a year DEIS
 #     never published, a 404 for a fuente that does not exist (a14)
@@ -390,6 +391,20 @@ fetch "$OUTSIDER" "$OUTSIDER_TOKEN" -H 'OCS-APIRequest: true' -H 'Accept: applic
 expect "$BODY" '"meta_comprometida":75' \
 	"the metas view reads the commitment back" \
 	"the metas do NOT carry the meta comprometida"
+
+# The commitment is a change the stored Resumen reads (docs/adr/0009): it
+# queues ResumenJob, which the background work runs as Nextcloud wires it.
+expect "$(occ background-job:list --class='OCA\Estadistica\BackgroundJob\ResumenJob' 2>&1)" 'ResumenJob' \
+	"the commitment queues a rebuild of the stored Resumen" \
+	"the commitment did NOT queue a rebuild of the stored Resumen"
+occ background-job:worker --once 'OCA\Estadistica\BackgroundJob\ResumenJob' >/dev/null 2>&1
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" "$INGESTS"
+expect "$BODY" '"resumen":{"builtAt":' \
+	"the background work stores the Resumen, and the section says when" \
+	"the background work did NOT store the Resumen"
+expect "$BODY" ',"error":null}}' \
+	"the stored Resumen's rebuild reports no failure" \
+	"the stored Resumen's rebuild failed"
 
 web_as admin "$ADMIN_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -o /dev/null \
 	-X PUT --data '{"year":2026,"commitments":[]}' "$GOALS"

@@ -12,6 +12,7 @@ use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Goals\Goals;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
@@ -53,6 +54,7 @@ class AdminController extends Controller {
 		private PivImporter $piv,
 		private Goals $goals,
 		private Planillas $planillas,
+		private ResumenStore $resumen,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -112,6 +114,7 @@ class AdminController extends Controller {
 			'piv' => $this->piv->status(),
 			'metas' => $this->goals->status(),
 			'planillas' => $this->planillas->status(),
+			'resumen' => $this->resumen->status(),
 		]);
 	}
 

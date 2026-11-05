@@ -7,10 +7,12 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Goals;
 
 use JsonException;
+use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Service\EstablishmentConfig;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\IDBConnection;
 use Throwable;
 
@@ -28,6 +30,9 @@ use Throwable;
  *   They replace what was typed before for that year. A new seed for the year
  *   leaves them alone: they name their meta by codigo.
  *
+ * Each write queues a rebuild of the stored Resumen in its own transaction
+ * (ResumenJob, docs/adr/0009): a write rolled back queues none.
+ *
  * @psalm-import-type Metas from GoalSeed
  * @psalm-type Commitment = array{meta: ?float, denominador: ?float, cumplimiento: ?float}
  */
@@ -40,6 +45,7 @@ class Goals {
 		private EstablishmentConfig $establishment,
 		private YearWindow $window,
 		private ITimeFactory $time,
+		private IJobList $jobs,
 	) {
 	}
 
@@ -85,6 +91,7 @@ class Goals {
 				'INSERT INTO *PREFIX*estadistica_goal (anio, version, document, loaded_at) VALUES (?, ?, ?, ?)',
 				[$metas['anio'], $metas['version'], json_encode($raw, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION), $this->time->getTime()],
 			);
+			$this->jobs->add(ResumenJob::class);
 			$this->db->commit();
 		} catch (Throwable $e) {
 			$this->db->rollBack();
@@ -209,6 +216,7 @@ class Goals {
 					[$anio, $estab, $this->time->getTime(), json_encode(array_values($rows), JSON_THROW_ON_ERROR)],
 				);
 			}
+			$this->jobs->add(ResumenJob::class);
 			$this->db->commit();
 		} catch (Throwable $e) {
 			$this->db->rollBack();

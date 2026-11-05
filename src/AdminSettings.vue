@@ -241,6 +241,14 @@
 			description="Las metas de cada año, con sus rutas en el REM: la aplicación trae las de 2026, y
 				las de un año nuevo se cargan como un archivo en «Cargar un archivo a mano». Aquí se escribe lo
 				que su establecimiento comprometió.">
+			<p v-if="resumen && resumen.builtAt" class="estadistica-admin__hint">
+				El Resumen en uso se calculó el {{ when(resumen.builtAt) }}. Se calcula de nuevo en segundo plano
+				después de cada carga de cifras REM o de metas, y de cada cambio en lo comprometido.
+			</p>
+			<NcNoteCard v-if="resumen && resumen.error" type="error">
+				No se pudo volver a calcular el Resumen: {{ resumen.error }}
+				{{ resumen.builtAt ? 'Sigue en uso el anterior.' : '' }}
+			</NcNoteCard>
 			<p v-if="!metasOfYear" class="estadistica-admin__hint">
 				Todavía no hay metas cargadas.
 			</p>
@@ -467,6 +475,7 @@ export default {
 			metasSaving: false,
 			metasSaved: false,
 			metasFailed: '',
+			resumen: null,
 			COMMITTED,
 		}
 	},
@@ -598,6 +607,7 @@ export default {
 				this.metas = data.metas
 				this.pickMetasYear()
 				this.fillCommitments()
+				this.resumen = data.resumen
 			} catch (error) {
 				warnError('could not read the ingest state', error)
 				this.ingestsFailed = await messageFrom(error, 'No se pudo leer el estado de las cargas. Recargue la página.')

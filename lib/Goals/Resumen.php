@@ -31,8 +31,9 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   «falta el denominador oficial de <año>» when its ages cut a PIV band and
  *   no denominador comprometido is typed (GoalEvaluator's falta_oficial).
  *
- * ponytail: built on request. Storing it once per change and the past years
- * are their own tickets (#47, #48).
+ * Built here, the one way; ResumenStore keeps the configured
+ * establishment's once per change. ponytail: the past years are their own
+ * ticket (#48).
  *
  * @psalm-import-type Meta from GoalEvaluator
  * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}
