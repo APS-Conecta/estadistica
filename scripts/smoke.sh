@@ -100,8 +100,9 @@ mint() {
 }
 
 # Everything this run made is removed however it leaves: what it saved, the
-# credentials, the three throwaway users (and with them the file the drop
-# check put in Files), the group and its delegation, and the window it moved.
+# credentials, the three throwaway users (and with them the files the drop
+# and planilla checks put in Files), the group and its delegation, the window
+# it moved and the planilla folder it chose.
 cleanup() {
 	# A run that died halfway leaves a commitment and the establishment it
 	# needed: the commitments are cleared while the key still names it.
@@ -122,6 +123,8 @@ cleanup() {
 	occ user:delete "$READER" >/dev/null 2>&1
 	occ group:delete "$GROUP" >/dev/null 2>&1
 	occ config:app:delete "$APP" first_year >/dev/null 2>&1
+	occ config:app:delete "$APP" planilla_owner >/dev/null 2>&1
+	occ config:app:delete "$APP" planilla_folder >/dev/null 2>&1
 	return 0
 }
 trap cleanup EXIT
@@ -239,6 +242,30 @@ is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -o /dev/null -w '%{http_co
 	-X POST -d 'path=/nota.txt' "$DROP")" '403' \
 	"a user outside the delegated group cannot drop a file (403)" \
 	"a user outside the delegated group was NOT refused the drop with 403"
+
+# --- the planilla folder: a delegated write (ADR-0003, ADR-0010) -------------
+# A folder in the delegate's OWN Files, handed over by path the way the
+# FilePicker hands it; the section's state then names it. An outsider gets
+# core's 403. Nothing is saved in it, so the job has nothing to read.
+PLANILLAS="$BASE/index.php/apps/$APP/admin/planillas"
+is "$(web_as "$DELEGATE" "$DELEGATE_TOKEN" -o /dev/null -w '%{http_code}' \
+	-X MKCOL "$BASE/remote.php/dav/files/$DELEGATE/planillas")" '201' \
+	"a folder lands in the delegate's Files (WebDAV 201)" \
+	"could NOT make a folder in the delegate's Files"
+
+fetch "$DELEGATE" "$DELEGATE_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' \
+	-X PUT --data '{"path":"/planillas"}' "$PLANILLAS"
+is "$CODE" '200' \
+	"a delegate chooses the planilla folder (200)" \
+	"a delegate could NOT choose the planilla folder"
+expect "$BODY" "\"owner\":\"$DELEGATE\"" \
+	"the planilla state names the folder's owner" \
+	"the planilla state does NOT name the delegate as the folder's owner"
+
+is "$(web_as "$OUTSIDER" "$OUTSIDER_TOKEN" -H "$OCSH" -H 'Content-Type: application/json' -o /dev/null -w '%{http_code}' \
+	-X PUT --data '{"path":"/planillas"}' "$PLANILLAS")" '403' \
+	"a user outside the delegated group cannot choose the planilla folder (403)" \
+	"a user outside the delegated group was NOT refused the planilla folder with 403"
 
 # --- the PIV: FONASA's export through the same door (a10, a11) ---------------
 # A CSV that adds a RUT to FONASA's eleven columns is refused whole: the header
