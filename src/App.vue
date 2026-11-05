@@ -48,15 +48,25 @@ import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { defineAsyncComponent } from 'vue'
+import { defineAsyncComponent, h } from 'vue'
 import { safeError } from './api.js'
+
+// A tab whose chunk cannot be fetched shows this in its place, not an empty page.
+// inheritAttrs: false — the loader's error and the tab's props stay off the card.
+const TabLoadFailed = {
+	name: 'TabLoadFailed',
+	inheritAttrs: false,
+	render: () => h(NcNoteCard, { type: 'error' }, () => 'No se pudo cargar esta sección. Recargue la página; si persiste, avise al administrador.'),
+}
 
 // Each tab is its own chunk (js/estadistica-<view>.js), fetched the first time
 // the tab opens, so the main bundle carries only the shell (#43, #23).
-const EstadisticaDashboard = defineAsyncComponent(() => import(/* webpackChunkName: "tableros" */ './components/Dashboard.vue'))
-const SanitaryGoals = defineAsyncComponent(() => import(/* webpackChunkName: "metas" */ './components/Goals.vue'))
-const QueryBuilder = defineAsyncComponent(() => import(/* webpackChunkName: "consultar" */ './components/QueryBuilder.vue'))
-const SavedQuestions = defineAsyncComponent(() => import(/* webpackChunkName: "preguntas" */ './components/Questions.vue'))
+const lazyTab = (loader) => defineAsyncComponent({ loader, errorComponent: TabLoadFailed })
+
+const EstadisticaDashboard = lazyTab(() => import(/* webpackChunkName: "tableros" */ './components/Dashboard.vue'))
+const SanitaryGoals = lazyTab(() => import(/* webpackChunkName: "metas" */ './components/Goals.vue'))
+const QueryBuilder = lazyTab(() => import(/* webpackChunkName: "consultar" */ './components/QueryBuilder.vue'))
+const SavedQuestions = lazyTab(() => import(/* webpackChunkName: "preguntas" */ './components/Questions.vue'))
 
 /** The page's views. */
 const VIEWS = [

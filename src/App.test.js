@@ -23,8 +23,8 @@ vi.mock('./components/Questions.vue', tab('preguntas', 'SavedQuestions'))
 vi.mock('./components/Dashboard.vue', tab('tableros', 'EstadisticaDashboard'))
 vi.mock('./components/Goals.vue', tab('metas', 'SanitaryGoals'))
 
-const open = async (wrapper, nombre) => {
-	await wrapper.findAll('nav button').find((b) => b.text() === nombre).trigger('click')
+const open = async (wrapper, label) => {
+	await wrapper.findAll('nav button').find((b) => b.text() === label).trigger('click')
 	await flushPromises()
 }
 
@@ -46,5 +46,24 @@ describe('App', () => {
 		expect(loaded).toEqual(['consultar', 'preguntas', 'tableros', 'metas'])
 		expect(wrapper.findComponent({ name: 'SanitaryGoals' }).exists()).toBe(true)
 		expect(wrapper.findComponent({ name: 'SavedQuestions' }).exists()).toBe(false)
+	})
+
+	it('shows an error card in place of a tab whose code cannot load', async () => {
+		// A chunk the server no longer serves, in a fresh App: a tab keeps its
+		// first load's outcome for the page's life.
+		vi.doMock('./components/Dashboard.vue', () => {
+			throw new Error('no chunk for tableros')
+		})
+		vi.resetModules()
+		const { default: FreshApp } = await import('./App.vue')
+		const wrapper = mount(FreshApp)
+		await flushPromises()
+
+		await open(wrapper, 'Tableros')
+		const card = wrapper.findComponent({ name: 'NcNoteCard' })
+		expect(card.exists()).toBe(true)
+		expect(card.props('type')).toBe('error')
+		expect(card.text()).toContain('No se pudo cargar esta sección.')
+		expect(wrapper.findComponent({ name: 'EstadisticaDashboard' }).exists()).toBe(false)
 	})
 })

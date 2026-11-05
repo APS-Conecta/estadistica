@@ -13,13 +13,13 @@ Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for ev
 - **Gate before opening a PR** — what `ci.yml` and `release.yml` run. This repo uses **npm**, not pnpm:
   `git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common` if it is missing — aps-common is
   private, so if the clone fails, skip the steps that need it and list them as not run; never edit a workflow to work around it;
-  `make aps-drift`; `npm ci`; `npm run lint-js`; `npm test`; `npm run build`, then assert the two bundles and their
-  `.LICENSE.txt` exist (never committed — the release packs them); then
+  `make aps-drift`; `npm ci`; `npm run lint-js`; `npm test`; `make bundles` (builds, then asserts every bundle,
+  its `.LICENSE.txt` and each tab's chunk; never committed — the release packs them); then
   `make test`;
   `make instance-up && make smoke`, then `make instance-clean`.
   A step you could not run is named in the PR, never reported as passed.
-- **`src/` changed → `npm run build`**: `js/` is build output, ignored — nothing to commit. The release
-  workflow builds the bundles before packing, and CI fails a PR whose build produces no bundle.
+- **`src/` changed → `npm run build`**: `js/` is build output, ignored — nothing to commit. CI and the
+  release both run `make bundles`, so a build that drops a bundle, a license file or a tab's chunk fails.
   Never commit `*.js.map` or `node_modules/`.
 - **Never edit** `package-lock.json`, `composer.lock`, the dependency lists
   in `package.json`/`composer.json`, `openapi.json` (generated from `ApiController` by `scripts/openapi.sh`;
