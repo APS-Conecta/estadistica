@@ -28,7 +28,7 @@ La documentación vive en el sitio de documentación de la organización:
 Dentro de este repositorio quedan los documentos que viajan con el código:
 
 - [`CONTEXT.md`](CONTEXT.md): el vocabulario (serie, fuente, consulta, pares, informante, meta comprometida, PIV), en inglés.
-- [`docs/adr/`](docs/adr/): las decisiones, de la 0001 a la 0008.
+- [`docs/adr/`](docs/adr/): las decisiones, de la 0001 a la 0010.
 - [`docs/threat-model.md`](docs/threat-model.md): qué busca un atacante, las entradas y sus protecciones.
 - [`openapi.json`](openapi.json): el contrato OCS para otras aplicaciones, generado por `make openapi` desde el controlador, nunca a mano. La respuesta de una consulta solo se extiende, nunca cambia de forma ([ADR-0006](docs/adr/0006-one-consulta-spec-compiled-to-bound-sql.md)). El [sitio de documentación](https://aps-conecta.github.io/documentation/desarrollo/apis/plataforma-y-rest-interno.html) lo indexa.
 - [`seeds/metas-2026.json`](seeds/metas-2026.json): las Metas Sanitarias 2026 tal como se leyeron de las Orientaciones Técnicas, con notas sobre lo leído y no copiado.
