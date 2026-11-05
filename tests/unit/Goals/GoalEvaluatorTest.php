@@ -83,21 +83,24 @@ final class GoalEvaluatorTest extends TestCase {
 		]);
 	}
 
-	/** IV.A's shape: each group counted by the band rule, times its prevalence, then summed. */
+	/** IV.A's shape: each group counted over whole bands, times its prevalence, then summed. */
 	public function testPeopleAreCountedByGroupAndPrevalence(): void {
 		$inscritos = ['corte' => '2025-12-31', 'factor' => 1.0, 'manual' => false, 'bands' => [10 => ['M' => 100, 'H' => 100], 20 => ['M' => 300, 'H' => 100]]];
 
-		// 15–24: half of 10–19 (100) + half of 20–29 (200) = 300, × 10 % = 30.
-		// 25 and over: half of 20–29 = 200, × 50 % = 100.
-		self::assertSame(['valor' => 130.0, 'prorrateado' => true], GoalEvaluator::people([
-			['desde' => 15, 'hasta' => 24, 'sexo' => null, 'prevalencia' => 10.0],
-			['desde' => 25, 'hasta' => null, 'sexo' => null, 'prevalencia' => 50.0],
+		// 10–19: 200, × 10 % = 20. 20 and over: 400, × 50 % = 200.
+		self::assertSame(220.0, GoalEvaluator::people([
+			['desde' => 10, 'hasta' => 19, 'sexo' => null, 'prevalencia' => 10.0],
+			['desde' => 20, 'hasta' => null, 'sexo' => null, 'prevalencia' => 50.0],
 		], $inscritos));
-		// Mujeres 20–29, whole: 300, grown × 1.03 when the corte is a year old.
-		self::assertSame(['valor' => 309.0, 'prorrateado' => false], GoalEvaluator::people(
+		// Mujeres 20–29: 300, grown × 1.03 when the corte is a year old.
+		self::assertSame(309.0, GoalEvaluator::people(
 			[['desde' => 20, 'hasta' => 29, 'sexo' => 'M', 'prevalencia' => 100.0]],
 			['factor' => 1.03] + $inscritos,
 		));
+		self::assertNull(GoalEvaluator::people([
+			['desde' => 15, 'hasta' => 24, 'sexo' => null, 'prevalencia' => 10.0],
+			['desde' => 20, 'hasta' => null, 'sexo' => null, 'prevalencia' => 50.0],
+		], $inscritos), 'one group that cuts a band leaves the meta with no figure');
 		self::assertNull(GoalEvaluator::people([['desde' => 0, 'hasta' => 9, 'sexo' => null, 'prevalencia' => 100.0]], null));
 	}
 
@@ -188,17 +191,46 @@ final class GoalEvaluatorTest extends TestCase {
 		$inscritos = ['local' => $band(100), 'nacional' => $band(10000), 'pares' => $band(1000)];
 
 		$fonasa = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606, 202606);
-		self::assertSame(['comprometida' => false, 'corte' => '2025-12-31', 'factor' => 1.0, 'prorrateado' => false], $fonasa['poblacion']);
+		self::assertSame(['comprometida' => false, 'corte' => '2025-12-31', 'factor' => 1.0, 'falta_oficial' => false], $fonasa['poblacion']);
 		// June: 40 ÷ 100 = 40 %, the country 3000 ÷ 10000 = 30 %, the peers 500 ÷ 1000 = 50 %. May has no corte yet.
 		self::assertSame(['mes' => '2026-06', 'numerador' => 40.0, 'denominador' => 100.0, 'porcentaje' => 40.0, 'brecha_comprometida' => null, 'brecha_nacional' => -40.0, 'nacional' => 30.0, 'pares' => 50.0], $fonasa['meses'][5]);
 		self::assertSame([null, 100.0, null, null, null], [$fonasa['meses'][4]['numerador'], $fonasa['meses'][4]['denominador'], $fonasa['meses'][4]['porcentaje'], $fonasa['meses'][4]['nacional'], $fonasa['meses'][4]['pares']]);
 
 		$committed = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => 80.0, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606, 202606);
-		self::assertSame(['comprometida' => true, 'corte' => null, 'factor' => null, 'prorrateado' => false], $committed['poblacion']);
+		self::assertSame(['comprometida' => true, 'corte' => null, 'factor' => null, 'falta_oficial' => false], $committed['poblacion']);
 		self::assertSame([80.0, 80.0, 50.0, 30.0, 50.0], [$committed['denominador_comprometido'], $committed['meses'][5]['denominador'], $committed['meses'][5]['porcentaje'], $committed['meses'][5]['nacional'], $committed['meses'][5]['pares']]);
 
 		$noCorte = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, ['local' => null, 'nacional' => null, 'pares' => null], true, 2026, 6, 202606, 202606);
 		self::assertSame([null, null, null], [$noCorte['meses'][5]['denominador'], $noCorte['meses'][5]['nacional'], $noCorte['meses'][5]['pares']], 'no corte serves the year: no % anywhere');
+	}
+
+	/**
+	 * Every figure is official (docs/adr/0007, amendment): a people meta whose
+	 * ages cut a band has no %, local, national or peer, until a denominador
+	 * comprometido gives the local one.
+	 */
+	public function testAPeopleMetaWhoseAgesCutABandWaitsForItsOfficialDenominator(): void {
+		$meta = self::metas()['indicadores'][1];
+		$meta['poblacion'] = [['desde' => 25, 'hasta' => 64, 'sexo' => 'M', 'prevalencia' => 100.0]];
+		$answers = self::answers($meta['numerador'], ['P' => [
+			'local' => self::points(['2026-06' => 40]),
+			'nacional' => self::points(['2026-06' => 3000]),
+			'pares' => self::points(['2026-06' => 500]),
+		]]);
+		$band = static fn (int $mujeres): array => ['corte' => '2025-12-31', 'factor' => 1.0, 'manual' => false, 'bands' => [20 => ['M' => $mujeres], 30 => ['M' => $mujeres]]];
+		$inscritos = ['local' => $band(100), 'nacional' => $band(10000), 'pares' => $band(1000)];
+
+		$missing = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606, 202606);
+		self::assertSame(['comprometida' => false, 'corte' => null, 'factor' => null, 'falta_oficial' => true], $missing['poblacion']);
+		self::assertSame([40.0, null, null, null, null], [$missing['meses'][5]['numerador'], $missing['meses'][5]['denominador'], $missing['meses'][5]['porcentaje'], $missing['meses'][5]['nacional'], $missing['meses'][5]['pares']]);
+
+		$committed = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => 80.0, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606, 202606);
+		self::assertSame(['comprometida' => true, 'corte' => null, 'factor' => null, 'falta_oficial' => false], $committed['poblacion']);
+		self::assertSame([80.0, 50.0, null, null], [$committed['meses'][5]['denominador'], $committed['meses'][5]['porcentaje'], $committed['meses'][5]['nacional'], $committed['meses'][5]['pares']], 'the country and the peers have no official figure');
+
+		$national = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, false, 2026, 6, null, null);
+		self::assertTrue($national['poblacion']['falta_oficial'], 'with no establishment, the country\'s % waits too');
+		self::assertNull($national['meses'][5]['nacional']);
 	}
 
 	/** An install with no establishment: no local series, and a commitment has no one to belong to. */
@@ -209,7 +241,7 @@ final class GoalEvaluatorTest extends TestCase {
 
 		$indicator = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, false, 2026, 6, null, null);
 
-		self::assertSame(['comprometida' => false, 'corte' => '2024-12-31', 'factor' => 1.03, 'prorrateado' => false], $indicator['poblacion'], 'the country\'s corte, grown a year');
+		self::assertSame(['comprometida' => false, 'corte' => '2024-12-31', 'factor' => 1.03, 'falta_oficial' => false], $indicator['poblacion'], 'the country\'s corte, grown a year');
 		// 3000 ÷ (10000 × 1.03) = 29.13 %.
 		self::assertSame([null, null, null, 29.13, null], [$indicator['meses'][5]['numerador'], $indicator['meses'][5]['denominador'], $indicator['meses'][5]['porcentaje'], $indicator['meses'][5]['nacional'], $indicator['meses'][5]['pares']]);
 	}

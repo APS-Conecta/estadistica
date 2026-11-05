@@ -31,13 +31,14 @@ use OCP\AppFramework\Utility\ITimeFactory;
  *   series' is the establishment's own last month with a written number
  *   (#25); the country's and the peers' is the fuente's.
  * - **Denominators.** REM, like a numerador; FONASA's inscritos for the meta
- *   year (Population: its corte rule and its band rule), each age group times
+ *   year (Population: its corte rule, whole bands only), each age group times
  *   its prevalence; or the establishment's commitment alone. A committed
  *   figure wins for the local series only; the country and the peers stay
  *   FONASA's (docs/adr/0007).
  * - **National and peer % where the denominator is nationally computable**:
- *   REM, or FONASA's inscritos when a corte serves the year. A meta whose
- *   denominator only a commitment gives, and a manual meta, have none.
+ *   REM, or FONASA's inscritos when a corte serves the year and the meta's
+ *   ages are whole bands. A meta whose denominator only a commitment gives,
+ *   and a manual meta, have none.
  * - **Peers are «like ours»**: the register's establishments that share the
  *   chosen traits with this one (owner, Slice 9), as a consulta's pares: true.
  * - Every REM route is asked through QueryExecutor, in one read-only snapshot,
@@ -55,7 +56,7 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * @psalm-import-type Inscritos from Population
  * @psalm-import-type Fuente from Sources
  * @psalm-type Mes = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}
- * @psalm-type Poblacion = array{comprometida: bool, corte: ?string, factor: ?float, prorrateado: bool}
+ * @psalm-type Poblacion = array{comprometida: bool, corte: ?string, factor: ?float, falta_oficial: bool}
  * @psalm-type Meta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?Poblacion, meses: list<Mes>}
  * @psalm-type Respuesta = array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<Fuente>, fecha_corte_local: ?array<string, ?string>, indicadores: list<Meta>}
  */
@@ -192,16 +193,18 @@ class GoalEvaluator {
 
 		$committed = $configured ? $commitment['denominador'] : null;
 		if ($meta['base'] === GoalSeed::BASE_POPULATION) {
-			$people = array_map(static fn (?array $read): ?array => self::people($meta['poblacion'], $read), $inscritos);
+			$people = array_map(static fn (?array $read): ?float => self::people($meta['poblacion'], $read), $inscritos);
+			$whole = array_filter($meta['poblacion'], static fn (array $group): bool => !Population::whole($group['desde'], $group['hasta'])) === [];
+			$fonasa = $committed === null && $whole;
 			$described = $configured ? 'local' : 'nacional';
 			$indicator['poblacion'] = [
 				'comprometida' => $committed !== null,
-				'corte' => $committed === null ? ($inscritos[$described]['corte'] ?? null) : null,
-				'factor' => $committed === null ? ($inscritos[$described]['factor'] ?? null) : null,
-				'prorrateado' => $committed === null && ($people[$described]['prorrateado'] ?? false),
+				'corte' => $fonasa ? ($inscritos[$described]['corte'] ?? null) : null,
+				'factor' => $fonasa ? ($inscritos[$described]['factor'] ?? null) : null,
+				'falta_oficial' => $committed === null && !$whole,
 			];
 			foreach (self::SCOPES as $scope) {
-				$valor = $scope === 'local' && $committed !== null ? $committed : ($people[$scope]['valor'] ?? null);
+				$valor = $scope === 'local' && $committed !== null ? $committed : ($people[$scope] ?? null);
 				$denominador[$scope] = $valor === null || ($scope === 'local' && !$configured) ? null : array_fill(0, $months, $valor);
 			}
 		} elseif ($meta['base'] === GoalSeed::BASE_COMMITTED) {
@@ -303,26 +306,26 @@ class GoalEvaluator {
 
 	/**
 	 * A meta's people from FONASA's inscritos: each group counted by
-	 * Population's band rule, times its prevalence.
+	 * Population, times its prevalence. Null when a group cuts a band.
 	 *
 	 * @param list<Grupo> $groups
 	 * @param ?Inscritos $inscritos
-	 * @return ?array{valor: float, prorrateado: bool}
 	 */
-	public static function people(array $groups, ?array $inscritos): ?array {
+	public static function people(array $groups, ?array $inscritos): ?float {
 		if ($inscritos === null) {
 			return null;
 		}
 
 		$valor = 0.0;
-		$cut = false;
 		foreach ($groups as $group) {
 			$count = Population::count($inscritos, $group['desde'], $group['hasta'], $group['sexo']);
-			$valor += $count['valor'] * $group['prevalencia'] / 100;
-			$cut = $cut || $count['prorrateado'];
+			if ($count === null) {
+				return null;
+			}
+			$valor += $count * $group['prevalencia'] / 100;
 		}
 
-		return ['valor' => $valor, 'prorrateado' => $cut];
+		return $valor;
 	}
 
 	public static function percent(?float $numerador, ?float $denominador): ?float {

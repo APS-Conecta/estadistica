@@ -56,44 +56,30 @@ class PopulationTest extends TestCase {
 		self::assertSame($expected, Population::pick($year, $cortes));
 	}
 
-	public function testABandWhollyInsideTheRangeIsNotProrated(): void {
-		self::assertSame(['valor' => 211.0, 'prorrateado' => false], Population::count(self::INSCRITOS, 0, 9));
-		self::assertSame(['valor' => 1500.0, 'prorrateado' => false], Population::count(self::INSCRITOS, 80, null), '«80 a más» is 80–89, so 80+ is the whole band');
-	}
-
-	/** Meta II: mujeres 25–64 = 200 × 5/10 + 300 + 400 + 500 + 600 × 5/10. */
-	public function testMetaTwoWomen25To64CutsTheTwentiesAndTheSixtiesInHalf(): void {
-		self::assertSame(['valor' => 1600.0, 'prorrateado' => true], Population::count(self::INSCRITOS, 25, 64, 'M'));
-	}
-
-	/** Meta III.B: age 6 alone is a tenth of 0–9, all three sexes: 211 / 10. */
-	public function testASingleAgeIsATenthOfItsBand(): void {
-		$count = Population::count(self::INSCRITOS, 6, 6);
-
-		self::assertEqualsWithDelta(21.1, $count['valor'], 1e-9);
-		self::assertTrue($count['prorrateado']);
-	}
-
-	/** 65 and over, mujeres: 600 × 5/10 + 700 + 800. */
-	public function testAnOpenRangeRunsToTheLastBand(): void {
-		self::assertSame(['valor' => 1800.0, 'prorrateado' => true], Population::count(self::INSCRITOS, 65, null, 'M'));
+	public function testARangeOfWholeBandsCountsFonasasFigures(): void {
+		self::assertSame(211.0, Population::count(self::INSCRITOS, 0, 9));
+		self::assertSame(2000.0, Population::count(self::INSCRITOS, 20, 69, 'M'));
+		self::assertSame(1500.0, Population::count(self::INSCRITOS, 80, null), '«80 a más» is 80–89, so 80+ is the whole band');
 	}
 
 	public function testOneSexCountsOnlyItsOwnAndABandWithoutItCountsNothing(): void {
-		self::assertSame(['valor' => 110.0, 'prorrateado' => false], Population::count(self::INSCRITOS, 0, 9, 'H'));
-		self::assertSame(['valor' => 0.0, 'prorrateado' => false], Population::count(self::INSCRITOS, 70, 79, 'H'));
+		self::assertSame(110.0, Population::count(self::INSCRITOS, 0, 9, 'H'));
+		self::assertSame(0.0, Population::count(self::INSCRITOS, 70, 79, 'H'));
 	}
 
-	/** A band with no one in it is not an estimate, whatever the range cuts. */
-	public function testACutBandWithNoOneInItIsNotAnEstimate(): void {
-		self::assertSame(['valor' => 0.0, 'prorrateado' => false], Population::count(self::INSCRITOS, 45, 54, 'H'));
+	/** Every figure is official (docs/adr/0007, amendment): a range that cuts a band has no figure, whoever is in the band. */
+	public function testARangeThatCutsABandHasNoFigure(): void {
+		self::assertNull(Population::count(self::INSCRITOS, 25, 64, 'M'), 'Meta II: mujeres 25–64');
+		self::assertNull(Population::count(self::INSCRITOS, 6, 6), 'Meta III.B: age 6');
+		self::assertNull(Population::count(self::INSCRITOS, 65, null, 'M'), '65 and over');
+		self::assertNull(Population::count(self::INSCRITOS, 45, 54, 'H'), 'a cut band with no one in it');
 	}
 
 	public function testTheCortesFactorIsAppliedLast(): void {
 		$grown = ['factor' => Population::GROWTH] + self::INSCRITOS;
 
-		self::assertEqualsWithDelta(103.0, Population::count($grown, 0, 9, 'M')['valor'], 1e-9);
-		self::assertEqualsWithDelta(1648.0, Population::count($grown, 25, 64, 'M')['valor'], 1e-9);
+		self::assertEqualsWithDelta(103.0, Population::count($grown, 0, 9, 'M'), 1e-9);
+		self::assertEqualsWithDelta(2060.0, Population::count($grown, 20, 69, 'M'), 1e-9);
 	}
 
 	public function testARangeThatEndsBeforeItStartsIsABug(): void {
