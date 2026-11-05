@@ -13,9 +13,12 @@
 					:aria-label="`Gráfico de la Meta ${meta.codigo} por año; sus valores están en la tabla.`" />
 			</div>
 
+			<p class="estadistica-historico__note">
+				Porcentaje de cada mes y, entre paréntesis, su numerador y denominador. {{ metaLine.nombre }}.
+			</p>
 			<div class="estadistica-historico__scroll">
 				<table class="estadistica-historico__table">
-					<caption>Porcentaje de cada mes y, entre paréntesis, su numerador y denominador. {{ metaLine.nombre }}.</caption>
+					<caption>Meta {{ meta.codigo }} por mes y año</caption>
 					<thead>
 						<tr>
 							<th scope="col">
@@ -146,14 +149,17 @@ export default {
 	overflow-x: auto;
 }
 
+/* As wide as the card, so the caption wraps instead of widening the table. */
 .estadistica-historico__table {
+	width: 100%;
 	border-collapse: collapse;
 	font-variant-numeric: tabular-nums;
 }
 
 .estadistica-historico__table caption {
+	white-space: normal;
 	text-align: start;
-	color: var(--color-text-maxcontrast);
+	font-weight: bold;
 }
 
 .estadistica-historico__table th,
@@ -163,7 +169,8 @@ export default {
 	text-align: end;
 }
 
-.estadistica-historico__table th[scope='row'] {
+.estadistica-historico__table th[scope='row'],
+.estadistica-historico__table th:first-child {
 	text-align: start;
 }
 
