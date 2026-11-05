@@ -14,9 +14,9 @@ use OCP\Migration\SimpleMigrationStep;
 
 /**
  * estadistica_resumen: the stored Resumen (docs/adr/0009, «computed once per
- * change, then read»), one row per establishment, replaced whole by each
- * rebuild (ResumenStore). The build time, the fingerprint and the last
- * failure sit beside the document, never in it.
+ * change, then read»): only the configured establishment's Resumen, replaced
+ * whole by each rebuild (ResumenStore). The build time, the fingerprint and
+ * the last failure sit beside the document, never in it.
  *
  * No foreign keys, hasTable() guards (farmacia's doctrine).
  */

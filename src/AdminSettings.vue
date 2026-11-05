@@ -243,7 +243,8 @@
 				que su establecimiento comprometió.">
 			<p v-if="resumen && resumen.builtAt" class="estadistica-admin__hint">
 				El Resumen en uso se calculó el {{ when(resumen.builtAt) }}. Se calcula de nuevo en segundo plano
-				después de cada carga de cifras REM o de metas, y de cada cambio en lo comprometido.
+				después de cada carga de cifras REM o de metas, y de cada cambio en lo comprometido o en la
+				población de su establecimiento.
 			</p>
 			<NcNoteCard v-if="resumen && resumen.error" type="error">
 				No se pudo volver a calcular el Resumen: {{ resumen.error }}

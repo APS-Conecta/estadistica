@@ -21,7 +21,9 @@ use Throwable;
  * - **Rebuilt in the background.** ResumenJob calls rebuild() after a change
  *   the Resumen reads commits. It builds the configured establishment's
  *   Resumen the one way there is (Resumen::build) and replaces its row whole,
- *   in one statement.
+ *   in one statement. That row is the only one kept: each rebuild first drops
+ *   any other establishment's, which could otherwise be served stale once
+ *   that establishment is configured again.
  * - **Read as stored.** read() answers the configured establishment with
  *   the stored document, so every reader sees the same figures until the
  *   next rebuild. Any other establishment is built on request and never
@@ -70,13 +72,15 @@ class ResumenStore {
 		return $this->resumen->build($local);
 	}
 
-	/** Builds the configured establishment's Resumen and stores it whole; a failure keeps the stored one and records why. */
+	/** Builds the configured establishment's Resumen and stores it whole, the only row kept; a failure keeps the stored one and records why. */
 	public function rebuild(): void {
 		$local = $this->establishment->get();
 		if (!$local->isConfigured()) {
+			$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_resumen');
 			return;
 		}
 		$estab = (int)$local->deisCode;
+		$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_resumen WHERE estab <> ?', [$estab]);
 
 		try {
 			$document = json_encode($this->resumen->build($local), self::JSON);

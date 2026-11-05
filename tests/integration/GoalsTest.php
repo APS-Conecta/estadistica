@@ -506,9 +506,10 @@ class GoalsTest extends IntegrationTestCase {
 
 	/**
 	 * docs/adr/0009, computed once per change: a committed REM load, an admin
-	 * write of the commitments and a new metas seed each queue one rebuild in
-	 * the background work. FONASA's file, a refused write and a reading queue
-	 * none.
+	 * write of the commitments or of the typed population (the PIV, the
+	 * denominador of the metas that count people) and a new metas seed each
+	 * queue one rebuild in the background work. FONASA's file, a refused
+	 * write and a reading queue none.
 	 */
 	public function testEachChangeQueuesOneRebuildAndNothingElseDoes(): void {
 		self::assertSame(1, self::queued(), 'the REM loads and the seed of setUp wait as one rebuild');
@@ -516,6 +517,7 @@ class GoalsTest extends IntegrationTestCase {
 
 		$this->fonasa('31-12-2098');
 		$this->admin()->goals(2099, [['codigo' => 'IX', 'meta' => 50]]);
+		$this->admin()->piv(2098, [['edad' => 25, 'sexo' => 'M', 'inscritos' => 1]]);
 		$this->api()->resumen();
 		$this->api()->resumen('900002');
 		self::assertSame(0, self::queued(), 'FONASA\'s file, a refused write and a reading are not changes the Resumen waits for');
@@ -525,6 +527,7 @@ class GoalsTest extends IntegrationTestCase {
 		foreach ([
 			'a REM load' => fn () => Server::get(RemImporter::class)->import(new LocalRange(ZipFixture::zip(['SerieA2097.csv' => ZipFixture::header() . ZipFixture::row(2097, 3, '900001', '02010420', [11 => '4'])])), 2097, 'A', IngestState::ORIGIN_FILE),
 			'an admin write' => fn () => $this->admin()->goals(2099, [['codigo' => 'I', 'meta' => 50]]),
+			'a typed population' => fn () => $this->admin()->piv(2098, [['edad' => 20, 'sexo' => 'M', 'inscritos' => 120]]),
 			'a new metas seed' => fn () => $this->goals()->store($seed),
 		] as $change => $make) {
 			$make();
@@ -608,6 +611,30 @@ class GoalsTest extends IntegrationTestCase {
 		$other = $t($this->api()->resumen('900002')->getData());
 		self::assertSame([300.0, 1000.0, 30.0], [$other['numerador'], $other['denominador'], $other['porcentaje']]);
 		self::assertSame(0, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_resumen WHERE estab = 900002')->fetchOne());
+	}
+
+	/**
+	 * Only the configured establishment's Resumen is stored. A rebuild for
+	 * 900002 drops 900001's, so switching back to 900001 builds its Resumen
+	 * on request, with what changed meanwhile (FONASA's file gives Meta T its
+	 * 350 mujeres), never its stale stored one. Without an establishment, a
+	 * rebuild drops every row.
+	 */
+	public function testOnlyTheConfiguredEstablishmentsResumenIsStored(): void {
+		$this->rebuild();
+		$this->provision(EstablishmentConfig::KEY_DEIS, '900002');
+		$this->fonasa('31-12-2098');
+		$this->rebuild();
+
+		$this->provision(EstablishmentConfig::KEY_DEIS, '900001');
+
+		$t = array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['T'];
+		self::assertSame(['2099-12', 45.0, 350.0, 12.86, false, null], self::card($t));
+		self::assertNull($this->resumen()->status(), 'nothing stored for 900001');
+
+		$this->provision(EstablishmentConfig::KEY_DEIS, '');
+		$this->rebuild();
+		self::assertSame(0, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_resumen')->fetchOne());
 	}
 
 	/** @param array<string, mixed> $card @return list<mixed> what a Resumen card shows: mes, N, D, %, cumple and estado */
@@ -736,7 +763,7 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertStringStartsWith('Meta I, numerador: «col51» no es una columna del REM', $response->getData()['message']);
 	}
 
-	/** The admin section's controller, acting for admin through the same door. */
+	/** The admin section's controller, acting for admin through the same door; the PIV's year window on this test's clock. */
 	private function admin(): AdminController {
 		return new AdminController(
 			Server::get(IRequest::class),
@@ -746,7 +773,7 @@ class GoalsTest extends IntegrationTestCase {
 			Server::get(DeisRepository::class),
 			Server::get(Catalog::class),
 			Server::get(Register::class),
-			Server::get(PivImporter::class),
+			new PivImporter($this->db(), Server::get(EstablishmentConfig::class), $this->window(), $this->clock, Server::get(IJobList::class)),
 			$this->goals(),
 			$this->planillasFor('admin'),
 			$this->resumen(),
