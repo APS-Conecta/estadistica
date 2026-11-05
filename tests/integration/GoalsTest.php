@@ -47,7 +47,8 @@ use OCP\Server;
  * meta year with its twelve months, and nothing here meets a real year.
  *
  * The metas of 2099 (this test's seed): Meta I and II on the 2026 routes,
- * Meta C whose denominator only a commitment gives, and Meta VIII, manual.
+ * Meta T, II's numerador over whole age bands, Meta C whose denominator only
+ * a commitment gives, and Meta VIII, manual.
  *
  * Serie A, Meta I (col08–col11; a blank cell is not written):
  *
@@ -65,13 +66,14 @@ use OCP\Server;
  *     900002  2099-01  02010420   08=10            the country's numerador
  *     900003  2099-12  02010420   08=1             the country's; sets the corte at December
  *
- * Serie P, Meta II (col01 + col02): 900001 in June P1206010 30 + 2 and
- * P1206020 8 = 40, in December P1206010 45; 900002 in June P1206010 300.
+ * Serie P, Metas II and T (col01 + col02): 900001 in June P1206010 30 + 2
+ * and P1206020 8 = 40, in December P1206010 45; 900002 in June P1206010 300.
  *
- * FONASA, mujeres 25–64: 900001 has 20–29 100 (half is 25–29: 50) and 50 in
- * each of 30–39, 40–49 and 50–59, and 60–69 100 (half: 50) = 250, and 999
- * hombres who never count; 900002 has 1,000 mujeres 30–39. The country:
- * 1,250.
+ * FONASA: Meta II's mujeres 25–64 cut the 20–29 and 60–69 bands, so the PIV
+ * gives it no figure (docs/adr/0007, amendment). Meta T's mujeres 20–69 are
+ * whole bands: 900001 has 100 in 20–29, 50 in each of 30–39, 40–49 and
+ * 50–59, and 100 in 60–69 = 350, and 999 hombres who never count; 900002 has
+ * 1,000 mujeres 30–39. The country: 1,350.
  *
  * 900001 and 900002 are CESFAM, 900003 a PSR: the peers «of the same tipo»
  * are 900001 and 900002. The register is one whole table, so the tests skip
@@ -158,10 +160,11 @@ class GoalsTest extends IntegrationTestCase {
 		parent::tearDown();
 	}
 
-	/** @return array<string, mixed> 2099's metas: I and II on the 2026 routes, C counted only against a commitment, VIII manual */
+	/** @return array<string, mixed> 2099's metas: I and II on the 2026 routes, T over whole bands, C counted only against a commitment, VIII manual */
 	private static function seed(int $anio = 2099): array {
 		$columns = ['col08', 'col09', 'col10', 'col11'];
 		$previous = $anio - 1;
+		$p12 = ['fuente' => 'rem-p', 'periodo' => ['desde' => "$anio-01", 'hasta' => "$anio-12"], 'sumar' => [['codigos' => ['P1206010', 'P1206020', 'P1206030', 'P1206040', 'P1206050', 'P1206060', 'P1206070', 'P1206080'], 'columnas' => ['col01', 'col02']]]];
 
 		return [
 			'anio' => $anio,
@@ -181,8 +184,13 @@ class GoalsTest extends IntegrationTestCase {
 				],
 				[
 					'codigo' => 'II', 'nombre' => 'PAP', 'indicador' => 'Tamizaje vigente', 'meta_nacional' => 80, 'peso' => 25,
-					'numerador' => ['fuente' => 'rem-p', 'periodo' => ['desde' => "$anio-01", 'hasta' => "$anio-12"], 'sumar' => [['codigos' => ['P1206010', 'P1206020', 'P1206030', 'P1206040', 'P1206050', 'P1206060', 'P1206070', 'P1206080'], 'columnas' => ['col01', 'col02']]]],
+					'numerador' => $p12,
 					'denominador' => ['poblacion' => [['desde' => 25, 'hasta' => 64, 'sexo' => 'mujeres']]],
+				],
+				[
+					'codigo' => 'T', 'nombre' => 'Tramos enteros', 'indicador' => 'Contra las mujeres de 20 a 69 años', 'meta_nacional' => 80, 'peso' => 25,
+					'numerador' => $p12,
+					'denominador' => ['poblacion' => [['desde' => 20, 'hasta' => 69, 'sexo' => 'mujeres']]],
 				],
 				[
 					'codigo' => 'C', 'nombre' => 'Comprometida', 'indicador' => 'Contra lo comprometido', 'meta_nacional' => 50, 'peso' => 25,
@@ -278,43 +286,63 @@ class GoalsTest extends IntegrationTestCase {
 	}
 
 	/**
-	 * a13, a11: Meta II is P12 col01 + col02 over FONASA's mujeres 25–64 for the
-	 * corte of 31-12-2098: December 45 ÷ 250 = 18 %; June 40 ÷ 250 = 16 %.
+	 * a13, a11: Meta T is P12 col01 + col02 over FONASA's mujeres 20–69 for the
+	 * corte of 31-12-2098: December 45 ÷ 350 = 12.86 %; June 40 ÷ 350 = 11.43 %.
 	 */
-	public function testMetaIIIsItsP12CorteOverTheInscritos(): void {
+	public function testAMetaOverWholeBandsIsItsP12CorteOverTheInscritos(): void {
+		$this->fonasa('31-12-2098');
+
+		$t = $this->evaluate()['T'];
+
+		self::assertSame(['comprometida' => false, 'corte' => '2098-12-31', 'factor' => 1.0, 'falta_oficial' => false], $t['poblacion']);
+		self::assertSame([null, null], [$t['meses'][4]['numerador'], $t['meses'][4]['porcentaje']], 'before June there is no corte of the year');
+		self::assertSame([40.0, 350.0, 11.43], [$t['meses'][5]['numerador'], $t['meses'][5]['denominador'], $t['meses'][5]['porcentaje']]);
+		self::assertSame([40.0, 11.43], [$t['meses'][10]['numerador'], $t['meses'][10]['porcentaje']], 'June\'s corte stands until December\'s');
+		self::assertSame([45.0, 350.0, 12.86], [$t['meses'][11]['numerador'], $t['meses'][11]['denominador'], $t['meses'][11]['porcentaje']]);
+		// The country: June (40 + 300) ÷ 1,350 = 25.19 %, December 45 ÷ 1,350 = 3.33 %; the CESFAM peers are the same two.
+		self::assertSame([25.19, 3.33, 25.19, 3.33], [$t['meses'][5]['nacional'], $t['meses'][11]['nacional'], $t['meses'][5]['pares'], $t['meses'][11]['pares']]);
+	}
+
+	/**
+	 * Every figure is official (docs/adr/0007, amendment): Meta II's mujeres
+	 * 25–64 cut two bands, so it has no %, local, national or peer, until its
+	 * denominador comprometido gives the local one: 45 ÷ 200 = 22.5 %.
+	 */
+	public function testAMetaWhoseAgesCutABandWaitsForItsOfficialDenominator(): void {
 		$this->fonasa('31-12-2098');
 
 		$ii = $this->evaluate()['II'];
+		self::assertSame(['comprometida' => false, 'corte' => null, 'factor' => null, 'falta_oficial' => true], $ii['poblacion']);
+		self::assertSame([45.0, null, null, null, null], [$ii['meses'][11]['numerador'], $ii['meses'][11]['denominador'], $ii['meses'][11]['porcentaje'], $ii['meses'][11]['nacional'], $ii['meses'][11]['pares']]);
 
-		self::assertSame(['comprometida' => false, 'corte' => '2098-12-31', 'factor' => 1.0, 'prorrateado' => true], $ii['poblacion'], '25–29 and 60–64 are half-bands: «estimado por prorrateo»');
-		self::assertSame([null, null], [$ii['meses'][4]['numerador'], $ii['meses'][4]['porcentaje']], 'before June there is no corte of the year');
-		self::assertSame([40.0, 250.0, 16.0], [$ii['meses'][5]['numerador'], $ii['meses'][5]['denominador'], $ii['meses'][5]['porcentaje']]);
-		self::assertSame([40.0, 16.0], [$ii['meses'][10]['numerador'], $ii['meses'][10]['porcentaje']], 'June\'s corte stands until December\'s');
-		self::assertSame([45.0, 250.0, 18.0], [$ii['meses'][11]['numerador'], $ii['meses'][11]['denominador'], $ii['meses'][11]['porcentaje']]);
-		// The country: June (40 + 300) ÷ 1,250 = 27.2 %, December 45 ÷ 1,250 = 3.6 %; the CESFAM peers are the same two.
-		self::assertSame([27.2, 3.6, 27.2, 3.6], [$ii['meses'][5]['nacional'], $ii['meses'][11]['nacional'], $ii['meses'][5]['pares'], $ii['meses'][11]['pares']]);
+		$this->commit([['codigo' => 'II', 'denominador' => 200]]);
+
+		$committed = $this->evaluate()['II'];
+		self::assertSame(['comprometida' => true, 'corte' => null, 'factor' => null, 'falta_oficial' => false], $committed['poblacion']);
+		self::assertSame([200.0, 22.5], [$committed['meses'][11]['denominador'], $committed['meses'][11]['porcentaje']]);
+		self::assertSame([null, null], [$committed['meses'][11]['nacional'], $committed['meses'][11]['pares']], 'the country and the peers have no official figure');
 	}
 
 	/**
 	 * a11: a year with no corte of its own reads the latest earlier one × 1.03,
-	 * unless a committed value is set. 250 × 1.03 = 257.5, so December is
-	 * 45 ÷ 257.5 = 17.48 %; committed at 200, it is 22.5 %, and the country
+	 * unless a committed value is set. 350 × 1.03 = 360.5, so December is
+	 * 45 ÷ 360.5 = 12.48 %; committed at 200, it is 22.5 %, and the country
 	 * stays FONASA's.
 	 */
 	public function testAMissingCorteGrowsByThreePercentUnlessADenominatorIsCommitted(): void {
 		$this->fonasa('31-12-2097');
 
-		$grown = $this->evaluate()['II'];
-		self::assertSame(['comprometida' => false, 'corte' => '2097-12-31', 'factor' => 1.03, 'prorrateado' => true], $grown['poblacion']);
-		self::assertSame([257.5, 17.48], [$grown['meses'][11]['denominador'], $grown['meses'][11]['porcentaje']]);
+		$grown = $this->evaluate()['T'];
+		self::assertSame(['comprometida' => false, 'corte' => '2097-12-31', 'factor' => 1.03, 'falta_oficial' => false], $grown['poblacion']);
+		self::assertSame([360.5, 12.48], [$grown['meses'][11]['denominador'], $grown['meses'][11]['porcentaje']]);
 
-		$this->commit([['codigo' => 'II', 'denominador' => 200]]);
+		$this->commit([['codigo' => 'T', 'denominador' => 200]]);
 
-		$committed = $this->evaluate()['II'];
+		$committed = $this->evaluate()['T'];
 		self::assertSame([200.0, true], [$committed['denominador_comprometido'], $committed['poblacion']['comprometida']]);
 		self::assertSame([200.0, 22.5], [$committed['meses'][11]['denominador'], $committed['meses'][11]['porcentaje']]);
-		// 45 ÷ (1,250 × 1.03) = 3.5 %.
-		self::assertSame(3.5, $committed['meses'][11]['nacional'], 'the country is never bent by one install\'s commitment');
+		// 45 ÷ (1,350 × 1.03) = 3.24 %.
+		self::assertSame(3.24, $committed['meses'][11]['nacional'], 'the country is never bent by one install\'s commitment');
 	}
 
 	/**
@@ -339,9 +367,9 @@ class GoalsTest extends IntegrationTestCase {
 		]);
 		self::assertSame([true, 100.0, [], null], [$metas['VIII']['manual'], $metas['VIII']['cumplimiento'], $metas['VIII']['meses'], $metas['VIII']['poblacion']]);
 
-		// With no FONASA corte, Meta II has no denominator anywhere: no % and no national one.
-		self::assertSame([null, null, null], [$metas['II']['meses'][11]['porcentaje'], $metas['II']['meses'][11]['nacional'], $metas['II']['meses'][11]['pares']]);
-		self::assertNull($metas['II']['poblacion']['corte']);
+		// With no FONASA corte, Meta T has no denominator anywhere: no % and no national one.
+		self::assertSame([null, null, null], [$metas['T']['meses'][11]['porcentaje'], $metas['T']['meses'][11]['nacional'], $metas['T']['meses'][11]['pares']]);
+		self::assertSame([null, false], [$metas['T']['poblacion']['corte'], $metas['T']['poblacion']['falta_oficial']]);
 	}
 
 	/** The peers are «like ours» by the traits asked for, or none, and the answer says why. */
@@ -384,7 +412,7 @@ class GoalsTest extends IntegrationTestCase {
 
 		foreach ([
 			'no metas that year' => [2098, [['codigo' => 'I', 'meta' => 50]], 'No hay Metas Sanitarias cargadas para 2098.'],
-			'a meta the year lacks' => [2099, [['codigo' => 'IX', 'meta' => 50]], 'Cada compromiso nombra una meta de 2099: I, II, C, VIII.'],
+			'a meta the year lacks' => [2099, [['codigo' => 'IX', 'meta' => 50]], 'Cada compromiso nombra una meta de 2099: I, II, T, C, VIII.'],
 			'a REM denominator' => [2099, [['codigo' => 'I', 'denominador' => 10]], 'El denominador de la Meta I sale de las cifras REM: no se compromete.'],
 			'a computed meta\'s cumplimiento' => [2099, [['codigo' => 'II', 'cumplimiento' => 80]], 'La Meta II se calcula de las cifras: su cumplimiento no se escribe a mano.'],
 			'a manual meta\'s denominator' => [2099, [['codigo' => 'VIII', 'denominador' => 1]], 'La Meta VIII se informa a mano: no tiene denominador.'],
@@ -449,8 +477,8 @@ class GoalsTest extends IntegrationTestCase {
 		$response = $this->admin()->drop('/' . self::DROPPED);
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['metas' => ['anio' => $next, 'version' => 1, 'indicadores' => 4]], $response->getData());
-		self::assertSame(['I', 'II', 'C', 'VIII'], array_column(Server::get(Goals::class)->get($next)['indicadores'], 'codigo'));
+		self::assertSame(['metas' => ['anio' => $next, 'version' => 1, 'indicadores' => 5]], $response->getData());
+		self::assertSame(['I', 'II', 'T', 'C', 'VIII'], array_column(Server::get(Goals::class)->get($next)['indicadores'], 'codigo'));
 		self::assertContains($next, array_column($this->admin()->ingests()->getData()['metas']['years'], 'anio'), 'the section lists the new year');
 
 		// A second file for the year replaces the first whole.
@@ -459,8 +487,8 @@ class GoalsTest extends IntegrationTestCase {
 		array_pop($corrected['indicadores']);
 		Server::get(IRootFolder::class)->getUserFolder('admin')->get(self::DROPPED)->delete();
 		$this->putInFiles('admin', self::DROPPED, ZipFixture::file(json_encode($corrected, JSON_THROW_ON_ERROR)));
-		self::assertSame(['metas' => ['anio' => $next, 'version' => 2, 'indicadores' => 3]], $this->admin()->drop('/' . self::DROPPED)->getData());
-		self::assertSame(['I', 'II', 'C'], array_column(Server::get(Goals::class)->get($next)['indicadores'], 'codigo'));
+		self::assertSame(['metas' => ['anio' => $next, 'version' => 2, 'indicadores' => 4]], $this->admin()->drop('/' . self::DROPPED)->getData());
+		self::assertSame(['I', 'II', 'T', 'C'], array_column(Server::get(Goals::class)->get($next)['indicadores'], 'codigo'));
 	}
 
 	/** A metas file the seed cannot read is refused whole, in Spanish, and the stored year stays. */

@@ -242,12 +242,15 @@ export default {
 			if (poblacion.comprometida) {
 				return `Denominador: ${this.figure(meta.denominador_comprometido)} personas, comprometidas por el establecimiento.`
 			}
+			// Every figure is official (ADR-0007, amendment): no FONASA figure gives a range that cuts a band.
+			if (poblacion.falta_oficial) {
+				return `Sin porcentaje: falta el denominador oficial de ${this.metas.anio}. Las edades de esta meta no coinciden con los tramos de FONASA: quien administra Estadística ingresa el denominador comprometido.`
+			}
 			if (!poblacion.corte) {
 				return 'No hay población inscrita de FONASA para este año: se carga en la administración de Estadística.'
 			}
 			const grown = poblacion.factor !== 1 ? `, más un ${formatValue((poblacion.factor - 1) * 100)} % porque el año no tiene su propio corte` : ''
-			const estimated = poblacion.prorrateado ? ', estimada por prorrateo de los tramos de edad' : ''
-			return `Denominador: población inscrita validada por FONASA al ${poblacion.corte.split('-').reverse().join('-')}${grown}${estimated}.`
+			return `Denominador: población inscrita validada por FONASA al ${poblacion.corte.split('-').reverse().join('-')}${grown}.`
 		},
 
 		figure(value) {

@@ -16,7 +16,7 @@ use OCP\IDBConnection;
  * decision, docs/adr/0007). Slice 9's metas ask here.
  *
  * Two rules are pure, so they test without a database: which corte a meta year
- * reads (pick()), and how an age range is cut out of FONASA's decade bands
+ * reads (pick()), and which age ranges FONASA's decade bands give, whole
  * (count()). Everything else reads estadistica_piv:
  * - The establishment's own figures take its typed cells over FONASA's, cell
  *   by cell. Its cortes are every corte it has a figure for.
@@ -31,7 +31,7 @@ class Population {
 	/** OOTT 2026: a unit without the year's PIV grows the last one it has by 3 %. */
 	public const GROWTH = 1.03;
 
-	/** Every FONASA band is ten years wide. «80 a más» counts as 80–89 (the band rule). */
+	/** Every FONASA band is ten years wide. «80 a más» counts as 80–89. */
 	public const WIDTH = 10;
 
 	public function __construct(
@@ -118,36 +118,52 @@ class Population {
 
 	/**
 	 * The inscritos aged $from to $to (both included; null means no upper
-	 * age). $sex picks one sex. When it is null all three count, «Sin
-	 * información» included, because those people have an age.
-	 *
-	 * The band rule: a band counts count × the years it shares with the range
-	 * ÷ WIDTH. prorrateado says whether any band with people in it was cut.
-	 * The sum stays whole until one division at the end, and the corte's factor
-	 * is applied last.
+	 * age), times the corte's factor. $sex picks one sex. When it is null all
+	 * three count, «Sin información» included, because those people have an age.
 	 *
 	 * @param Inscritos $inscritos
-	 * @return array{valor: float, prorrateado: bool}
+	 * @return ?float null when the range cuts a band (whole())
 	 */
-	public static function count(array $inscritos, int $from, ?int $to, ?string $sex = null): array {
+	public static function count(array $inscritos, int $from, ?int $to, ?string $sex = null): ?float {
+		if (!self::whole($from, $to)) {
+			return null;
+		}
+
+		$total = 0;
+		foreach ($inscritos['bands'] as $first => $sexes) {
+			if (self::shared($first, $from, $to) > 0) {
+				$total += $sex === null ? array_sum($sexes) : ($sexes[$sex] ?? 0);
+			}
+		}
+
+		return $total * $inscritos['factor'];
+	}
+
+	/**
+	 * Whether $from to $to is a sum of whole bands, so FONASA's own figures
+	 * give it. No band is split (docs/adr/0007, amendment): every figure is
+	 * official.
+	 */
+	public static function whole(int $from, ?int $to): bool {
 		if ($from < 0 || ($to !== null && $to < $from)) {
 			throw new LogicException(sprintf('Not an age range: %d to %s.', $from, $to ?? 'any'));
 		}
 
-		$total = 0;
-		$cut = false;
-		foreach ($inscritos['bands'] as $first => $sexes) {
-			$last = $first + self::WIDTH - 1;
-			$shared = min($last, $to ?? $last) - max($first, $from) + 1;
-			if ($shared <= 0) {
-				continue;
+		foreach (PivReader::BANDS as $first) {
+			$shared = self::shared($first, $from, $to);
+			if ($shared > 0 && $shared < self::WIDTH) {
+				return false;
 			}
-			$people = $sex === null ? array_sum($sexes) : ($sexes[$sex] ?? 0);
-			$total += $people * $shared;
-			$cut = $cut || ($shared < self::WIDTH && $people > 0);
 		}
 
-		return ['valor' => $total / self::WIDTH * $inscritos['factor'], 'prorrateado' => $cut];
+		return true;
+	}
+
+	/** The years the band starting at $first shares with $from to $to. */
+	private static function shared(int $first, int $from, ?int $to): int {
+		$last = $first + self::WIDTH - 1;
+
+		return min($last, $to ?? $last) - max($first, $from) + 1;
 	}
 
 	/**

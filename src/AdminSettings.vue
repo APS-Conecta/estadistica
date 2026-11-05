@@ -266,8 +266,9 @@
 					<p class="estadistica-admin__hint">
 						Lo que comprometió su establecimiento (código DEIS {{ metas.local.deisCode }}) para
 						{{ metasYear }}: la meta comprometida de cada una, en porcentaje; el denominador de las que
-						se cuentan sobre población, cuando se comprometió otro que la población inscrita de FONASA;
-						y el cumplimiento de las que se informan a mano. Una casilla en blanco no compromete nada.
+						se cuentan sobre población, cuando se comprometió otro que la población inscrita de FONASA o
+						cuando su rango de edad corta los tramos de FONASA, que solo así tiene denominador; y el
+						cumplimiento de las que se informan a mano. Una casilla en blanco no compromete nada.
 					</p>
 
 					<NcNoteCard v-if="metasFailed" type="error">

@@ -57,7 +57,7 @@ final class ApiContractTest extends TestCase {
 
 	private const MES = ['mes', 'numerador', 'denominador', 'porcentaje', 'brecha_comprometida', 'brecha_nacional', 'nacional', 'pares'];
 
-	private const POBLACION = ['comprometida', 'corte', 'factor', 'prorrateado'];
+	private const POBLACION = ['comprometida', 'corte', 'factor', 'falta_oficial'];
 
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 

@@ -49,7 +49,7 @@ function answer(changes = {}) {
 			{
 				codigo: 'II', nombre: 'Cáncer de cuello uterino', indicador: 'Tamizaje vigente', meta_nacional: 80, meta_comprometida: null, peso: 12.5, nota: 'Solo mujeres.',
 				numerador: {}, denominador: {}, manual: false, cumplimiento: null, denominador_comprometido: null,
-				poblacion: { comprometida: false, corte: '2024-12-31', factor: 1.03, prorrateado: true },
+				poblacion: { comprometida: false, corte: '2024-12-31', factor: 1.03, falta_oficial: false },
 				meses: [mes(1, {}), mes(2, { denominador: 1287.5 })],
 			},
 			{
@@ -105,14 +105,24 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		const wrapper = await shown()
 
 		expect(card(wrapper, 1).text()).toContain('Sin meta comprometida.')
-		expect(card(wrapper, 1).text()).toContain('Denominador: población inscrita validada por FONASA al 31-12-2024, más un 3 % porque el año no tiene su propio corte, estimada por prorrateo de los tramos de edad.')
+		expect(card(wrapper, 1).text()).toContain('Denominador: población inscrita validada por FONASA al 31-12-2024, más un 3 % porque el año no tiene su propio corte.')
 		expect(cells(card(wrapper, 1).findAll('tbody tr')[1])).toEqual(['febrero de 2026', '—', '1.287,5', '—', '—', '—', '—', '—'])
+		wrapper.unmount()
+	})
+
+	it('says a meta whose ages cut a band lacks its official denominator', async () => {
+		const missing = answer()
+		missing.indicadores[1].poblacion = { comprometida: false, corte: null, factor: null, falta_oficial: true }
+		const wrapper = await shown(ok(missing))
+
+		expect(card(wrapper, 1).text()).toContain('Sin porcentaje: falta el denominador oficial de 2026.')
+		expect(card(wrapper, 1).text()).not.toContain('No hay población inscrita de FONASA')
 		wrapper.unmount()
 	})
 
 	it('says a committed denominator is the establishment\'s, and a manual meta is its cumplimiento', async () => {
 		const committed = answer()
-		committed.indicadores[1].poblacion = { comprometida: true, corte: null, factor: null, prorrateado: false }
+		committed.indicadores[1].poblacion = { comprometida: true, corte: null, factor: null, falta_oficial: false }
 		committed.indicadores[1].denominador_comprometido = 1200
 		const wrapper = await shown(ok(committed))
 

@@ -382,7 +382,10 @@ class ApiController extends OCSController {
 	 * gaps to its meta comprometida and to the meta nacional (in points); beside
 	 * them, the country's % and the peer group's, wherever the denominator is
 	 * nationally computable: REM, or FONASA's inscritos when a corte serves the
-	 * year. A Serie A month adds up to that month; a Serie P month is the
+	 * year and the meta's ages are whole bands. poblacion.falta_oficial marks a
+	 * meta whose ages cut a band: no denominador until its denominador
+	 * comprometido, which serves the local % only (docs/adr/0007).
+	 * A Serie A month adds up to that month; a Serie P month is the
 	 * latest corte up to it (June, December); a month past the data has no
 	 * figure. A manual meta (VIII) is its typed cumplimiento. numerador and
 	 * denominador are the meta's routes as its seed file writes them, with the
@@ -402,7 +405,7 @@ class ApiController extends OCSController {
 	 *
 	 * @param ?int $anio the metas' year; the newest with metas up to the current year when omitted
 	 * @param string $pares what the peers share with this establishment, comma-separated: tipo, dependencia, nivel, servicio, region or comuna; empty for no peers
-	 * @return DataResponse<Http::STATUS_OK, array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, fecha_corte_local: ?array<string, ?string>, indicadores: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?array{comprometida: bool, corte: ?string, factor: ?float, prorrateado: bool}, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, fecha_corte_local: ?array<string, ?string>, indicadores: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?array{comprometida: bool, corte: ?string, factor: ?float, falta_oficial: bool}, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The year's metas, month by month
 	 * 400: The year cannot hold metas, or a peer trait is not one — {message: the Spanish sentence}
