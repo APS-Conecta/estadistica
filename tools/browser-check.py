@@ -24,8 +24,9 @@ It makes everything it needs and removes it all however it ends:
   window's floor: outside the default window the REM job neither loads that
   year (which would replace its rows) nor forgets it (which reads the ingest
   state these rows have none of);
-- for the Resumen, four rows of the current year under the shipped seed's
-  Meta VI códigos, for the fabricated establishment only;
+- for the Resumen, four rows of the newest metas' year (GET resumen's anio)
+  under the shipped seed's Meta VI códigos, for the fabricated establishment
+  only;
 - the establishment code, set to a fabricated one and put back after;
 - a pregunta, a tablero, an app password and a throwaway user.
 
@@ -69,7 +70,6 @@ ROWS = [(900001, 1, 4), (900001, 2, 6), (900002, 1, 3), (900002, 2, 5), (900003,
 
 # The Resumen reads the newest metas, the shipped seed's in its own year: Meta
 # VI is A0200002 over A0200001, col06. (código, mes, col06): 5 de 8 by February.
-RESUMEN_YEAR = time.gmtime().tm_year
 RESUMEN_ROWS = [("A0200002", 1, 3), ("A0200001", 1, 4), ("A0200002", 2, 2), ("A0200001", 2, 4)]
 
 SPEC = {
@@ -262,13 +262,16 @@ def main():
         psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col01) VALUES "
              + ", ".join(f"('A', {YEAR}, {mes}, {estab}, '{CODE}', {valor})" for estab, mes, valor in ROWS) + ";")
         made["rows"] = True
-        psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col06) VALUES "
-             + ", ".join(f"('A', {RESUMEN_YEAR}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in RESUMEN_ROWS) + ";")
-        made["resumen_rows"] = True
         occ("config:app:set", "estadistica", "deis_code", f"--value={LOCAL}")
 
         token = occ("user:add-app-password", ADMIN, f"--name=browser-{RUN}", "-n").stdout.strip().splitlines()[-1]
         made["token"] = True
+
+        # The year the code under test reads its metas in, not the clock's.
+        resumen_year = ocs("GET", "resumen", token)["anio"]
+        psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col06) VALUES "
+             + ", ".join(f"('A', {resumen_year}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in RESUMEN_ROWS) + ";")
+        made["resumen_year"] = resumen_year
 
         # App config values reach the web workers within seconds, not at once:
         # ask until the local series is the one just configured.
@@ -291,7 +294,7 @@ def main():
         expected = api_figures(answer)
         resumen_answer = ocs("GET", "resumen", token)
         resumen = resumen_api_figures(resumen_answer)
-        if resumen.get(f"Meta VI {RESUMEN_YEAR}") != ("62,5 %", "5 de 8"):
+        if resumen.get(f"Meta VI {resumen_year}") != ("62,5 %", "5 de 8"):
             failures.append(f"the API did not answer the seeded Resumen figures for Meta VI: {resumen}")
         failures += resumen_against_indicadores(resumen_answer, ocs("GET", f"indicadores?anio={resumen_answer['anio']}&pares=", token))
         if expected != {"enero de 2009": ("4", "3"), "febrero de 2009": ("6", "5,5")}:
@@ -362,8 +365,8 @@ def main():
             occ("user:delete", READER, check=False)
         if made.get("rows"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE codigo = '{CODE}';")
-        if made.get("resumen_rows"):
-            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {RESUMEN_YEAR} AND codigo IN ('A0200002', 'A0200001');")
+        if "resumen_year" in made:
+            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {made['resumen_year']} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
             occ("config:app:set", "estadistica", "deis_code", f"--value={previous_code.stdout.strip()}", check=False)
         else:
