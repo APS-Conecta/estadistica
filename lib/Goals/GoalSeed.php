@@ -35,7 +35,9 @@ use OCA\Estadistica\Service\YearWindow;
  *   and the códigos × columnas to add (sumar) and, where the OOTT takes some
  *   away, to subtract (restar: Meta I's denominator). Each is one consulta,
  *   judged by QuerySpec::from() as POST consultas judges one, so a seed can
- *   name nothing a consulta could not (a16).
+ *   name nothing a consulta could not (a16). "oficial": false marks a ruta the
+ *   year's OOTT have not confirmed yet; without the key it is oficial
+ *   (docs/adr/0009). The Resumen reads it from the ruta as written.
  * - A denominador is REM the same way; or FONASA's población inscrita as age
  *   groups, each of one sex or both, with a prevalence in percent where the
  *   OOTT estimates the sick among the inscritos (IV.A, V, VII); or
@@ -197,7 +199,10 @@ final class GoalSeed {
 	 * @throws RefusedException
 	 */
 	private static function part(array $raw, int $anio, int $year, string $what): array {
-		self::keys($raw, ['fuente', 'periodo', 'sumar', 'restar'], $what);
+		self::keys($raw, ['fuente', 'periodo', 'sumar', 'restar', 'oficial'], $what);
+		if (!is_bool($raw['oficial'] ?? true)) {
+			throw new RefusedException(sprintf('%s: oficial es true o false; sin oficial, la ruta es oficial.', $what));
+		}
 		$sumar = $raw['sumar'] ?? null;
 		$restar = $raw['restar'] ?? [];
 		if (!is_array($sumar) || !array_is_list($sumar) || $sumar === [] || !is_array($restar) || !array_is_list($restar)) {

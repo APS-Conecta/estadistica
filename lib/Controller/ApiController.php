@@ -12,6 +12,7 @@ use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\ForbiddenException;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\GoalEvaluator;
+use OCA\Estadistica\Goals\Resumen;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\EstablishmentConfig;
@@ -32,7 +33,7 @@ use OCP\IRequest;
  * Estadística over OCS: the contract suite apps and M3 read (the contracts
  * page on the documentation site, Slice 10). farmacia's resource-per-endpoint shape (the
  * OCS decision), under Spanish resource names: fuentes, consultas,
- * preguntas, tableros and indicadores.
+ * preguntas, tableros, indicadores and resumen.
  *
  * Consumers send `OCS-APIRequest: true`, which is also the CSRF protection
  * (Request::passesCSRFCheck), and get the OCS envelope back:
@@ -71,6 +72,7 @@ class ApiController extends OCSController {
 		private YearWindow $window,
 		private SavedContent $saved,
 		private GoalEvaluator $goals,
+		private Resumen $resumen,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -428,6 +430,53 @@ class ApiController extends OCSController {
 
 		try {
 			return new DataResponse($this->goals->evaluate($anio, $this->establishment->get(), $traits));
+		} catch (DoesNotExistException) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		} catch (RefusedException $e) {
+			return $this->refuse($e->getMessage());
+		}
+	}
+
+	/**
+	 * The Resumen (docs/adr/0009): one card per meta of the newest metas, for
+	 * the establishment. Each card is the meta's last month with a figure
+	 * (mes, YYYY-MM): its numerador, denominador and %, the same as GET
+	 * indicadores' local series for that month, and whether it cumple against
+	 * its meta comprometida when one is typed, else the meta nacional. A
+	 * manual meta (VIII) is its cumplimiento informado, with no mes. A month
+	 * with no written number in any of the meta's cells has no figure, never 0.
+	 * estado says why a meta shows none: «esperando ruta oficial» while its
+	 * seed marks a ruta "oficial": false, or «falta el denominador oficial de
+	 * <año>» while its ages cut a PIV band and no denominador comprometido is
+	 * typed. Only the establishment's own figures are asked: no country, no
+	 * peers.
+	 *
+	 * The establishment is this install's (app config), unless the request
+	 * names another DEIS code (suite ADR-0009).
+	 *
+	 * ponytail: built on each request, where docs/adr/0009 stores it once per change.
+	 *
+	 * @param ?string $establecimiento the six-digit DEIS code whose Resumen to build; this install's when omitted
+	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 *
+	 * 200: The newest metas' cards
+	 * 400: The DEIS code is not one — {message: the Spanish sentence}
+	 * 404: No metas are loaded
+	 * 422: Understood and refused, as a consulta past its time — {message: the Spanish sentence}
+	 */
+	#[NoAdminRequired]
+	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
+	#[ApiRoute(verb: 'GET', url: '/api/v1/resumen')]
+	public function resumen(?string $establecimiento = null): DataResponse {
+		try {
+			$local = $establecimiento === null ? $this->establishment->get() : Establishment::of($establecimiento);
+		} catch (RefusedException $e) {
+			// 400, not 422: the request itself is unintelligible (fuente()'s rule).
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			return new DataResponse($this->resumen->build($local));
 		} catch (DoesNotExistException) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		} catch (RefusedException $e) {

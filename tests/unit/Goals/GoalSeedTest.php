@@ -143,6 +143,17 @@ final class GoalSeedTest extends TestCase {
 		GoalSeed::parse($next, 2026);
 	}
 
+	/** docs/adr/0009: a REM ruta may say whether it is oficial; every other test reads seeds without the key (docs/adr/0006: keys are only added). */
+	public function testARutaMaySayWhetherItIsOficial(): void {
+		$seed = self::minimal();
+		$seed['indicadores'][0]['numerador']['oficial'] = false;
+		$seed['indicadores'][0]['denominador']['oficial'] = true;
+
+		$ruta = GoalSeed::parse($seed, 2026)['indicadores'][0]['ruta'];
+
+		self::assertSame([false, true], [$ruta['numerador']['oficial'], $ruta['denominador']['oficial']], 'the ruta keeps the key as the file writes it');
+	}
+
 	public function testACommittedDenominatorAndAnOptionalNote(): void {
 		$seed = self::minimal();
 		$seed['indicadores'][0]['denominador'] = ['comprometido' => true];
@@ -181,6 +192,7 @@ final class GoalSeedTest extends TestCase {
 		yield 'an age range backwards' => [fn (array $s): array => $meta($s, ['denominador' => ['poblacion' => [['desde' => 64, 'hasta' => 25]]]]), 'un grupo va desde una edad hasta otra igual o mayor'];
 		yield 'a prevalence of 0' => [fn (array $s): array => $meta($s, ['denominador' => ['poblacion' => [['desde' => 15, 'prevalencia' => 0]]]]), 'prevalencia es un porcentaje mayor que 0'];
 		yield 'a population with a fuente too' => [fn (array $s): array => $meta($s, ['denominador' => ['poblacion' => [['desde' => 0]], 'fuente' => 'rem-a']]), 'Meta I, denominador no admite «fuente»'];
+		yield 'oficial as text' => [fn (array $s): array => $meta($s, ['numerador' => ['oficial' => 'no'] + $s['indicadores'][0]['numerador']]), 'Meta I, numerador: oficial es true o false'];
 		yield 'comprometido false' => [fn (array $s): array => $meta($s, ['denominador' => ['comprometido' => false]]), '"comprometido" solo puede ser true'];
 	}
 

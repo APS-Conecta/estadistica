@@ -8,11 +8,13 @@ namespace OCA\Estadistica\Tests\Integration;
 
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Controller\AdminController;
+use OCA\Estadistica\Controller\ApiController;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Goals\Goals;
+use OCA\Estadistica\Goals\Resumen;
 use OCA\Estadistica\Migration\EnsureSeedData;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Piv\Population;
@@ -23,6 +25,7 @@ use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Rem\LocalRange;
 use OCA\Estadistica\Rem\RemImporter;
 use OCA\Estadistica\Service\EstablishmentConfig;
+use OCA\Estadistica\Service\SavedContent;
 use OCA\Estadistica\Service\Sources;
 use OCA\Estadistica\Service\YearWindow;
 use OCA\Estadistica\Tests\Unit\Piv\PivFixture;
@@ -395,6 +398,95 @@ class GoalsTest extends IntegrationTestCase {
 
 		self::assertSame([null, null, 56.25], [$metas['I']['meses'][11]['numerador'], $metas['I']['meses'][11]['porcentaje'], $metas['I']['meses'][11]['nacional']]);
 		self::assertNull($metas['I']['meses'][11]['pares'], 'no «ours», so no peers like it');
+	}
+
+	/**
+	 * docs/adr/0009: each Resumen card is its meta's last month with a figure,
+	 * with the N, D and % GET indicadores serves for that month's local series.
+	 * Meta I is October, 7 de 12 = 58.33 %: November's row has no written
+	 * number, so November has no figure, never 0. It cumple the 50 committed,
+	 * though not the nacional 90. Meta T is December, 45 de 350 = 12.86 %,
+	 * under its nacional 80. Meta II names its missing denominador. Meta VIII
+	 * is its cumplimiento informado, which reaches its nacional 100.
+	 */
+	public function testEachResumenCardIsItsMetasLastMonthWithAFigure(): void {
+		$this->fonasa('31-12-2098');
+		$this->commit([['codigo' => 'I', 'meta' => 50], ['codigo' => 'VIII', 'cumplimiento' => 100]]);
+
+		$response = $this->api()->resumen();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$resumen = $response->getData();
+		self::assertSame([2099, '900001'], [$resumen['anio'], $resumen['establecimiento']], 'the newest metas, for this install\'s establishment');
+		$cards = array_column($resumen['metas'], null, 'codigo');
+		self::assertSame(['2099-10', 7.0, 12.0, 58.33, true, null], self::card($cards['I']));
+		self::assertSame(['2099-12', 45.0, 350.0, 12.86, false, null], self::card($cards['T']));
+		self::assertSame([null, null, null, null, null, 'falta el denominador oficial de 2099'], self::card($cards['II']));
+		self::assertSame([null, null, null, 100.0, true, null], self::card($cards['VIII']));
+		self::assertSame([null, null, null, null, null, null], self::card($cards['C']), 'no commitment typed, so no denominador');
+
+		$indicadores = array_column($this->api()->indicadores(null, '')->getData()['indicadores'], null, 'codigo');
+		foreach ($resumen['metas'] as $card) {
+			$meses = array_column($indicadores[$card['codigo']]['meses'], null, 'mes');
+			$figures = static fn (array $mes): array => [$mes['numerador'], $mes['denominador'], $mes['porcentaje']];
+			if ($card['mes'] === null) {
+				self::assertSame([], array_filter(array_map(static fn (array $mes): ?float => $mes['porcentaje'], $meses)), "Meta {$card['codigo']}: no month of its local series has a %");
+				continue;
+			}
+			self::assertSame($figures($meses[$card['mes']]), $figures($card), "Meta {$card['codigo']}: the card is GET indicadores' local {$card['mes']}");
+		}
+	}
+
+	/**
+	 * docs/adr/0009: a meta with a ruta the OOTT have not confirmed shows
+	 * «esperando ruta oficial» and no figure; a ruta marked oficial reads as
+	 * one without the key.
+	 */
+	public function testAMetaWhoseRutaIsNotOficialShowsNoFigure(): void {
+		$seed = self::seed();
+		$seed['indicadores'][0]['denominador']['oficial'] = false;
+		$seed['indicadores'][2]['numerador']['oficial'] = true;
+		$this->goals()->store($seed);
+		$this->fonasa('31-12-2098');
+
+		$cards = array_column($this->api()->resumen()->getData()['metas'], null, 'codigo');
+
+		self::assertSame([null, null, null, null, null, 'esperando ruta oficial'], self::card($cards['I']));
+		self::assertSame(['2099-12', 45.0, 350.0, 12.86, false, null], self::card($cards['T']));
+	}
+
+	/**
+	 * suite ADR-0009: another establishment's Resumen, named by its DEIS code.
+	 * 900002's Meta I is January, its own last month: 10 de 20 = 50 %, against
+	 * the nacional 90, since this install's commitments are not its own.
+	 */
+	public function testTheResumenOfAnotherEstablishment(): void {
+		$this->commit([['codigo' => 'I', 'meta' => 40]]);
+
+		$other = $this->api()->resumen('900002')->getData();
+
+		self::assertSame('900002', $other['establecimiento']);
+		$i = array_column($other['metas'], null, 'codigo')['I'];
+		self::assertSame([null, ['2099-01', 10.0, 20.0, 50.0, false, null]], [$i['meta_comprometida'], self::card($i)]);
+	}
+
+	/** @param array<string, mixed> $card @return list<mixed> what a Resumen card shows: mes, N, D, %, cumple and estado */
+	private static function card(array $card): array {
+		return [$card['mes'], $card['numerador'], $card['denominador'], $card['porcentaje'], $card['cumple'], $card['estado']];
+	}
+
+	/** The OCS routes, on this test's clock and fixtures; the wiring is smoke's (scripts/smoke.sh). */
+	private function api(): ApiController {
+		return new ApiController(
+			Server::get(IRequest::class),
+			Server::get(Sources::class),
+			Server::get(QueryExecutor::class),
+			Server::get(EstablishmentConfig::class),
+			$this->window(),
+			Server::get(SavedContent::class),
+			$this->evaluator(),
+			new Resumen($this->goals(), $this->evaluator()),
+		);
 	}
 
 	/**

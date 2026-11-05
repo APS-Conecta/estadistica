@@ -1,0 +1,191 @@
+<!--
+	Resumen (docs/adr/0009): the view that opens first. One card per meta of
+	the newest metas, for this install's establishment: the percentage and
+	«N de D» of the meta's last month with a figure, and whether it cumple, in
+	colour and in words. Read from GET resumen alone, so the page shows what
+	the API answers.
+-->
+<template>
+	<section class="estadistica-resumen">
+		<NcNoteCard v-if="failed" type="error">
+			{{ failed }}
+		</NcNoteCard>
+
+		<NcNoteCard v-else-if="missing" type="info">
+			Todavía no hay Metas Sanitarias cargadas. Quien administra Estadística las carga como un
+			archivo en «Cargar un archivo a mano».
+		</NcNoteCard>
+
+		<p v-else-if="!resumen" class="estadistica-resumen__hint">
+			Cargando…
+		</p>
+
+		<template v-else>
+			<h2>{{ resumen.nombre }}</h2>
+
+			<ul class="estadistica-resumen__metas">
+				<li v-for="meta in resumen.metas" :key="meta.codigo">
+					<article :class="['estadistica-resumen__meta', cumpleClass(meta)]"
+						tabindex="0"
+						:aria-labelledby="`resumen-${meta.codigo}-titulo`"
+						:aria-describedby="`resumen-${meta.codigo}-cifra`">
+						<h3 :id="`resumen-${meta.codigo}-titulo`">
+							Meta {{ meta.codigo }} {{ resumen.anio }}
+						</h3>
+						<p class="estadistica-resumen__hint">
+							{{ meta.nombre }}
+						</p>
+
+						<div :id="`resumen-${meta.codigo}-cifra`">
+							<p v-if="meta.estado" class="estadistica-resumen__estado">
+								Sin porcentaje: {{ meta.estado }}.
+							</p>
+							<p v-else-if="meta.manual" class="estadistica-resumen__estado">
+								{{ meta.porcentaje === null ? 'Todavía no se ha informado su cumplimiento.' : `Cumplimiento informado: ${percent(meta.porcentaje)}` }}
+							</p>
+							<template v-else-if="meta.porcentaje !== null">
+								<p class="estadistica-resumen__porcentaje">
+									{{ percent(meta.porcentaje) }}
+								</p>
+								<p class="estadistica-resumen__cuenta">
+									{{ figure(meta.numerador) }} de {{ figure(meta.denominador) }}
+								</p>
+								<p class="estadistica-resumen__hint">
+									Datos al {{ monthName(meta.mes) }}
+								</p>
+							</template>
+							<p v-else class="estadistica-resumen__estado">
+								Sin informar
+							</p>
+
+							<p v-if="meta.cumple !== null" class="estadistica-resumen__cumple">
+								{{ meta.cumple ? 'Cumple' : 'No cumple' }} la meta
+								{{ meta.meta_comprometida === null ? 'nacional' : 'comprometida' }}
+								({{ percent(meta.meta_comprometida ?? meta.meta_nacional) }})
+							</p>
+						</div>
+					</article>
+				</li>
+			</ul>
+		</template>
+	</section>
+</template>
+
+<script>
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import { ocsGet, ocsMessageFrom, warnError } from '../api.js'
+import { formatValue } from '../charts.js'
+import { monthName } from '../query.js'
+
+export default {
+	name: 'EstadisticaResumen',
+
+	components: { NcNoteCard },
+
+	data() {
+		return {
+			resumen: null,
+			missing: false,
+			failed: '',
+		}
+	},
+
+	async mounted() {
+		try {
+			this.resumen = await ocsGet('resumen')
+		} catch (error) {
+			if (error?.response?.status === 404) {
+				this.missing = true
+				return
+			}
+			warnError('could not read the resumen', error)
+			this.failed = await ocsMessageFrom(error, 'No se pudo leer el resumen de las metas. Revise la conexión e inténtelo de nuevo.')
+		}
+	},
+
+	methods: {
+		monthName,
+
+		cumpleClass(meta) {
+			if (meta.cumple === null) {
+				return ''
+			}
+			return meta.cumple ? 'estadistica-resumen__meta--cumple' : 'estadistica-resumen__meta--no-cumple'
+		},
+
+		figure(value) {
+			return formatValue(value)
+		},
+
+		percent(value) {
+			return `${formatValue(value)} %`
+		},
+	},
+}
+</script>
+
+<style scoped>
+.estadistica-resumen {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.estadistica-resumen__hint {
+	color: var(--color-text-maxcontrast);
+}
+
+/* As many cards as fit, one per row on a phone. */
+.estadistica-resumen__metas {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.estadistica-resumen__meta {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	height: 100%;
+	padding: 12px 16px;
+	border: 1px solid var(--color-border);
+	border-inline-start: 4px solid var(--color-border-dark);
+	border-radius: var(--border-radius-container);
+}
+
+.estadistica-resumen__meta:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+}
+
+/* Colour backs the words «Cumple» and «No cumple», never stands alone. */
+.estadistica-resumen__meta--cumple {
+	border-inline-start-color: var(--color-border-success);
+}
+
+.estadistica-resumen__meta--no-cumple {
+	border-inline-start-color: var(--color-border-error);
+}
+
+.estadistica-resumen__porcentaje {
+	font-size: 2em;
+	font-weight: bold;
+	line-height: 1.2;
+	font-variant-numeric: tabular-nums;
+}
+
+.estadistica-resumen__cumple {
+	font-weight: bold;
+}
+
+.estadistica-resumen__meta--cumple .estadistica-resumen__cumple {
+	color: var(--color-text-success);
+}
+
+.estadistica-resumen__meta--no-cumple .estadistica-resumen__cumple {
+	color: var(--color-text-error);
+}
+</style>

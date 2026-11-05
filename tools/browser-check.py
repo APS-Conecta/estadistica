@@ -14,11 +14,17 @@ It also checks a8 in a browser: a second user, who is no admin and in no
 delegated group, opens the same tablero and sees the same figures with no
 controls to change it.
 
+And the Resumen (docs/adr/0009), the tab the app opens on: each card shows
+the figures GET resumen answers, a keyboard reaches every card, and the
+cards fit a phone's width.
+
 It makes everything it needs and removes it all however it ends:
 - a few synthetic REM rows under a código of its own. They sit in 2009, the
   window's floor: outside the default window the REM job neither loads that
   year (which would replace its rows) nor forgets it (which reads the ingest
   state these rows have none of);
+- for the Resumen, four rows of the current year under the shipped seed's
+  Meta VI códigos, for the fabricated establishment only;
 - the establishment code, set to a fabricated one and put back after;
 - a pregunta, a tablero, an app password and a throwaway user.
 
@@ -59,6 +65,11 @@ LOCAL = "900001"
 # (estab, mes, col01): the third establishment reports January only, so
 # February's national promedio divides by the two that reported.
 ROWS = [(900001, 1, 4), (900001, 2, 6), (900002, 1, 3), (900002, 2, 5), (900003, 1, 2)]
+
+# The Resumen reads the newest metas, the shipped seed's in its own year: Meta
+# VI is A0200002 over A0200001, col06. (código, mes, col06): 5 de 8 by February.
+RESUMEN_YEAR = time.gmtime().tm_year
+RESUMEN_ROWS = [("A0200002", 1, 3), ("A0200001", 1, 4), ("A0200002", 2, 2), ("A0200001", 2, 4)]
 
 SPEC = {
     "fuente": "rem-a",
@@ -187,6 +198,40 @@ def api_figures(answer):
             for month, value in sorted(nacional.items())}
 
 
+def resumen_figures(page):
+    """{card title: (percentage, «N de D»)} as the Resumen's cards show them; None where a card has none."""
+    cards = page.locator(".estadistica-resumen__meta")
+    cards.first.wait_for(timeout=30_000)
+    figures = {}
+    for i in range(cards.count()):
+        card = cards.nth(i)
+        shown = card.locator(".estadistica-resumen__porcentaje")
+        figures[card.locator("h3").inner_text().strip()] = (
+            (shown.inner_text().strip(), card.locator(".estadistica-resumen__cuenta").inner_text().strip())
+            if shown.count() else (None, None))
+    return figures
+
+
+def resumen_api_figures(answer):
+    """The same, from GET resumen, formatted as the cards format them."""
+    return {f"Meta {meta['codigo']} {answer['anio']}": (
+        (f"{es_cl(meta['porcentaje'])} %", f"{es_cl(meta['numerador'])} de {es_cl(meta['denominador'])}")
+        if meta["mes"] is not None else (None, None)) for meta in answer["metas"]}
+
+
+def keyboard_reaches(page, count):
+    """The card titles a keyboard focuses, tabbing from the top of the page."""
+    reached = []
+    for _ in range(80 + count):
+        page.keyboard.press("Tab")
+        title = page.evaluate("() => document.activeElement.matches('.estadistica-resumen__meta') ? document.activeElement.querySelector('h3').innerText.trim() : null")
+        if title and title not in reached:
+            reached.append(title)
+        if len(reached) == count:
+            break
+    return reached
+
+
 def main():
     SHOTS.mkdir(exist_ok=True)
     failures = []
@@ -198,6 +243,9 @@ def main():
         psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col01) VALUES "
              + ", ".join(f"('A', {YEAR}, {mes}, {estab}, '{CODE}', {valor})" for estab, mes, valor in ROWS) + ";")
         made["rows"] = True
+        psql("INSERT INTO oc_estadistica_rem (serie, anio, mes, estab, codigo, col06) VALUES "
+             + ", ".join(f"('A', {RESUMEN_YEAR}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in RESUMEN_ROWS) + ";")
+        made["resumen_rows"] = True
         occ("config:app:set", "estadistica", "deis_code", f"--value={LOCAL}")
 
         token = occ("user:add-app-password", ADMIN, f"--name=browser-{RUN}", "-n").stdout.strip().splitlines()[-1]
@@ -222,6 +270,9 @@ def main():
         made["reader"] = True
 
         expected = api_figures(answer)
+        resumen = resumen_api_figures(ocs("GET", "resumen", token))
+        if resumen.get(f"Meta VI {RESUMEN_YEAR}") != ("62,5 %", "5 de 8"):
+            failures.append(f"the API did not answer the seeded Resumen figures for Meta VI: {resumen}")
         if expected != {"enero de 2009": ("4", "3"), "febrero de 2009": ("6", "5,5")}:
             failures.append(f"the API did not answer the seeded figures: {expected}")
 
@@ -232,6 +283,16 @@ def main():
             page = browser.new_page(viewport={"width": 1400, "height": 900})
             errors = console_errors(page)
             log_in(page, ADMIN, ADMIN_PASSWORD)
+
+            # docs/adr/0009: the app opens on the Resumen, whose cards show GET resumen's figures.
+            shown_resumen = resumen_figures(page)
+            page.screenshot(path=str(SHOTS / "resumen.png"), full_page=True)
+            if shown_resumen != resumen:
+                failures.append(f"the Resumen's cards show {shown_resumen}, the API answers {resumen}")
+            reached = keyboard_reaches(page, len(resumen))
+            if sorted(reached) != sorted(resumen):
+                failures.append(f"a keyboard reaches only these Resumen cards: {reached}")
+
             rows = open_the_tablero(page, f"Tablero navegador {RUN}")
             shown = card_figures(rows)
             page.screenshot(path=str(SHOTS / "tablero.png"), full_page=True)
@@ -255,6 +316,16 @@ def main():
             reader.screenshot(path=str(SHOTS / "tablero-lector.png"), full_page=True)
             failures += [f"console error for the second user: {e}" for e in reader_errors]
 
+            # A phone: the cards stack, and nothing is wider than the screen.
+            phone = browser.new_context(viewport={"width": 375, "height": 800}).new_page()
+            phone_errors = console_errors(phone)
+            log_in(phone, ADMIN, ADMIN_PASSWORD)
+            resumen_figures(phone)
+            phone.screenshot(path=str(SHOTS / "resumen-telefono.png"), full_page=True)
+            if phone.evaluate("() => { const r = document.querySelector('.estadistica-resumen'); return r.scrollWidth > r.clientWidth }"):
+                failures.append("the Resumen is wider than a 375 px screen")
+            failures += [f"console error on a phone: {e}" for e in phone_errors]
+
             browser.close()
     finally:
         if "tablero" in made:
@@ -270,6 +341,8 @@ def main():
             occ("user:delete", READER, check=False)
         if made.get("rows"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE codigo = '{CODE}';")
+        if made.get("resumen_rows"):
+            psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {RESUMEN_YEAR} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
             occ("config:app:set", "estadistica", "deis_code", f"--value={previous_code.stdout.strip()}", check=False)
         else:
@@ -284,6 +357,7 @@ def main():
         return 1
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
+    print("ok    the Resumen opens first, its cards show GET resumen's figures, a keyboard reaches each one, and it fits a phone")
     print("\nAll good.")
     return 0
 

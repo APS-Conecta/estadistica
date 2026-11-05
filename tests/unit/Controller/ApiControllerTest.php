@@ -11,6 +11,7 @@ use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\ForbiddenException;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\GoalEvaluator;
+use OCA\Estadistica\Goals\Resumen;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\EstablishmentConfig;
@@ -30,7 +31,9 @@ use PHPUnit\Framework\TestCase;
  * routes (a8): a save answers 201, and SavedContent's three refusals answer
  * 404, 403 and 422, each with its sentence. And GET indicadores (a12, a14):
  * the configured establishment and the peer traits reach the evaluator, and
- * a question it cannot read is a Spanish 400 before any SQL.
+ * a question it cannot read is a Spanish 400 before any SQL. And GET resumen
+ * (docs/adr/0009): the configured establishment or the one a DEIS code names,
+ * and a code that is not one is a Spanish 400.
  */
 final class ApiControllerTest extends TestCase {
 	private const SPEC = [
@@ -48,6 +51,8 @@ final class ApiControllerTest extends TestCase {
 
 	private GoalEvaluator&MockObject $goals;
 
+	private Resumen&MockObject $resumen;
+
 	private ApiController $controller;
 
 	protected function setUp(): void {
@@ -55,6 +60,7 @@ final class ApiControllerTest extends TestCase {
 		$this->executor = $this->createMock(QueryExecutor::class);
 		$this->saved = $this->createMock(SavedContent::class);
 		$this->goals = $this->createMock(GoalEvaluator::class);
+		$this->resumen = $this->createMock(Resumen::class);
 		$window = $this->createStub(YearWindow::class);
 		$window->method('currentYear')->willReturn(2026);
 
@@ -66,6 +72,7 @@ final class ApiControllerTest extends TestCase {
 			$window,
 			$this->saved,
 			$this->goals,
+			$this->resumen,
 		);
 	}
 
@@ -258,6 +265,46 @@ final class ApiControllerTest extends TestCase {
 		$missing = $this->controller->indicadores(2025);
 		self::assertSame([Http::STATUS_NOT_FOUND, []], [$missing->getStatus(), $missing->getData()]);
 		$refused = $this->controller->indicadores(2026);
+		self::assertSame(Http::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatus());
+		self::assertStringContainsString('se canceló', $refused->getData()['message']);
+	}
+
+	/** docs/adr/0009, suite ADR-0009: the Resumen is this install's establishment's, or the one a DEIS code names. */
+	public function testTheResumenIsTheConfiguredEstablishmentsOrTheOneNamed(): void {
+		$configured = Establishment::of('900001');
+		$this->config->method('get')->willReturn($configured);
+		$built = [];
+		$this->resumen->expects(self::exactly(2))->method('build')
+			->willReturnCallback(static function (Establishment $local) use (&$built): array {
+				$built[] = $local->deisCode;
+				return ['anio' => 2026];
+			});
+
+		$response = $this->controller->resumen();
+		self::assertSame([Http::STATUS_OK, ['anio' => 2026]], [$response->getStatus(), $response->getData()]);
+		self::assertSame(Http::STATUS_OK, $this->controller->resumen('900002')->getStatus());
+		self::assertSame(['900001', '900002'], $built);
+	}
+
+	public function testAResumenForACodeThatIsNotOneIsA400InSpanish(): void {
+		$this->resumen->expects(self::never())->method('build');
+
+		$response = $this->controller->resumen('9001');
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertStringContainsString('no es un código DEIS de establecimiento', $response->getData()['message']);
+	}
+
+	public function testAResumenWithoutMetasIs404AndARefusalIs422(): void {
+		$this->config->method('get')->willReturn(Establishment::none());
+		$this->resumen->method('build')->willReturnOnConsecutiveCalls(
+			self::throwException(new DoesNotExistException('')),
+			self::throwException(new RefusedException('La consulta tardó más de 10 s y se canceló: acote el periodo, las prestaciones o la comparación.')),
+		);
+
+		$missing = $this->controller->resumen();
+		self::assertSame([Http::STATUS_NOT_FOUND, []], [$missing->getStatus(), $missing->getData()]);
+		$refused = $this->controller->resumen();
 		self::assertSame(Http::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatus());
 		self::assertStringContainsString('se canceló', $refused->getData()['message']);
 	}

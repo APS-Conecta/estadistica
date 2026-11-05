@@ -78,11 +78,12 @@ class GoalEvaluator {
 	 * @param ?int $anio the metas' year; null for the newest with metas up to the current year (else the newest)
 	 * @param list<string> $traits what the peer group shares with this install's establishment, each one of
 	 *                             QuerySpec::TRAITS (the caller's check: ApiController); none for no peers
+	 * @param bool $nacional false for the establishment alone, as the Resumen asks (docs/adr/0009): no country
 	 * @return Respuesta
 	 * @throws DoesNotExistException no metas for that year
 	 * @throws RefusedException
 	 */
-	public function evaluate(?int $anio, Establishment $local, array $traits): array {
+	public function evaluate(?int $anio, Establishment $local, array $traits, bool $nacional = true): array {
 		$now = $this->time->getTime();
 		$currentYear = (int)gmdate('Y', $now);
 		$years = $this->goals->years();
@@ -98,12 +99,12 @@ class GoalEvaluator {
 		$fuentes = array_column($this->sources->all(), null, 'id');
 		$through = self::through($fuentes['rem-a'], $anio);
 		$commitments = $estab === null ? [] : $this->goals->commitments($anio, $estab);
-		[$answers, $own] = $this->ask($metas, $anio, $estab, $peers);
+		[$answers, $own] = $this->ask($metas, $anio, $estab, $peers, $nacional);
 		$localThrough = ($own['rem-a'] ?? null) === null ? null : (int)str_replace('-', '', $own['rem-a']);
 		$inscritos = in_array(GoalSeed::BASE_POPULATION, array_column($metas['indicadores'], 'base'), true)
 			? [
 				'local' => $estab === null ? null : $this->population->local($anio, $estab),
-				'nacional' => $this->population->national($anio),
+				'nacional' => $nacional ? $this->population->national($anio) : null,
 				'pares' => $peers === null ? null : $this->population->peers($anio, $peers),
 			]
 			: ['local' => null, 'nacional' => null, 'pares' => null];
@@ -358,7 +359,7 @@ class GoalEvaluator {
 	}
 
 	/**
-	 * Every REM route of the year's metas, each asked for the three scopes,
+	 * Every REM route of the year's metas, each asked for the scopes wanted,
 	 * and the establishment's own last month in each serie, in one read-only
 	 * snapshot, so no meta mixes two loads.
 	 *
@@ -366,7 +367,7 @@ class GoalEvaluator {
 	 * @param ?array<string, string> $peers
 	 * @return array{0: array<int, array<string, ?list<Punto>>>, 1: ?array<string, ?string>} the answers by spl_object_id of the route's QuerySpec; the last months by fuente, null without an establishment
 	 */
-	private function ask(array $metas, int $anio, ?int $estab, ?array $peers): array {
+	private function ask(array $metas, int $anio, ?int $estab, ?array $peers, bool $nacional): array {
 		$specs = [];
 		foreach ($metas['indicadores'] as $meta) {
 			foreach ([$meta['numerador'], $meta['denominador']] as $part) {
@@ -376,12 +377,12 @@ class GoalEvaluator {
 			}
 		}
 
-		return $this->executor->readOnly(function () use ($specs, $anio, $estab, $peers): array {
+		return $this->executor->readOnly(function () use ($specs, $anio, $estab, $peers, $nacional): array {
 			$answers = [];
 			foreach ($specs as $id => $spec) {
 				$answers[$id] = [
 					'local' => $estab === null ? null : $this->executor->series($spec, $spec->codigos, ['estab' => $estab]),
-					'nacional' => $this->executor->series($spec, $spec->codigos, []),
+					'nacional' => $nacional ? $this->executor->series($spec, $spec->codigos, []) : null,
 					'pares' => $peers === null ? null : $this->executor->series($spec, $spec->codigos, $peers),
 				];
 			}

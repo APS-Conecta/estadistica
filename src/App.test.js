@@ -22,6 +22,7 @@ vi.mock('./components/QueryBuilder.vue', tab('consultar', 'QueryBuilder'))
 vi.mock('./components/Questions.vue', tab('preguntas', 'SavedQuestions'))
 vi.mock('./components/Dashboard.vue', tab('tableros', 'EstadisticaDashboard'))
 vi.mock('./components/Goals.vue', tab('metas', 'SanitaryGoals'))
+vi.mock('./components/Resumen.vue', tab('resumen', 'EstadisticaResumen'))
 
 const open = async (wrapper, label) => {
 	await wrapper.findAll('nav button').find((b) => b.text() === label).trigger('click')
@@ -29,23 +30,31 @@ const open = async (wrapper, label) => {
 }
 
 describe('App', () => {
-	it('loads a tab\'s code the first time the tab opens', async () => {
+	it('opens on the Resumen, and loads a tab\'s code the first time the tab opens', async () => {
 		const wrapper = mount(App)
 		await flushPromises()
-		expect(loaded).toEqual(['consultar'])
+		const first = wrapper.findAll('nav button')[0]
+		expect([first.text(), first.attributes('aria-current')]).toEqual(['Resumen', 'page'])
+		expect(wrapper.findComponent({ name: 'EstadisticaResumen' }).exists()).toBe(true)
+		expect(loaded).toEqual(['resumen'])
+		expect(wrapper.findComponent({ name: 'QueryBuilder' }).exists()).toBe(false)
+
+		await open(wrapper, 'Consultar')
+		expect(loaded).toEqual(['resumen', 'consultar'])
 		expect(wrapper.findComponent({ name: 'QueryBuilder' }).exists()).toBe(true)
 
 		await open(wrapper, 'Preguntas')
-		expect(loaded).toEqual(['consultar', 'preguntas'])
+		expect(loaded).toEqual(['resumen', 'consultar', 'preguntas'])
 		expect(wrapper.findComponent({ name: 'SavedQuestions' }).exists()).toBe(true)
-		// The builder stays mounted, as before: a consulta half-built survives.
+		// The builder stays mounted once opened, as before: a consulta half-built survives.
 		expect(wrapper.findComponent({ name: 'QueryBuilder' }).exists()).toBe(true)
 
 		await open(wrapper, 'Tableros')
 		await open(wrapper, 'Metas Sanitarias')
-		expect(loaded).toEqual(['consultar', 'preguntas', 'tableros', 'metas'])
+		expect(loaded).toEqual(['resumen', 'consultar', 'preguntas', 'tableros', 'metas'])
 		expect(wrapper.findComponent({ name: 'SanitaryGoals' }).exists()).toBe(true)
 		expect(wrapper.findComponent({ name: 'SavedQuestions' }).exists()).toBe(false)
+		expect(wrapper.findComponent({ name: 'EstadisticaResumen' }).exists()).toBe(false)
 	})
 
 	it('shows an error card in place of a tab whose code cannot load', async () => {
