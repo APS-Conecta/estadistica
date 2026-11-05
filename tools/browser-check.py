@@ -16,7 +16,8 @@ controls to change it.
 
 And the Resumen (docs/adr/0009), the tab the app opens on: each card shows
 the figures GET resumen answers, which are GET indicadores' local series for
-the card's month, a keyboard reaches every card, and the cards fit a phone's
+the card's month, a keyboard reaches every card, a figure opens its source
+panel in the app sidebar and Escape closes it, and the cards fit a phone's
 width.
 
 It makes everything it needs and removes it all however it ends:
@@ -251,6 +252,28 @@ def keyboard_reaches(page, count):
     return reached
 
 
+def source_panel(page, title):
+    """A card's first figure, opened from the keyboard: the app sidebar names the card and its
+    códigos, and Escape closes it with the focus back on the figure (docs/adr/0009)."""
+    card = page.locator(".estadistica-resumen__meta").filter(has=page.get_by_role("heading", name=title, exact=True))
+    figure = card.locator(".estadistica-cifra").first
+    figure.focus()
+    page.keyboard.press("Enter")
+    sidebar = page.locator("#app-sidebar-vue")
+    sidebar.wait_for(timeout=10_000)
+    page.wait_for_function("() => document.querySelector('#app-sidebar-vue').contains(document.activeElement)", timeout=10_000)
+    page.screenshot(path=str(SHOTS / "resumen-fuente.png"))
+    failures = []
+    shown = sidebar.inner_text()
+    if title not in shown or "A0200002" not in shown or "col06" not in shown:
+        failures.append(f"{title}'s source panel does not name its card, códigos and columnas: {shown!r}")
+    page.keyboard.press("Escape")
+    sidebar.wait_for(state="detached", timeout=10_000)
+    if not figure.evaluate("(element) => element === document.activeElement"):
+        failures.append(f"closing {title}'s source panel did not give the focus back to its figure")
+    return failures
+
+
 def main():
     SHOTS.mkdir(exist_ok=True)
     failures = []
@@ -316,6 +339,7 @@ def main():
             reached = keyboard_reaches(page, len(resumen))
             if sorted(reached) != sorted(resumen):
                 failures.append(f"a keyboard reaches only these Resumen cards: {reached}")
+            failures += source_panel(page, f"Meta VI {resumen_year}")
 
             rows = open_the_tablero(page, f"Tablero navegador {RUN}")
             shown = card_figures(rows)
@@ -381,7 +405,7 @@ def main():
         return 1
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
-    print("ok    the Resumen opens first, its cards show GET resumen's figures, which are GET indicadores' local months, a keyboard reaches each one, and it fits a phone")
+    print("ok    the Resumen opens first, its cards show GET resumen's figures, which are GET indicadores' local months, a keyboard reaches each one and its source panel, and it fits a phone")
     print("\nAll good.")
     return 0
 

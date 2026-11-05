@@ -7,9 +7,11 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Goals;
 
 use APS\Common\Text;
+use Closure;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
 use OCA\Estadistica\Service\Sources;
 use OCA\Estadistica\Service\YearWindow;
@@ -50,6 +52,11 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   shows each month's running sum, Serie P its June and December cortes,
  *   each only in its own month: a corte not reported is sin informar, never
  *   the one before it. A year already over carries its cierre: December's %.
+ * - **Its source**, which a click on any figure shows (docs/adr/0009): each
+ *   month's origen and the fecha de corte of its year's load (origin()),
+ *   each year's ruta with its periodos moved (ruta()), each código labelled
+ *   by that year's diccionario as POST consultas labels it
+ *   (QueryExecutor::label), and the metas' referencia.
  *
  * Built here, the one way; ResumenStore keeps the configured
  * establishment's once per change.
@@ -58,19 +65,27 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * @psalm-import-type Carried from GoalEvaluator
  * @psalm-import-type Metas from GoalSeed
  * @psalm-import-type Label from Catalog
- * @psalm-type Cifra = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float}
- * @psalm-type Historico = array{anio: int, estado: ?string, cierre: ?float, meses: list<Cifra>}
- * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<Historico>}
- * @psalm-type Respuesta = array{anio: int, nombre: string, establecimiento: ?string, metas: list<Tarjeta>}
+ * @psalm-import-type Parte from GoalSeed
+ * @psalm-import-type Etiqueta from QueryExecutor
+ * @psalm-import-type Fuente from Sources
+ * @psalm-type Ruta = array{fuente: string, desde: ?string, hasta: ?string, sumar: list<list<Etiqueta>>, restar: list<list<Etiqueta>>}
+ * @psalm-type Cifra = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, origen: ?string, fecha_corte: ?string}
+ * @psalm-type Historico = array{anio: int, estado: ?string, cierre: ?float, meses: list<Cifra>, ruta: array{numerador: ?Ruta, denominador: ?Ruta}}
+ * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<Historico>, origen: ?string, fecha_corte: ?string}
+ * @psalm-type Respuesta = array{anio: int, nombre: string, referencia: string, establecimiento: ?string, metas: list<Tarjeta>}
  */
 class Resumen {
 	public const NOT_COMPARABLE = 'sin datos comparables';
+
+	/** A denominador of FONASA's inscritos: no periodo, no códigos. */
+	private const POPULATION = ['fuente' => Sources::PIV, 'desde' => null, 'hasta' => null, 'sumar' => [], 'restar' => []];
 
 	public function __construct(
 		private Goals $goals,
 		private GoalEvaluator $evaluator,
 		private Catalog $catalog,
 		private YearWindow $window,
+		private Sources $sources,
 	) {
 	}
 
@@ -90,17 +105,32 @@ class Resumen {
 		$history = $this->evaluator->history($metas, $firstYear, $local);
 		$current = array_key_last($history);
 		$labels = $this->labels($metas, array_keys($history));
+		$fuentes = array_column($this->sources->all(), null, 'id');
+		$moved = [];
+		foreach (array_keys($history) as $year) {
+			$moved[$year] = GoalSeed::shift($metas, $year - $anio)['indicadores'];
+		}
 		$cards = [];
 		foreach ($metas['indicadores'] as $i => $indicador) {
+			$fuente = $fuentes[$indicador['numerador']['fuente'] ?? ''] ?? null;
 			$historico = [];
 			foreach ($history as $year => $counted) {
 				$comparable = $year === $current || self::comparable(GoalSeed::terms($indicador), $labels, $year, $current, $year - $anio, $firstYear);
-				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear());
+				$label = static fn (QuerySpec $spec): array => array_map(
+					static fn (string $codigo): array => QueryExecutor::label($labels[$year][$spec->serie][$codigo], $year, $spec->columnas),
+					$spec->codigos,
+				);
+				$fonasa = $indicador['base'] === GoalSeed::BASE_POPULATION && !($counted['indicadores'][$i]['poblacion']['comprometida'] ?? false);
+				$ruta = [
+					'numerador' => self::ruta($moved[$year][$i]['numerador'], $label),
+					'denominador' => $fonasa ? self::POPULATION : self::ruta($moved[$year][$i]['denominador'], $label),
+				];
+				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear(), $fuente, $ruta);
 			}
-			$cards[] = self::card($history[$current]['indicadores'][$i], $current, $history[$current]['fecha_corte_local'], $historico);
+			$cards[] = self::card($history[$current]['indicadores'][$i], $current, $history[$current]['fecha_corte_local'], $historico, $fuente);
 		}
 
-		return self::response($anio, $metas['nombre'], $local->isConfigured() ? $local->deisCode : null, $cards);
+		return self::response($anio, $metas['nombre'], $metas['referencia'], $local->isConfigured() ? $local->deisCode : null, $cards);
 	}
 
 	/**
@@ -110,8 +140,8 @@ class Resumen {
 	 * @param list<Tarjeta> $metas
 	 * @return Respuesta
 	 */
-	public static function response(int $anio, string $nombre, ?string $establecimiento, array $metas): array {
-		return ['anio' => $anio, 'nombre' => $nombre, 'establecimiento' => $establecimiento, 'metas' => $metas];
+	public static function response(int $anio, string $nombre, string $referencia, ?string $establecimiento, array $metas): array {
+		return ['anio' => $anio, 'nombre' => $nombre, 'referencia' => $referencia, 'establecimiento' => $establecimiento, 'metas' => $metas];
 	}
 
 	/**
@@ -122,9 +152,10 @@ class Resumen {
 	 * @param int $anio the current year
 	 * @param ?array<string, ?string> $fechaCorteLocal the establishment's own last month (YYYY-MM) by fuente; null without one
 	 * @param list<Historico> $historico
+	 * @param ?Fuente $fuente the numerador's, as GET fuentes serves it
 	 * @return Tarjeta
 	 */
-	public static function card(array $meta, int $anio, ?array $fechaCorteLocal, array $historico): array {
+	public static function card(array $meta, int $anio, ?array $fechaCorteLocal, array $historico, ?array $fuente): array {
 		$waiting = ($meta['numerador']['oficial'] ?? true) === false || ($meta['denominador']['oficial'] ?? true) === false;
 		$last = null;
 		foreach ($waiting ? [] : $meta['meses'] as $mes) {
@@ -147,6 +178,42 @@ class Resumen {
 			'porcentaje' => $porcentaje,
 			'cumple' => $porcentaje === null ? null : $porcentaje >= ($meta['meta_comprometida'] ?? $meta['meta_nacional']),
 			'historico' => $waiting || $meta['manual'] ? [] : $historico,
+			...self::origin($fuente, $last['mes'] ?? null),
+		];
+	}
+
+	/**
+	 * Where a month's figures come from (docs/adr/0010): its fuente's origen
+	 * and the fecha de corte of that year's load; nothing without one.
+	 * ponytail: a month a planilla covers is «planilla del establecimiento»
+	 * with the file's date (#54).
+	 *
+	 * @param ?Fuente $fuente
+	 * @return array{origen: ?string, fecha_corte: ?string}
+	 */
+	public static function origin(?array $fuente, ?string $mes): array {
+		$load = $mes === null ? null : array_column($fuente['anios'] ?? [], null, 'anio')[(int)substr($mes, 0, 4)] ?? null;
+
+		return ['origen' => $load === null ? null : ($fuente['origen'] ?? null), 'fecha_corte' => $load['fecha_corte'] ?? null];
+	}
+
+	/**
+	 * A part of a meta's ruta as the source panel shows it: its fuente, its
+	 * periodo (YYYY-MM) and each consulta's códigos, labelled by $labels.
+	 *
+	 * @param ?Parte $part
+	 * @param Closure(QuerySpec): list<Etiqueta> $labels
+	 * @return ?Ruta
+	 */
+	public static function ruta(?array $part, Closure $labels): ?array {
+		$month = static fn (int $yyyymm): string => sprintf('%04d-%02d', intdiv($yyyymm, 100), $yyyymm % 100);
+
+		return $part === null ? null : [
+			'fuente' => $part['fuente'],
+			'desde' => $month($part['desde']),
+			'hasta' => $month($part['hasta']),
+			'sumar' => array_map($labels, $part['sumar']),
+			'restar' => array_map($labels, $part['restar']),
 		];
 	}
 
@@ -157,11 +224,13 @@ class Resumen {
 	 *
 	 * @param Meta $meta the newest metas' meta, counted over $anio
 	 * @param Carried $carried the months its Serie P figures only carry an earlier corte (GoalEvaluator::history)
+	 * @param ?Fuente $fuente the numerador's, for each month's origin()
+	 * @param array{numerador: ?Ruta, denominador: ?Ruta} $ruta the year's, its periodos moved
 	 * @return Historico
 	 */
-	public static function year(array $meta, array $carried, int $anio, bool $comparable, bool $over): array {
+	public static function year(array $meta, array $carried, int $anio, bool $comparable, bool $over, ?array $fuente, array $ruta): array {
 		if (!$comparable) {
-			return ['anio' => $anio, 'estado' => self::NOT_COMPARABLE, 'cierre' => null, 'meses' => []];
+			return ['anio' => $anio, 'estado' => self::NOT_COMPARABLE, 'cierre' => null, 'meses' => [], 'ruta' => $ruta];
 		}
 
 		$cortes = (Sources::REM[$meta['numerador']['fuente'] ?? ''] ?? null) === 'P';
@@ -170,7 +239,7 @@ class Resumen {
 			if (!$cortes || in_array(substr($mes['mes'], 5), ['06', '12'], true)) {
 				$numerador = in_array($mes['mes'], $carried['numerador'], true) ? null : $mes['numerador'];
 				$denominador = in_array($mes['mes'], $carried['denominador'], true) ? null : $mes['denominador'];
-				$meses[] = ['mes' => $mes['mes'], 'numerador' => $numerador, 'denominador' => $denominador, 'porcentaje' => $numerador === null || $denominador === null ? null : $mes['porcentaje']];
+				$meses[] = ['mes' => $mes['mes'], 'numerador' => $numerador, 'denominador' => $denominador, 'porcentaje' => $numerador === null || $denominador === null ? null : $mes['porcentaje'], ...self::origin($fuente, $mes['mes'])];
 			}
 		}
 
@@ -179,6 +248,7 @@ class Resumen {
 			'estado' => self::missing($meta, $anio),
 			'cierre' => $over ? array_column($meses, 'porcentaje', 'mes')["$anio-12"] ?? null : null,
 			'meses' => $meses,
+			'ruta' => $ruta,
 		];
 	}
 

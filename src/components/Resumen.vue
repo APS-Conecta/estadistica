@@ -5,7 +5,8 @@
 	establishment's own last month in the meta's serie, whether it cumple, in
 	colour and in words, and its histórico: a line per comparable year with the
 	table under it. Read from GET resumen alone, so the page shows what the API
-	answers.
+	answers. Each figure, on the card and in its table, is a button that opens
+	its source panel for the figure's month; closing it gives the focus back.
 -->
 <template>
 	<section class="estadistica-resumen">
@@ -43,17 +44,24 @@
 								Sin porcentaje: {{ meta.estado }}.
 							</p>
 							<p v-else-if="meta.manual" class="estadistica-resumen__estado">
-								{{ meta.porcentaje === null ? 'Todavía no se ha informado su cumplimiento.' : `Cumplimiento informado: ${percent(meta.porcentaje)}` }}
+								<template v-if="meta.porcentaje === null">
+									Todavía no se ha informado su cumplimiento.
+								</template>
+								<template v-else>
+									Cumplimiento informado: <button type="button" class="estadistica-cifra" @click="open(meta, card(meta), $event)">{{ percent(meta.porcentaje) }}</button>
+								</template>
 							</p>
 							<template v-else-if="meta.porcentaje !== null">
 								<p class="estadistica-resumen__porcentaje">
-									{{ percent(meta.porcentaje) }}
+									<button type="button" class="estadistica-cifra" @click="open(meta, card(meta), $event)">{{ percent(meta.porcentaje) }}</button>
 								</p>
 								<p class="estadistica-resumen__cuenta">
-									{{ figure(meta.numerador) }} de {{ figure(meta.denominador) }}
+									<button type="button" class="estadistica-cifra" @click="open(meta, card(meta), $event)">{{ figure(meta.numerador) }}</button>
+									de
+									<button type="button" class="estadistica-cifra" @click="open(meta, card(meta), $event)">{{ figure(meta.denominador) }}</button>
 								</p>
 								<p class="estadistica-resumen__hint">
-									Datos al {{ monthName(meta.datos_al) }}
+									Datos al {{ monthName(meta.datos_al) }}<template v-if="meta.origen"> · {{ meta.origen }}, con cifras hasta {{ monthName(meta.fecha_corte) }}</template>
 								</p>
 							</template>
 							<p v-else class="estadistica-resumen__estado">
@@ -67,10 +75,19 @@
 							</p>
 						</div>
 
-						<ResumenHistorico v-if="meta.historico.length" :meta="meta" />
+						<ResumenHistorico v-if="meta.historico.length" :meta="meta" @fuente="(cifra, event) => open(meta, cifra, event)" />
 					</article>
 				</li>
 			</ul>
+
+			<!-- Mounted afresh on each figure, so each opening moves the focus into the panel. -->
+			<ResumenFuente v-if="fuente"
+				:key="fuente.vez"
+				:meta="fuente.meta"
+				:cifra="fuente.cifra"
+				:anio="resumen.anio"
+				:referencia="resumen.referencia"
+				@close="close" />
 		</template>
 	</section>
 </template>
@@ -79,19 +96,26 @@
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { ocsGet, ocsMessageFrom, warnError } from '../api.js'
 import { formatValue } from '../charts.js'
+import { defineAsyncComponent } from 'vue'
 import { monthName } from '../query.js'
 import ResumenHistorico from './ResumenHistorico.vue'
+
+// The panel and the app sidebar are their own chunk, fetched on the first click (#43's way).
+const ResumenFuente = defineAsyncComponent(() => import(/* webpackChunkName: "fuente" */ './ResumenFuente.vue'))
 
 export default {
 	name: 'EstadisticaResumen',
 
-	components: { NcNoteCard, ResumenHistorico },
+	components: { NcNoteCard, ResumenFuente, ResumenHistorico },
 
 	data() {
 		return {
 			resumen: null,
 			missing: false,
 			failed: '',
+			/** The open source panel's card and month ({meta, cifra, vez}), and the figure that opened it. */
+			fuente: null,
+			opener: null,
 		}
 	},
 
@@ -110,6 +134,22 @@ export default {
 
 	methods: {
 		monthName,
+
+		/** The card's own month, with the current year's ruta: its histórico's last year. */
+		card(meta) {
+			return { mes: meta.mes, origen: meta.origen, fecha_corte: meta.fecha_corte, ruta: meta.historico.at(-1)?.ruta ?? null }
+		},
+
+		open(meta, cifra, event) {
+			this.fuente = { meta, cifra, vez: (this.fuente?.vez ?? 0) + 1 }
+			this.opener = event.currentTarget
+		},
+
+		async close() {
+			this.fuente = null
+			await this.$nextTick()
+			this.opener?.focus()
+		},
 
 		cumpleClass(meta) {
 			if (meta.cumple === null) {
@@ -192,5 +232,28 @@ export default {
 
 .estadistica-resumen__meta--no-cumple .estadistica-resumen__cumple {
 	color: var(--color-text-error);
+}
+</style>
+
+<style>
+/* A figure that opens its source panel, on a card or in its table: a button
+   that reads as the figure, underlined as a link. */
+.estadistica-resumen .estadistica-cifra,
+.estadistica-resumen .estadistica-cifra:hover {
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-decoration: underline dotted;
+	text-underline-offset: 0.2em;
+	cursor: pointer;
+}
+
+.estadistica-resumen .estadistica-cifra:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
 }
 </style>

@@ -60,13 +60,15 @@ final class ApiContractTest extends TestCase {
 
 	private const POBLACION = ['comprometida', 'corte', 'factor', 'falta_oficial'];
 
-	private const RESUMEN = ['anio', 'nombre', 'establecimiento', 'metas'];
+	private const RESUMEN = ['anio', 'nombre', 'referencia', 'establecimiento', 'metas'];
 
-	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'datos_al', 'numerador', 'denominador', 'porcentaje', 'cumple', 'historico'];
+	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'datos_al', 'numerador', 'denominador', 'porcentaje', 'cumple', 'historico', 'origen', 'fecha_corte'];
 
-	private const HISTORICO = ['anio', 'estado', 'cierre', 'meses'];
+	private const HISTORICO = ['anio', 'estado', 'cierre', 'meses', 'ruta'];
 
-	private const CIFRA = ['mes', 'numerador', 'denominador', 'porcentaje'];
+	private const CIFRA = ['mes', 'numerador', 'denominador', 'porcentaje', 'origen', 'fecha_corte'];
+
+	private const RUTA = ['fuente', 'desde', 'hasta', 'sumar', 'restar'];
 
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 
@@ -301,13 +303,24 @@ final class ApiContractTest extends TestCase {
 		$i = array_column($metas['indicadores'], null, 'codigo')['I'];
 		$indicator = GoalEvaluator::indicator($i, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], [], ['local' => null, 'nacional' => null, 'pares' => null], true, 2026, 6, 202606, 202606);
 
-		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false)];
-		$answer = Resumen::response(2026, $metas['nombre'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico)]);
+		$label = static fn (QuerySpec $spec): array => [QueryExecutor::label(
+			['codigo' => $spec->codigos[0], 'hoja' => 'A03', 'seccion' => 'SECCIÓN C', 'prestacion' => 'Evaluación', 'columnas' => [8 => 'Total'], 'de' => 2026],
+			2026,
+			$spec->columnas,
+		)];
+		$ruta = ['numerador' => Resumen::ruta($i['numerador'], $label), 'denominador' => Resumen::ruta($i['denominador'], $label)];
+		$fuente = Sources::rem('rem-a', [], []);
+
+		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false, $fuente, $ruta)];
+		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente)]);
 
 		self::assertSame(self::RESUMEN, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::TARJETA_META, array_keys($answer['metas'][0]));
 		self::assertSame(self::HISTORICO, array_keys($answer['metas'][0]['historico'][0]));
 		self::assertSame(self::CIFRA, array_keys($answer['metas'][0]['historico'][0]['meses'][0]));
+		self::assertSame(['numerador', 'denominador'], array_keys($answer['metas'][0]['historico'][0]['ruta']));
+		self::assertSame(self::RUTA, array_keys($answer['metas'][0]['historico'][0]['ruta']['denominador']));
+		self::assertSame(self::ETIQUETA, array_keys($answer['metas'][0]['historico'][0]['ruta']['denominador']['restar'][0][0]), 'a ruta labels its códigos as a consulta does');
 	}
 
 	public function testTheSpecNamesExactlyTheKeysTheResumenServes(): void {
@@ -317,6 +330,11 @@ final class ApiContractTest extends TestCase {
 		self::assertSame(self::TARJETA_META, array_keys($tarjeta));
 		self::assertSame(self::HISTORICO, array_keys($tarjeta['historico']['items']['properties']));
 		self::assertSame(self::CIFRA, array_keys($tarjeta['historico']['items']['properties']['meses']['items']['properties']));
+		$ruta = $tarjeta['historico']['items']['properties']['ruta'];
+		self::assertSame(['numerador', 'denominador'], array_keys($ruta['properties']));
+		self::assertTrue($ruta['properties']['denominador']['nullable'] ?? false, 'a denominador only a commitment gives has no ruta');
+		self::assertSame(self::RUTA, array_keys($ruta['properties']['numerador']['properties']));
+		self::assertSame(self::ETIQUETA, array_keys($ruta['properties']['numerador']['properties']['sumar']['items']['items']['properties']));
 	}
 
 	public function testTheResumenQueryIsTheControllersParameters(): void {
