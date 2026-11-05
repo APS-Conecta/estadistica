@@ -62,7 +62,7 @@ final class ApiContractTest extends TestCase {
 
 	private const RESUMEN = ['anio', 'nombre', 'establecimiento', 'metas'];
 
-	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'numerador', 'denominador', 'porcentaje', 'cumple'];
+	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'datos_al', 'numerador', 'denominador', 'porcentaje', 'cumple'];
 
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 
@@ -297,7 +297,7 @@ final class ApiContractTest extends TestCase {
 		$i = array_column($metas['indicadores'], null, 'codigo')['I'];
 		$indicator = GoalEvaluator::indicator($i, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], [], ['local' => null, 'nacional' => null, 'pares' => null], true, 2026, 6, 202606, 202606);
 
-		$answer = Resumen::response(2026, $metas['nombre'], '900001', [Resumen::card($indicator, 2026)]);
+		$answer = Resumen::response(2026, $metas['nombre'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'])]);
 
 		self::assertSame(self::RESUMEN, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::TARJETA_META, array_keys($answer['metas'][0]));

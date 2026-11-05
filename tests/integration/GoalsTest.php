@@ -407,7 +407,9 @@ class GoalsTest extends IntegrationTestCase {
 	 * number, so November has no figure, never 0. It cumple the 50 committed,
 	 * though not the nacional 90. Meta T is December, 45 de 350 = 12.86 %,
 	 * under its nacional 80. Meta II names its missing denominador. Meta VIII
-	 * is its cumplimiento informado, which reaches its nacional 100.
+	 * is its cumplimiento informado, which reaches its nacional 100. Each
+	 * card's datos al is 900001's own last month in its meta's serie: October
+	 * in REM-A, December in REM-P; a manual meta has none.
 	 */
 	public function testEachResumenCardIsItsMetasLastMonthWithAFigure(): void {
 		$this->fonasa('31-12-2098');
@@ -424,6 +426,7 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame([null, null, null, null, null, 'falta el denominador oficial de 2099'], self::card($cards['II']));
 		self::assertSame([null, null, null, 100.0, true, null], self::card($cards['VIII']));
 		self::assertSame([null, null, null, null, null, null], self::card($cards['C']), 'no commitment typed, so no denominador');
+		self::assertSame(['I' => '2099-10', 'II' => '2099-12', 'T' => '2099-12', 'C' => '2099-10', 'VIII' => null], array_column($resumen['metas'], 'datos_al', 'codigo'));
 
 		$indicadores = array_column($this->api()->indicadores(null, '')->getData()['indicadores'], null, 'codigo');
 		foreach ($resumen['metas'] as $card) {

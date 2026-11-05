@@ -445,7 +445,10 @@ class ApiController extends OCSController {
 	 * its meta comprometida when one is typed, else the meta nacional. A
 	 * manual meta (VIII) is its cumplimiento informado, with no mes. A month
 	 * with no written number in any of the meta's cells has no figure, never 0.
-	 * estado says why a meta shows none: «esperando ruta oficial» while its
+	 * datos_al (YYYY-MM) is the establishment's own last month in the meta's
+	 * serie, the fecha_corte_local GET indicadores serves for its fuente: a
+	 * Serie P mes shows its latest corte, so the two can differ. None for a
+	 * manual meta. estado says why a meta shows none: «esperando ruta oficial» while its
 	 * seed marks a ruta "oficial": false, or «falta el denominador oficial de
 	 * <año>» while its ages cut a PIV band and no denominador comprometido is
 	 * typed. Only the establishment's own figures are asked: no country, no
@@ -457,7 +460,7 @@ class ApiController extends OCSController {
 	 * ponytail: built on each request, where docs/adr/0009 stores it once per change.
 	 *
 	 * @param ?string $establecimiento the six-digit DEIS code whose Resumen to build; this install's when omitted
-	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The newest metas' cards
 	 * 400: The DEIS code is not one — {message: the Spanish sentence}

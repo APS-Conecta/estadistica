@@ -1,8 +1,9 @@
 <!--
 	Resumen (docs/adr/0009): the view that opens first. One card per meta of
 	the newest metas, for this install's establishment: the percentage and
-	«N de D» of the meta's last month with a figure, and whether it cumple, in
-	colour and in words. Read from GET resumen alone, so the page shows what
+	«N de D» of the meta's last month with a figure, dated by the
+	establishment's own last month in the meta's serie, and whether it
+	cumple, in colour and in words. Read from GET resumen alone, so the page shows what
 	the API answers.
 -->
 <template>
@@ -51,7 +52,7 @@
 									{{ figure(meta.numerador) }} de {{ figure(meta.denominador) }}
 								</p>
 								<p class="estadistica-resumen__hint">
-									Datos al {{ monthName(meta.mes) }}
+									Datos al {{ monthName(meta.datos_al) }}
 								</p>
 							</template>
 							<p v-else class="estadistica-resumen__estado">

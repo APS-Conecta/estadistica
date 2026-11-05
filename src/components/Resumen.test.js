@@ -17,17 +17,18 @@ const refused = (status, message) => Promise.reject(Object.assign(new Error(`HTT
 
 const meta = (codigo, fields) => ({
 	codigo, nombre: `La meta ${codigo}`, indicador: 'Un indicador', meta_nacional: 90, meta_comprometida: null, manual: false,
-	estado: null, mes: null, numerador: null, denominador: null, porcentaje: null, cumple: null, ...fields,
+	estado: null, mes: null, datos_al: null, numerador: null, denominador: null, porcentaje: null, cumple: null, ...fields,
 })
 
-/** GET resumen for 900001: cumple against a commitment, misses the nacional, both statuses, sin informar and Meta VIII. */
+/** GET resumen for 900001: cumple against a commitment, misses the nacional, a Serie P figure older than its month, both statuses, sin informar and Meta VIII. */
 const answer = () => ({
 	anio: 2026,
 	nombre: 'Metas Sanitarias 2026',
 	establecimiento: '900001',
 	metas: [
-		meta('I', { nombre: 'Recuperación del desarrollo psicomotor', meta_comprometida: 50, mes: '2026-10', numerador: 7, denominador: 12, porcentaje: 58.33, cumple: true }),
-		meta('V', { meta_nacional: 45, mes: '2026-06', numerador: 1287, denominador: 3500.5, porcentaje: 36.77, cumple: false }),
+		meta('I', { nombre: 'Recuperación del desarrollo psicomotor', meta_comprometida: 50, mes: '2026-10', datos_al: '2026-10', numerador: 7, denominador: 12, porcentaje: 58.33, cumple: true }),
+		meta('V', { meta_nacional: 45, mes: '2026-06', datos_al: '2026-06', numerador: 1287, denominador: 3500.5, porcentaje: 36.77, cumple: false }),
+		meta('VII', { meta_nacional: 55, mes: '2026-11', datos_al: '2026-06', numerador: 30, denominador: 60, porcentaje: 50, cumple: false }),
 		meta('II', { estado: 'falta el denominador oficial de 2026' }),
 		meta('IV.A', { estado: 'esperando ruta oficial' }),
 		meta('VI'),
@@ -55,7 +56,7 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
 		expect(axios.get).toHaveBeenCalledTimes(1)
 		expect(axios.get).toHaveBeenCalledWith(RESUMEN, { params: {} })
 		expect(wrapper.find('h2').text()).toBe('Metas Sanitarias 2026')
-		expect(wrapper.findAll('article h3').map((title) => title.text())).toEqual(['Meta I 2026', 'Meta V 2026', 'Meta II 2026', 'Meta IV.A 2026', 'Meta VI 2026', 'Meta VIII 2026'])
+		expect(wrapper.findAll('article h3').map((title) => title.text())).toEqual(['Meta I 2026', 'Meta V 2026', 'Meta VII 2026', 'Meta II 2026', 'Meta IV.A 2026', 'Meta VI 2026', 'Meta VIII 2026'])
 		wrapper.unmount()
 	})
 
@@ -70,6 +71,16 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
 		expect(first).toContain('Cumple la meta comprometida (50 %)')
 		expect(card(wrapper, 'V').text()).toContain('1.287 de 3.500,5')
 		expect(card(wrapper, 'V').text()).toContain('No cumple la meta nacional (45 %)')
+		wrapper.unmount()
+	})
+
+	it('dates a card by the establishment\'s last month in the meta\'s serie, not by the month of its figure', async () => {
+		const wrapper = await shown()
+
+		const serieP = card(wrapper, 'VII').text()
+		expect(serieP).toContain('30 de 60')
+		expect(serieP).toContain('Datos al junio de 2026')
+		expect(serieP).not.toContain('noviembre')
 		wrapper.unmount()
 	})
 

@@ -15,6 +15,11 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * of the newest metas seed, for one establishment: the percentage and «N de
  * D» of the meta's last month with a figure, and whether it cumple.
  *
+ * - **Datos al** is the establishment's own last month in the meta's serie
+ *   (GoalEvaluator's fecha_corte_local, #25), not the month of the figure: a
+ *   Serie P meta's November shows its June corte. None for a manual meta or
+ *   without an establishment.
+ *
  * - **One formula path.** The cards are GoalEvaluator's answer for the
  *   establishment alone, so a card's N, D and % are GET indicadores' local
  *   series for the same month: the same compiled consultas, in one read-only
@@ -30,7 +35,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * are their own tickets (#47, #48).
  *
  * @psalm-import-type Meta from GoalEvaluator
- * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}
+ * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}
  * @psalm-type Respuesta = array{anio: int, nombre: string, establecimiento: ?string, metas: list<Tarjeta>}
  */
 class Resumen {
@@ -49,7 +54,7 @@ class Resumen {
 		$answer = $this->evaluator->evaluate($this->goals->years()[0] ?? null, $local, [], false);
 
 		return self::response($answer['anio'], $answer['nombre'], $answer['establecimiento'], array_map(
-			static fn (array $meta): array => self::card($meta, $answer['anio']),
+			static fn (array $meta): array => self::card($meta, $answer['anio'], $answer['fecha_corte_local']),
 			$answer['indicadores'],
 		));
 	}
@@ -69,9 +74,10 @@ class Resumen {
 	 * A meta's card, from its months as GoalEvaluator counts them.
 	 *
 	 * @param Meta $meta
+	 * @param ?array<string, ?string> $fechaCorteLocal the establishment's own last month (YYYY-MM) by fuente; null without one
 	 * @return Tarjeta
 	 */
-	public static function card(array $meta, int $anio): array {
+	public static function card(array $meta, int $anio, ?array $fechaCorteLocal): array {
 		$waiting = ($meta['numerador']['oficial'] ?? true) === false || ($meta['denominador']['oficial'] ?? true) === false;
 		$last = null;
 		foreach ($waiting ? [] : $meta['meses'] as $mes) {
@@ -92,6 +98,7 @@ class Resumen {
 				default => null,
 			},
 			'mes' => $last['mes'] ?? null,
+			'datos_al' => $fechaCorteLocal[$meta['numerador']['fuente'] ?? ''] ?? null,
 			'numerador' => $last['numerador'] ?? null,
 			'denominador' => $last['denominador'] ?? null,
 			'porcentaje' => $porcentaje,
