@@ -27,7 +27,9 @@ use OCP\AppFramework\Utility\ITimeFactory;
  *   snapshot at a corte (June and December, measured on SERIE_REM_2025), so a
  *   month shows the latest corte up to it, and nothing before the first.
  * - **No figure past the data.** A Serie A month after the meta year's fecha
- *   de corte has none yet, rather than repeating the last month's.
+ *   de corte has none yet, rather than repeating the last month's. The local
+ *   series' is the establishment's own last month with a written number
+ *   (#25); the country's and the peers' is the fuente's.
  * - **Denominators.** REM, like a numerador; FONASA's inscritos for the meta
  *   year (Population: its corte rule and its band rule), each age group times
  *   its prevalence; or the establishment's commitment alone. A committed
@@ -55,7 +57,7 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * @psalm-type Mes = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}
  * @psalm-type Poblacion = array{comprometida: bool, corte: ?string, factor: ?float, prorrateado: bool}
  * @psalm-type Meta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?Poblacion, meses: list<Mes>}
- * @psalm-type Respuesta = array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<Fuente>, indicadores: list<Meta>}
+ * @psalm-type Respuesta = array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<Fuente>, fecha_corte_local: ?array<string, ?string>, indicadores: list<Meta>}
  */
 class GoalEvaluator {
 	/** The scopes a meta is measured in, as a consulta's series. */
@@ -95,7 +97,8 @@ class GoalEvaluator {
 		$fuentes = array_column($this->sources->all(), null, 'id');
 		$through = self::through($fuentes['rem-a'], $anio);
 		$commitments = $estab === null ? [] : $this->goals->commitments($anio, $estab);
-		$answers = $this->ask($metas, $estab, $peers);
+		[$answers, $own] = $this->ask($metas, $anio, $estab, $peers);
+		$localThrough = ($own['rem-a'] ?? null) === null ? null : (int)str_replace('-', '', $own['rem-a']);
 		$inscritos = in_array(GoalSeed::BASE_POPULATION, array_column($metas['indicadores'], 'base'), true)
 			? [
 				'local' => $estab === null ? null : $this->population->local($anio, $estab),
@@ -107,11 +110,11 @@ class GoalEvaluator {
 		$indicadores = [];
 		foreach ($metas['indicadores'] as $meta) {
 			$commitment = $commitments[$meta['codigo']] ?? ['meta' => null, 'denominador' => null, 'cumplimiento' => null];
-			$indicadores[] = self::indicator($meta, $commitment, $answers, $inscritos, $estab !== null, $anio, $months, $through);
+			$indicadores[] = self::indicator($meta, $commitment, $answers, $inscritos, $estab !== null, $anio, $months, $through, $localThrough);
 		}
 
 		return self::response($years, $metas, $estab === null ? null : $local->deisCode, $peers, $aviso,
-			[$fuentes['rem-a'], $fuentes['rem-p'], $fuentes['piv']], $indicadores);
+			[$fuentes['rem-a'], $fuentes['rem-p'], $fuentes['piv']], $own, $indicadores);
 	}
 
 	/**
@@ -122,10 +125,11 @@ class GoalEvaluator {
 	 * @param Metas $metas
 	 * @param ?array<string, string> $pares
 	 * @param list<Fuente> $fuentes
+	 * @param ?array<string, ?string> $fechaCorteLocal the establishment's own last month, by fuente; null without one
 	 * @param list<Meta> $indicadores
 	 * @return Respuesta
 	 */
-	public static function response(array $years, array $metas, ?string $establecimiento, ?array $pares, ?string $aviso, array $fuentes, array $indicadores): array {
+	public static function response(array $years, array $metas, ?string $establecimiento, ?array $pares, ?string $aviso, array $fuentes, ?array $fechaCorteLocal, array $indicadores): array {
 		return [
 			'anios' => $years,
 			'anio' => $metas['anio'],
@@ -138,6 +142,7 @@ class GoalEvaluator {
 			'pares' => $pares,
 			'aviso' => $aviso,
 			'fuentes' => $fuentes,
+			'fecha_corte_local' => $fechaCorteLocal,
 			'indicadores' => $indicadores,
 		];
 	}
@@ -149,9 +154,11 @@ class GoalEvaluator {
 	 * @param Commitment $commitment
 	 * @param array<int, array<string, ?list<Punto>>> $answers each route's series, by spl_object_id of its QuerySpec
 	 * @param array<string, ?Inscritos> $inscritos
+	 * @param ?int $through the fuente's fecha de corte (YYYYMM), for the country and the peers
+	 * @param ?int $localThrough the establishment's own last reported month (YYYYMM), for the local series
 	 * @return Meta
 	 */
-	public static function indicator(array $meta, array $commitment, array $answers, array $inscritos, bool $configured, int $anio, int $months, ?int $through): array {
+	public static function indicator(array $meta, array $commitment, array $answers, array $inscritos, bool $configured, int $anio, int $months, ?int $through, ?int $localThrough): array {
 		$counted = in_array($meta['base'], [GoalSeed::BASE_POPULATION, GoalSeed::BASE_COMMITTED], true);
 		$indicator = [
 			'codigo' => $meta['codigo'],
@@ -176,10 +183,11 @@ class GoalEvaluator {
 		$numerador = [];
 		$denominador = [];
 		foreach (self::SCOPES as $scope) {
-			$numerador[$scope] = self::route($meta['numerador'], $answers, $scope, $anio, $months, $through);
+			$cut = $scope === 'local' ? $localThrough : $through;
+			$numerador[$scope] = self::route($meta['numerador'], $answers, $scope, $anio, $months, $cut);
 			$denominador[$scope] = $meta['denominador'] === null
 				? null
-				: self::route($meta['denominador'], $answers, $scope, $anio, $months, $through);
+				: self::route($meta['denominador'], $answers, $scope, $anio, $months, $cut);
 		}
 
 		$committed = $configured ? $commitment['denominador'] : null;
@@ -241,8 +249,8 @@ class GoalEvaluator {
 	/**
 	 * A route's figure at each month of the meta year (index 0 is January).
 	 * - Serie A: the sum from the periodo's first month to that month, and no
-	 *   further than its last. Null after $through, the meta year's fecha de
-	 *   corte, and while nothing in that range was reported.
+	 *   further than its last. Null after $through, the scope's fecha de
+	 *   corte in the meta year, and while nothing in that range was reported.
 	 * - Serie P: the latest corte up to that month within the periodo; null
 	 *   before the first.
 	 *
@@ -347,14 +355,15 @@ class GoalEvaluator {
 	}
 
 	/**
-	 * Every REM route of the year's metas, each asked for the three scopes in
-	 * one read-only snapshot, so no meta mixes two loads.
+	 * Every REM route of the year's metas, each asked for the three scopes,
+	 * and the establishment's own last month in each serie, in one read-only
+	 * snapshot, so no meta mixes two loads.
 	 *
 	 * @param Metas $metas
 	 * @param ?array<string, string> $peers
-	 * @return array<int, array<string, ?list<Punto>>> by spl_object_id of the route's QuerySpec
+	 * @return array{0: array<int, array<string, ?list<Punto>>>, 1: ?array<string, ?string>} the answers by spl_object_id of the route's QuerySpec; the last months by fuente, null without an establishment
 	 */
-	private function ask(array $metas, ?int $estab, ?array $peers): array {
+	private function ask(array $metas, int $anio, ?int $estab, ?array $peers): array {
 		$specs = [];
 		foreach ($metas['indicadores'] as $meta) {
 			foreach ([$meta['numerador'], $meta['denominador']] as $part) {
@@ -364,7 +373,7 @@ class GoalEvaluator {
 			}
 		}
 
-		return $this->executor->readOnly(function () use ($specs, $estab, $peers): array {
+		return $this->executor->readOnly(function () use ($specs, $anio, $estab, $peers): array {
 			$answers = [];
 			foreach ($specs as $id => $spec) {
 				$answers[$id] = [
@@ -373,8 +382,12 @@ class GoalEvaluator {
 					'pares' => $peers === null ? null : $this->executor->series($spec, $spec->codigos, $peers),
 				];
 			}
+			$own = $estab === null ? null : [
+				'rem-a' => $this->executor->lastReported('A', $anio, $estab),
+				'rem-p' => $this->executor->lastReported('P', $anio, $estab),
+			];
 
-			return $answers;
+			return [$answers, $own];
 		});
 	}
 

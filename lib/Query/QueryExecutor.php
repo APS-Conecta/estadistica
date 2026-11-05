@@ -11,6 +11,7 @@ use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Register\Register;
+use OCA\Estadistica\Rem\RemReader;
 use OCA\Estadistica\Service\Sources;
 use OCP\DB\Exception;
 use OCP\IDBConnection;
@@ -254,5 +255,23 @@ class QueryExecutor {
 		$result->closeCursor();
 
 		return QueryCompiler::points($spec, $rows);
+	}
+
+	/**
+	 * The establishment's last month of $anio with a written number in Serie
+	 * $serie, as YYYY-MM, or null when it wrote none: its own fecha de corte,
+	 * which another establishment's later month never moves (#25). Like
+	 * series(), it runs only inside readOnly().
+	 */
+	public function lastReported(string $serie, int $anio, int $estab): ?string {
+		$cells = implode(', ', array_map(static fn (int $i): string => sprintf('col%02d', $i), range(1, RemReader::COLUMNS)));
+		$result = $this->db->executeQuery(
+			"SELECT max(mes) FROM *PREFIX*estadistica_rem WHERE estab = ? AND anio = ? AND serie = ? AND COALESCE($cells) IS NOT NULL",
+			[$estab, $anio, $serie],
+		);
+		$mes = $result->fetchOne();
+		$result->closeCursor();
+
+		return $mes === null || $mes === false ? null : sprintf('%04d-%02d', $anio, (int)$mes);
 	}
 }
