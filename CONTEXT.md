@@ -77,10 +77,12 @@ comprometida follows (2027: Res. Exenta 732). MINSAL's **Orientaciones Técnicas
 gives each meta's route in the REM.
 
 **Resumen** — the view that opens first: the metas of the newest resolución de metas for the establishment, in the
-current year and in each comparable year before it. _Avoid_: tablero; nobody lays it out.
+current year and in each comparable year before it. Its current year is the latest with figures: next year's metas
+are counted over this year's until their own year has some. _Avoid_: tablero; nobody lays it out.
 
 **Histórico** — a meta's ruta asked over an earlier year's figures. A year is **comparable** when every código ×
-columna of the ruta carries the same label in that year's diccionario; otherwise it shows «sin datos comparables».
+columna of the ruta carries the same label in that year's diccionario, and its periodos lie whole in the ventana;
+otherwise it shows «sin datos comparables».
 
 **Ruta** — how a meta's numerador or denominador is counted: a fuente, a periodo, and the códigos × columnas to add
 (`sumar`) and to subtract (`restar`). Every term is a consulta. A ruta is **oficial** once the year's OOTT give it;

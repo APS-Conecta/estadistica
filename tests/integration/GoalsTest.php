@@ -76,6 +76,19 @@ use Psr\Log\LoggerInterface;
  * Serie P, Metas II and T (col01 + col02): 900001 in June P1206010 30 + 2
  * and P1206020 8 = 40, in December P1206010 45; 900002 in June P1206010 300.
  *
+ * Earlier years, for the Resumen's histórico (docs/adr/0009), all 900001's:
+ *
+ *     año-mes  código     cells   counts in, under the 2099 metas moved onto that year
+ *     2096-05  02010420   08=2    Meta C 2096
+ *     2097-11  02010321   08=4    Meta I 2098's denominador (2097-10 to 2098-09)
+ *     2098-02  02010420   08=5    Meta I and Meta C 2098's numerador
+ *     2098-03  02010321   08=6    Meta I 2098's denominador
+ *     2098-12  P1206010   01=35   Meta II and T 2098's December corte
+ *
+ * Each serie's diccionario labels the routes' códigos in 2096, 2098 and 2099;
+ * 2098's writes Serie A's labels in capitals, without accents and in the
+ * plural. 2097 has none, so it borrows 2098's.
+ *
  * FONASA: Meta II's mujeres 25–64 cut the 20–29 and 60–69 bands, so the PIV
  * gives it no figure (docs/adr/0007, amendment). Meta T's mujeres 20–69 are
  * whole bands: 900001 has 100 in 20–29, 50 in each of 30–39, 40–49 and
@@ -87,11 +100,35 @@ use Psr\Log\LoggerInterface;
  * on an instance that holds one (EnrichmentTest's reasoning).
  */
 class GoalsTest extends IntegrationTestCase {
-	private const YEARS = [2097, 2098, 2099];
+	private const YEARS = [2096, 2097, 2098, 2099, 2100];
 
 	private const CESFAM = 'Centro de Salud Familiar (CESFAM)';
 
 	private const DROPPED = 'estadistica-metas-test.json';
+
+	/** Serie A's diccionario: each route código's prestación. */
+	private const LABELS_A = [
+		'02010420' => 'Evaluación de recuperación',
+		'03500366' => 'Reevaluación normal',
+		'02010321' => 'Evaluación inicial con rezago',
+		'03500331' => 'Traslado a otro centro',
+		'03500334' => 'Egreso por fallecimiento',
+	];
+
+	/** LABELS_A as 2098's diccionario writes them: capitals, no accents, plurals. */
+	private const FOLDED_A = [
+		'02010420' => 'EVALUACIONES DE RECUPERACION',
+		'03500366' => 'REEVALUACIONES NORMALES',
+		'02010321' => 'EVALUACIONES INICIALES CON REZAGO',
+		'03500331' => 'TRASLADOS A OTROS CENTROS',
+		'03500334' => 'EGRESOS POR FALLECIMIENTO',
+	];
+
+	/** Serie P's diccionario: P12's age bands. */
+	private const LABELS_P = [
+		'P1206010' => 'De 25 a 29 años', 'P1206020' => 'De 30 a 34 años', 'P1206030' => 'De 35 a 39 años', 'P1206040' => 'De 40 a 44 años',
+		'P1206050' => 'De 45 a 49 años', 'P1206060' => 'De 50 a 54 años', 'P1206070' => 'De 55 a 59 años', 'P1206080' => 'De 60 a 64 años',
+	];
 
 	private bool $ownsRegister = false;
 
@@ -114,28 +151,8 @@ class GoalsTest extends IntegrationTestCase {
 			XlsxFixture::establishment(900003, ['tipo' => 'Posta de Salud Rural (PSR)']),
 		])))['rows'], IngestState::ORIGIN_DEIS, 2098);
 
-		$importer = Server::get(RemImporter::class);
-		$loads = [
-			[2098, 'A', ZipFixture::row(2098, 10, '900001', '02010321', [8 => '6', 9 => '4'])
-				. ZipFixture::row(2098, 11, '900002', '02010321', [8 => '20'])
-				. ZipFixture::row(2098, 12, '900001', '03500331', [8 => '1'])],
-			[2099, 'A', ZipFixture::row(2099, 1, '900001', '02010420', [8 => '2', 9 => '1'])
-				. ZipFixture::row(2099, 1, '900001', '03500366', [10 => '1'])
-				. ZipFixture::row(2099, 1, '900002', '02010420', [8 => '10'])
-				. ZipFixture::row(2099, 2, '900001', '02010321', [10 => '5'])
-				. ZipFixture::row(2099, 2, '900001', '03500334', [11 => '2'])
-				. ZipFixture::row(2099, 3, '900001', '02010420', [11 => '3'])
-				. ZipFixture::row(2099, 10, '900001', '02010321', [8 => '100'])
-				. ZipFixture::row(2099, 11, '900001', '02010420')
-				. ZipFixture::row(2099, 12, '900003', '02010420', [8 => '1'])],
-			[2099, 'P', ZipFixture::row(2099, 6, '900001', 'P1206010', [1 => '30', 2 => '2'])
-				. ZipFixture::row(2099, 6, '900001', 'P1206020', [1 => '8'])
-				. ZipFixture::row(2099, 6, '900002', 'P1206010', [1 => '300'])
-				. ZipFixture::row(2099, 12, '900001', 'P1206010', [1 => '45'])],
-		];
-		foreach ($loads as [$year, $serie, $rows]) {
-			$state = $importer->import(new LocalRange(ZipFixture::zip(["Serie{$serie}{$year}.csv" => ZipFixture::header() . $rows])), $year, $serie, IngestState::ORIGIN_FILE);
-			self::assertGreaterThan(0, $state->getRowCount(), "the $year $serie fixture loads");
+		foreach (self::loads() as [$year, $serie, $rows, $labels]) {
+			$this->load($year, $serie, $rows, $labels);
 		}
 
 		$this->goals()->store(self::seed());
@@ -211,6 +228,69 @@ class GoalsTest extends IntegrationTestCase {
 		];
 	}
 
+	/**
+	 * Each year and serie the setUp loads: its rows, and its diccionario's
+	 * labels (null for none).
+	 *
+	 * @return list<array{0: int, 1: string, 2: string, 3: ?array<string, string>}>
+	 */
+	private static function loads(): array {
+		$a = self::LABELS_A;
+		$p = self::LABELS_P;
+
+		return [
+			[2096, 'A', ZipFixture::row(2096, 5, '900001', '02010420', [8 => '2']), $a],
+			[2097, 'A', ZipFixture::row(2097, 11, '900001', '02010321', [8 => '4']), null],
+			[2098, 'A', ZipFixture::row(2098, 2, '900001', '02010420', [8 => '5'])
+				. ZipFixture::row(2098, 3, '900001', '02010321', [8 => '6'])
+				. ZipFixture::row(2098, 10, '900001', '02010321', [8 => '6', 9 => '4'])
+				. ZipFixture::row(2098, 11, '900002', '02010321', [8 => '20'])
+				. ZipFixture::row(2098, 12, '900001', '03500331', [8 => '1']), self::FOLDED_A],
+			[2098, 'P', ZipFixture::row(2098, 12, '900001', 'P1206010', [1 => '35']), $p],
+			[2099, 'A', ZipFixture::row(2099, 1, '900001', '02010420', [8 => '2', 9 => '1'])
+				. ZipFixture::row(2099, 1, '900001', '03500366', [10 => '1'])
+				. ZipFixture::row(2099, 1, '900002', '02010420', [8 => '10'])
+				. ZipFixture::row(2099, 2, '900001', '02010321', [10 => '5'])
+				. ZipFixture::row(2099, 2, '900001', '03500334', [11 => '2'])
+				. ZipFixture::row(2099, 3, '900001', '02010420', [11 => '3'])
+				. ZipFixture::row(2099, 10, '900001', '02010321', [8 => '100'])
+				. ZipFixture::row(2099, 11, '900001', '02010420')
+				. ZipFixture::row(2099, 12, '900003', '02010420', [8 => '1']), $a],
+			[2099, 'P', ZipFixture::row(2099, 6, '900001', 'P1206010', [1 => '30', 2 => '2'])
+				. ZipFixture::row(2099, 6, '900001', 'P1206020', [1 => '8'])
+				. ZipFixture::row(2099, 6, '900002', 'P1206010', [1 => '300'])
+				. ZipFixture::row(2099, 12, '900001', 'P1206010', [1 => '45']), $p],
+		];
+	}
+
+	/**
+	 * One year and serie through the importer the job uses, with a
+	 * DICCIONARIO CODIGOS in DEIS's layout when $labels names the prestación
+	 * of each código: one hoja, one sección, the column headers above the
+	 * COLnn markers (Serie A col08–col11, Serie P col01–col02).
+	 *
+	 * @param ?array<string, string> $labels código → prestación
+	 */
+	private function load(int $year, string $serie, string $rows, ?array $labels): void {
+		$members = ["Serie{$serie}{$year}.csv" => ZipFixture::header() . $rows];
+		if ($labels !== null) {
+			$columns = $serie === 'A'
+				? ['C' => ['COL08', 'Niños de 12 a 17 meses'], 'D' => ['COL09', 'Niñas de 12 a 17 meses'], 'E' => ['COL10', 'Niños de 18 a 23 meses'], 'F' => ['COL11', 'Niñas de 18 a 23 meses']]
+				: ['C' => ['COL01', 'Mujeres'], 'D' => ['COL02', 'Personas trans masculinas']];
+			$sheet = [
+				6 => ['B' => "REM-{$serie}12. HOJA DE PRUEBA"],
+				8 => ['B' => 'SECCIÓN A: SECCIÓN DE PRUEBA'],
+				9 => ['B' => 'PRESTACIÓN', ...array_map(static fn (array $column): string => $column[1], $columns)],
+			];
+			foreach (array_keys($labels) as $i => $codigo) {
+				$sheet[10 + $i] = ['A' => $codigo, 'B' => $labels[$codigo], ...array_map(static fn (array $column): string => $column[0], $columns)];
+			}
+			$members["Diccionarios/DICCIONARIO CODIGOS S{$serie}_99_V1.0.xlsm"] = (string)file_get_contents(XlsxFixture::workbook(["{$serie}12" => $sheet]));
+		}
+		$state = Server::get(RemImporter::class)->import(new LocalRange(ZipFixture::zip($members)), $year, $serie, IngestState::ORIGIN_FILE);
+		self::assertGreaterThan(0, $state->getRowCount(), "the $year $serie fixture loads");
+	}
+
 	private function at(int $time): ITimeFactory {
 		$clock = $this->createStub(ITimeFactory::class);
 		$clock->method('getTime')->willReturn($time);
@@ -241,7 +321,7 @@ class GoalsTest extends IntegrationTestCase {
 	private function resumen(?ITimeFactory $clock = null): ResumenStore {
 		$clock ??= $this->clock;
 
-		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
+		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
 	}
 
 	/** How many rebuilds wait in the background work. */
@@ -502,6 +582,128 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame('900002', $other['establecimiento']);
 		$i = array_column($other['metas'], null, 'codigo')['I'];
 		self::assertSame([null, ['2099-01', 10.0, 20.0, 50.0, false, null]], [$i['meta_comprometida'], self::card($i)]);
+	}
+
+	/**
+	 * docs/adr/0009: the histórico asks the newest metas over each earlier
+	 * year of the ventana, every periodo moved by whole years. Meta I 2098
+	 * counts its numerador over 2098 and its denominador from October 2097 to
+	 * September 2098: 4 + 6 = 10, so 2098-10's +10 (2099's window) never
+	 * counts. January 2098 has no numerador yet, sin informar; February
+	 * 5 ÷ 4 = 125 %; from March 5 ÷ 10 = 50 %, its cierre. Meta T is Serie
+	 * P, drawn at its cortes: 2098's December 35 ÷ 350 = 10 %, over the
+	 * corte of 31-12-2097. 2099 is not over, so it has no cierre yet, and the
+	 * card is its October.
+	 */
+	public function testTheHistoricoMovesEachPeriodoByWholeYears(): void {
+		$this->fonasa('31-12-2097');
+		$this->fonasa('31-12-2098');
+
+		$cards = array_column($this->api()->resumen()->getData()['metas'], null, 'codigo');
+
+		$i = self::historico($cards['I']);
+		self::assertSame([2096, 2097, 2098, 2099], array_keys($i), 'the ventana, oldest first, the current year last');
+		$i2098 = array_column($i[2098]['meses'], null, 'mes');
+		self::assertCount(12, $i2098);
+		self::assertSame([[null, 4.0, null], [5.0, 4.0, 125.0], [5.0, 10.0, 50.0], [5.0, 10.0, 50.0]], array_map(
+			static fn (string $mes): array => [$i2098[$mes]['numerador'], $i2098[$mes]['denominador'], $i2098[$mes]['porcentaje']],
+			['2098-01', '2098-02', '2098-03', '2098-12'],
+		));
+		self::assertSame([null, 50.0, null], [$i[2098]['estado'], $i[2098]['cierre'], $i[2099]['cierre']]);
+		self::assertSame([7.0, 12.0, 58.33], array_values(array_intersect_key(array_column($i[2099]['meses'], null, 'mes')['2099-10'], array_flip(['numerador', 'denominador', 'porcentaje']))), 'the card\'s own October');
+
+		$t = self::historico($cards['T']);
+		self::assertSame([['2098-06', null, 350.0, null], ['2098-12', 35.0, 350.0, 10.0]], array_map(
+			static fn (array $mes): array => [$mes['mes'], $mes['numerador'], $mes['denominador'], $mes['porcentaje']],
+			$t[2098]['meses'],
+		));
+		self::assertSame(10.0, $t[2098]['cierre']);
+		self::assertSame([], self::historico($cards['VIII']), 'a manual meta has no figures to draw');
+	}
+
+	/**
+	 * docs/adr/0009: a year is comparable only when its own diccionario gives
+	 * every código × columna of the ruta the current year's label, once case,
+	 * accents and plurals are folded. 2098's capitals and plurals compare;
+	 * 2097 borrows 2098's labels, so it never does; and Meta I's 2096 would
+	 * need October 2095, outside the ventana. Relabelling one of Meta I's
+	 * códigos in 2098 drops Meta I's 2098, and leaves Meta C's.
+	 */
+	public function testAYearIsComparableOnlyWithItsOwnDiccionarioAndTheSameLabels(): void {
+		$estados = fn (): array => array_map(
+			static fn (array $card): array => array_map(static fn (array $year): ?string => $year['estado'], self::historico($card)),
+			array_column($this->api()->resumen()->getData()['metas'], null, 'codigo'),
+		);
+		$none = 'sin datos comparables';
+
+		$before = $estados();
+		self::assertSame([2096 => $none, 2097 => $none, 2098 => null, 2099 => null], $before['I']);
+		self::assertSame([2096 => null, 2097 => $none, 2098 => null, 2099 => null], $before['C']);
+		$i2096 = self::historico(array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['I'])[2096];
+		self::assertSame([[], null], [$i2096['meses'], $i2096['cierre']], 'nothing is shown for a year that does not compare');
+
+		[[$year, $serie, $rows]] = array_values(array_filter(self::loads(), static fn (array $load): bool => $load[0] === 2098 && $load[1] === 'A'));
+		$this->load($year, $serie, $rows, ['03500331' => 'Derivación a especialidad'] + self::FOLDED_A);
+
+		$after = $estados();
+		self::assertSame($none, $after['I'][2098]);
+		self::assertNull($after['C'][2098], 'Meta C names no relabelled código');
+	}
+
+	/**
+	 * docs/adr/0009, ADR-0007 amendment: Meta II's ages cut a PIV band, so a
+	 * past year shows its figures only where that year's denominador
+	 * comprometido is typed, and names the year it is missing.
+	 */
+	public function testAPastYearOverPeopleWaitsForThatYearsOfficialDenominator(): void {
+		$ii = self::historico(array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['II']);
+
+		self::assertSame(['falta el denominador oficial de 2098', 'falta el denominador oficial de 2099'], [$ii[2098]['estado'], $ii[2099]['estado']]);
+		self::assertSame([35.0, null], [$ii[2098]['meses'][1]['numerador'], $ii[2098]['meses'][1]['porcentaje']]);
+	}
+
+	/**
+	 * #48, CONTEXT.md (Cierre, Sin informar): a Serie P point of the
+	 * histórico is that month's own corte. 2098 reported June (21) and no
+	 * December: Meta T's June is 21 ÷ 350 = 6 %, its December is sin
+	 * informar rather than June's corte again, and the year has no cierre.
+	 */
+	public function testAPastYearWithoutItsDecemberCorteHasNoCierre(): void {
+		$this->fonasa('31-12-2097');
+		$this->load(2098, 'P', ZipFixture::row(2098, 6, '900001', 'P1206010', [1 => '21']), self::LABELS_P);
+
+		$t = self::historico(array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['T'])[2098];
+
+		self::assertSame([['2098-06', 21.0, 350.0, 6.0], ['2098-12', null, 350.0, null]], array_map(
+			static fn (array $mes): array => [$mes['mes'], $mes['numerador'], $mes['denominador'], $mes['porcentaje']],
+			$t['meses'],
+		));
+		self::assertNull($t['cierre']);
+	}
+
+	/**
+	 * docs/adr/0009: the newest metas may come before any figures of their
+	 * year (2100's, in October). The Resumen's current year is then the
+	 * latest year with figures, 2099, with the 2100 rutas moved onto it.
+	 */
+	public function testNewerMetasAreCountedOverTheLatestYearWithFigures(): void {
+		$this->goals()->store(self::seed(2100));
+
+		$resumen = $this->api()->resumen()->getData();
+
+		self::assertSame([2100, 'Metas de prueba 2100'], [$resumen['anio'], $resumen['nombre']]);
+		$i = array_column($resumen['metas'], null, 'codigo')['I'];
+		self::assertSame(['2099-10', 7.0, 12.0, 58.33, false, null], self::card($i));
+		self::assertSame([2096, 2097, 2098, 2099], array_keys(self::historico($i)));
+		self::assertSame('falta el denominador oficial de 2099', array_column($resumen['metas'], null, 'codigo')['II']['estado']);
+	}
+
+	/**
+	 * @param array<string, mixed> $card
+	 * @return array<int, array<string, mixed>> a card's histórico, by year
+	 */
+	private static function historico(array $card): array {
+		return array_column($card['historico'], null, 'anio');
 	}
 
 	/**

@@ -2,8 +2,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import axios from '@nextcloud/axios'
+import { draw, formatValue } from '../charts.js'
 import Resumen from './Resumen.vue'
 
+// jsdom has no canvas: only Chart.js's own drawing is replaced (Visualization.test.js).
+vi.mock('../charts.js', async (importOriginal) => ({
+	...(await importOriginal()),
+	draw: vi.fn(() => ({ destroy: vi.fn() })),
+}))
 vi.mock('@nextcloud/axios', () => ({ default: { get: vi.fn() } }))
 vi.mock('@nextcloud/router', () => ({ generateOcsUrl: (url) => `/ocs/v2.php${url}` }))
 
@@ -17,7 +23,7 @@ const refused = (status, message) => Promise.reject(Object.assign(new Error(`HTT
 
 const meta = (codigo, fields) => ({
 	codigo, nombre: `La meta ${codigo}`, indicador: 'Un indicador', meta_nacional: 90, meta_comprometida: null, manual: false,
-	estado: null, mes: null, datos_al: null, numerador: null, denominador: null, porcentaje: null, cumple: null, ...fields,
+	estado: null, mes: null, datos_al: null, numerador: null, denominador: null, porcentaje: null, cumple: null, historico: [], ...fields,
 })
 
 /** GET resumen for 900001: cumple against a commitment, misses the nacional, a Serie P figure older than its month, both statuses, sin informar and Meta VIII. */
@@ -47,6 +53,7 @@ const card = (wrapper, codigo) => wrapper.findAll('article').find((article) => a
 
 beforeEach(() => {
 	axios.get.mockReset()
+	draw.mockClear()
 })
 
 describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
@@ -129,5 +136,80 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
 		expect(failed.findComponent({ name: 'NcNoteCard' }).props('type')).toBe('error')
 		expect(failed.text()).toContain('La consulta tardó más de 10 s y se canceló.')
 		failed.unmount()
+	})
+})
+
+/** One year of a histórico: each month's [numerador, denominador, porcentaje], null where sin informar. */
+const year = (anio, figures, fields = {}) => ({
+	anio,
+	estado: null,
+	cierre: null,
+	meses: figures.map(([numerador, denominador, porcentaje], i) => ({ mes: `${anio}-${String(i + 1).padStart(2, '0')}`, numerador, denominador, porcentaje })),
+	...fields,
+})
+
+/** Meta I's histórico: 2024 does not compare, 2025 is whole with its cierre, 2026 runs to October with February sin informar. */
+const withHistorico = () => {
+	const resumen = answer()
+	resumen.metas[0].historico = [
+		year(2024, [], { estado: 'sin datos comparables' }),
+		year(2025, Array.from({ length: 12 }, (_, i) => [i + 1, 10, (i + 1) * 10]), { cierre: 120 }),
+		year(2026, [[1, 4, 25], [null, null, null], [3, 6, 50], ...Array.from({ length: 7 }, () => [7, 12, 58.33])]),
+	]
+	return resumen
+}
+
+describe('Resumen — each card\'s histórico (docs/adr/0009)', () => {
+	it('draws one line per year with figures, the current year emphasised, and the meta as a line', async () => {
+		const wrapper = await shown(ok(withHistorico()))
+
+		expect(draw).toHaveBeenCalledTimes(1)
+		const { data } = draw.mock.calls[0][1]
+		expect(data.labels).toEqual(['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'])
+		expect(data.datasets.map((dataset) => dataset.label)).toEqual(['2025', '2026 (más reciente)', 'Meta comprometida (50 %)'])
+		const [past, current, metaLine] = data.datasets
+		expect(current.borderWidth).toBeGreaterThan(past.borderWidth)
+		expect(metaLine.data).toEqual(Array(12).fill(50))
+		wrapper.unmount()
+	})
+
+	it('leaves sin informar as a gap in the chart and says so in the table, never 0', async () => {
+		const wrapper = await shown(ok(withHistorico()))
+
+		const current = draw.mock.calls[0][1].data.datasets[1]
+		expect(current.data.slice(0, 4)).toEqual([25, null, 50, 58.33])
+		expect(current.data.slice(10)).toEqual([null, null])
+		const february = card(wrapper, 'I').findAll('tbody tr')[1].findAll('td').map((cell) => cell.text())
+		expect(february).toEqual(['20 % (2 de 10)', 'sin informar'])
+		wrapper.unmount()
+	})
+
+	it('puts every figure the chart draws in the table under it, with each year\'s cierre', async () => {
+		const wrapper = await shown(ok(withHistorico()))
+
+		const table = card(wrapper, 'I').find('table')
+		expect(table.findAll('thead th').map((cell) => cell.text())).toEqual(['Mes', '2025', '2026 (más reciente)'])
+		const { datasets } = draw.mock.calls[0][1].data
+		const drawn = withHistorico().metas[0].historico.slice(1)
+		const rows = table.findAll('tbody tr')
+		expect(rows).toHaveLength(12)
+		rows.forEach((row, month) => {
+			row.findAll('td').forEach((cell, line) => {
+				const value = datasets[line].data[month]
+				const empty = month < drawn[line].meses.length ? 'sin informar' : '—'
+				expect(cell.text().startsWith(value === null ? empty : `${formatValue(value)} %`)).toBe(true)
+			})
+		})
+		expect(table.findAll('tfoot td').map((cell) => cell.text())).toEqual(['120 %', '—'])
+		expect(card(wrapper, 'I').text()).toContain('2024: sin datos comparables.')
+		wrapper.unmount()
+	})
+
+	it('draws nothing for a meta with no histórico', async () => {
+		const wrapper = await shown()
+
+		expect(draw).not.toHaveBeenCalled()
+		expect(wrapper.find('canvas').exists()).toBe(false)
+		wrapper.unmount()
 	})
 })

@@ -25,7 +25,8 @@ use OCP\AppFramework\Utility\ITimeFactory;
  *   periodo's first month to that month, and no further than the periodo's
  *   last: Meta I's denominator stops in September. A Serie P route is a
  *   snapshot at a corte (June and December, measured on SERIE_REM_2025), so a
- *   month shows the latest corte up to it, and nothing before the first.
+ *   month shows the latest corte up to it, and nothing before the first;
+ *   carried() names the months that show an earlier one.
  * - **No figure past the data.** A Serie A month after the meta year's fecha
  *   de corte has none yet, rather than repeating the last month's. The local
  *   series' is the establishment's own last month with a written number
@@ -57,12 +58,15 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * @psalm-import-type Fuente from Sources
  * @psalm-type Mes = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}
  * @psalm-type Poblacion = array{comprometida: bool, corte: ?string, factor: ?float, falta_oficial: bool}
+ * @psalm-type Carried = array{numerador: list<string>, denominador: list<string>}
  * @psalm-type Meta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?Poblacion, meses: list<Mes>}
  * @psalm-type Respuesta = array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<Fuente>, fecha_corte_local: ?array<string, ?string>, indicadores: list<Meta>}
  */
 class GoalEvaluator {
 	/** The scopes a meta is measured in, as a consulta's series. */
 	private const SCOPES = ['local', 'nacional', 'pares'];
+
+	private const NO_COMMITMENT = ['meta' => null, 'denominador' => null, 'cumplimiento' => null];
 
 	public function __construct(
 		private Goals $goals,
@@ -78,16 +82,13 @@ class GoalEvaluator {
 	 * @param ?int $anio the metas' year; null for the newest with metas up to the current year (else the newest)
 	 * @param list<string> $traits what the peer group shares with this install's establishment, each one of
 	 *                             QuerySpec::TRAITS (the caller's check: ApiController); none for no peers
-	 * @param bool $nacional false for the establishment alone, as the Resumen asks (docs/adr/0009): no country
 	 * @return Respuesta
 	 * @throws DoesNotExistException no metas for that year
 	 * @throws RefusedException
 	 */
-	public function evaluate(?int $anio, Establishment $local, array $traits, bool $nacional = true): array {
-		$now = $this->time->getTime();
-		$currentYear = (int)gmdate('Y', $now);
+	public function evaluate(?int $anio, Establishment $local, array $traits): array {
 		$years = $this->goals->years();
-		$anio ??= self::defaultYear($years, $currentYear);
+		$anio ??= self::defaultYear($years, (int)gmdate('Y', $this->time->getTime()));
 		$metas = $anio === null ? null : $this->goals->get($anio);
 		if ($anio === null || $metas === null) {
 			throw new DoesNotExistException('No hay Metas Sanitarias cargadas para ese año.');
@@ -95,28 +96,96 @@ class GoalEvaluator {
 
 		$estab = $local->isConfigured() ? (int)$local->deisCode : null;
 		[$peers, $aviso] = $this->peers($estab, array_values(array_unique($traits)));
-		$months = self::months($anio, $currentYear, (int)gmdate('n', $now));
 		$fuentes = array_column($this->sources->all(), null, 'id');
-		$through = self::through($fuentes['rem-a'], $anio);
 		$commitments = $estab === null ? [] : $this->goals->commitments($anio, $estab);
-		[$answers, $own] = $this->ask($metas, $anio, $estab, $peers, $nacional);
-		$localThrough = ($own['rem-a'] ?? null) === null ? null : (int)str_replace('-', '', $own['rem-a']);
-		$inscritos = in_array(GoalSeed::BASE_POPULATION, array_column($metas['indicadores'], 'base'), true)
-			? [
-				'local' => $estab === null ? null : $this->population->local($anio, $estab),
-				'nacional' => $nacional ? $this->population->national($anio) : null,
-				'pares' => $peers === null ? null : $this->population->peers($anio, $peers),
-			]
-			: ['local' => null, 'nacional' => null, 'pares' => null];
-
-		$indicadores = [];
-		foreach ($metas['indicadores'] as $meta) {
-			$commitment = $commitments[$meta['codigo']] ?? ['meta' => null, 'denominador' => null, 'cumplimiento' => null];
-			$indicadores[] = self::indicator($meta, $commitment, $answers, $inscritos, $estab !== null, $anio, $months, $through, $localThrough);
-		}
+		$counted = $this->count([$anio => [$metas, $commitments]], $estab, $peers, true, $fuentes)[$anio];
 
 		return self::response($years, $metas, $estab === null ? null : $local->deisCode, $peers, $aviso,
-			[$fuentes['rem-a'], $fuentes['rem-p'], $fuentes['piv']], $own, $indicadores);
+			[$fuentes['rem-a'], $fuentes['rem-p'], $fuentes['piv']], $counted['fecha_corte_local'], $counted['indicadores']);
+	}
+
+	/**
+	 * The Resumen's histórico (docs/adr/0009): the newest metas counted for
+	 * the establishment alone, no country and no peers, over each year from
+	 * $firstYear to the current year, every periodo moved by whole years
+	 * (GoalSeed::shift). The current year is the latest with REM figures,
+	 * and never past the metas' own: October's metas of next year are counted
+	 * over this year's figures. Every year is asked in one read-only snapshot.
+	 * Each year reads its own denominador comprometido, the official figure
+	 * of that year; the meta comprometida and the cumplimiento informado stay
+	 * the metas year's. Beside each meta, the months its local Serie P
+	 * figure only carries an earlier corte (carried()).
+	 *
+	 * @param Metas $metas
+	 * @return array<int, array{indicadores: list<Meta>, carried: list<Carried>, fecha_corte_local: ?array<string, ?string>}> by year, oldest first; the last is the current year
+	 * @throws RefusedException
+	 */
+	public function history(array $metas, int $firstYear, Establishment $local): array {
+		$fuentes = array_column($this->sources->all(), null, 'id');
+		$loaded = [];
+		foreach (array_keys(Sources::REM) as $fuente) {
+			foreach ($fuentes[$fuente]['anios'] as $year) {
+				if ($year['filas'] > 0 && $year['anio'] <= $metas['anio']) {
+					$loaded[] = $year['anio'];
+				}
+			}
+		}
+		$current = $loaded === [] ? $metas['anio'] : max($loaded);
+
+		$estab = $local->isConfigured() ? (int)$local->deisCode : null;
+		$newest = $estab === null ? [] : $this->goals->commitments($metas['anio'], $estab);
+		$years = [];
+		foreach (range(min($firstYear, $current), $current) as $year) {
+			$own = $estab === null ? [] : $this->goals->commitments($year, $estab);
+			$commitments = [];
+			foreach ($metas['indicadores'] as $meta) {
+				$codigo = $meta['codigo'];
+				$commitments[$codigo] = ['denominador' => $own[$codigo]['denominador'] ?? null] + ($newest[$codigo] ?? self::NO_COMMITMENT);
+			}
+			$years[$year] = [GoalSeed::shift($metas, $year - $metas['anio']), $commitments];
+		}
+
+		return $this->count($years, $estab, null, false, $fuentes);
+	}
+
+	/**
+	 * Each year's metas, asked in one read-only snapshot so no meta mixes
+	 * two loads, then counted month by month.
+	 *
+	 * @param non-empty-array<int, array{0: Metas, 1: array<string, Commitment>}> $years each year's metas and commitments, by year
+	 * @param ?array<string, string> $peers
+	 * @param array<string, Fuente> $fuentes
+	 * @return array<int, array{indicadores: list<Meta>, carried: list<Carried>, fecha_corte_local: ?array<string, ?string>}>
+	 * @throws RefusedException
+	 */
+	private function count(array $years, ?int $estab, ?array $peers, bool $nacional, array $fuentes): array {
+		$now = $this->time->getTime();
+		[$answers, $own] = $this->ask(array_column($years, 0), $estab, $peers, $nacional);
+
+		$counted = [];
+		foreach ($years as $anio => [$metas, $commitments]) {
+			$months = self::months($anio, (int)gmdate('Y', $now), (int)gmdate('n', $now));
+			$through = self::through($fuentes['rem-a'], $anio);
+			$localThrough = ($own[$anio]['rem-a'] ?? null) === null ? null : (int)str_replace('-', '', $own[$anio]['rem-a']);
+			$inscritos = in_array(GoalSeed::BASE_POPULATION, array_column($metas['indicadores'], 'base'), true)
+				? [
+					'local' => $estab === null ? null : $this->population->local($anio, $estab),
+					'nacional' => $nacional ? $this->population->national($anio) : null,
+					'pares' => $peers === null ? null : $this->population->peers($anio, $peers),
+				]
+				: ['local' => null, 'nacional' => null, 'pares' => null];
+
+			$indicadores = [];
+			$carried = [];
+			foreach ($metas['indicadores'] as $meta) {
+				$commitment = $commitments[$meta['codigo']] ?? self::NO_COMMITMENT;
+				$indicadores[] = self::indicator($meta, $commitment, $answers, $inscritos, $estab !== null, $anio, $months, $through, $localThrough);
+				$carried[] = self::carried($meta, $answers, $anio, $months);
+			}
+			$counted[$anio] = ['indicadores' => $indicadores, 'carried' => $carried, 'fecha_corte_local' => $own[$anio] ?? null];
+		}
+
+		return $counted;
 	}
 
 	/**
@@ -359,25 +428,26 @@ class GoalEvaluator {
 	}
 
 	/**
-	 * Every REM route of the year's metas, each asked for the scopes wanted,
-	 * and the establishment's own last month in each serie, in one read-only
-	 * snapshot, so no meta mixes two loads.
+	 * Every REM route of each year's metas, each asked for the scopes wanted,
+	 * and the establishment's own last month in each serie of each year, in
+	 * one read-only snapshot, so no meta mixes two loads.
 	 *
-	 * @param Metas $metas
+	 * @param list<Metas> $list
 	 * @param ?array<string, string> $peers
-	 * @return array{0: array<int, array<string, ?list<Punto>>>, 1: ?array<string, ?string>} the answers by spl_object_id of the route's QuerySpec; the last months by fuente, null without an establishment
+	 * @return array{0: array<int, array<string, ?list<Punto>>>, 1: array<int, array<string, ?string>>} the answers by spl_object_id of the route's QuerySpec; the last months by year and fuente, none without an establishment
 	 */
-	private function ask(array $metas, int $anio, ?int $estab, ?array $peers, bool $nacional): array {
+	private function ask(array $list, ?int $estab, ?array $peers, bool $nacional): array {
 		$specs = [];
-		foreach ($metas['indicadores'] as $meta) {
-			foreach ([$meta['numerador'], $meta['denominador']] as $part) {
-				foreach ($part === null ? [] : [...$part['sumar'], ...$part['restar']] as $spec) {
+		foreach ($list as $metas) {
+			foreach ($metas['indicadores'] as $meta) {
+				foreach (GoalSeed::terms($meta) as $spec) {
 					$specs[spl_object_id($spec)] = $spec;
 				}
 			}
 		}
+		$years = array_column($list, 'anio');
 
-		return $this->executor->readOnly(function () use ($specs, $anio, $estab, $peers, $nacional): array {
+		return $this->executor->readOnly(function () use ($specs, $years, $estab, $peers, $nacional): array {
 			$answers = [];
 			foreach ($specs as $id => $spec) {
 				$answers[$id] = [
@@ -386,10 +456,13 @@ class GoalEvaluator {
 					'pares' => $peers === null ? null : $this->executor->series($spec, $spec->codigos, $peers),
 				];
 			}
-			$own = $estab === null ? null : [
-				'rem-a' => $this->executor->lastReported('A', $anio, $estab),
-				'rem-p' => $this->executor->lastReported('P', $anio, $estab),
-			];
+			$own = [];
+			foreach ($estab === null ? [] : $years as $anio) {
+				$own[$anio] = [
+					'rem-a' => $this->executor->lastReported('A', $anio, $estab),
+					'rem-p' => $this->executor->lastReported('P', $anio, $estab),
+				];
+			}
 
 			return [$answers, $own];
 		});
@@ -414,6 +487,35 @@ class GoalEvaluator {
 		}
 
 		return self::combine($terms['sumar'], $terms['restar'], $months);
+	}
+
+	/**
+	 * The months (YYYY-MM) whose local Serie P figure, by side, is an earlier
+	 * corte carried forward (monthly()): some term of the ruta has a figure
+	 * that month but no corte of its own in it. Serie A carries none.
+	 *
+	 * @param Indicador $meta
+	 * @param array<int, array<string, ?list<Punto>>> $answers
+	 * @return Carried
+	 */
+	private static function carried(array $meta, array $answers, int $anio, int $months): array {
+		$carried = ['numerador' => [], 'denominador' => []];
+		foreach (['numerador', 'denominador'] as $side) {
+			$part = $meta[$side];
+			foreach ($part === null || $part['serie'] !== 'P' ? [] : [...$part['sumar'], ...$part['restar']] as $spec) {
+				$points = $answers[spl_object_id($spec)]['local'] ?? [];
+				$cut = array_map(static fn (array $point): string => (string)$point['grupo'][0], $points);
+				foreach (self::monthly($points, 'P', $part['desde'], $part['hasta'], $anio, $months, null) as $i => $value) {
+					$mes = sprintf('%04d-%02d', $anio, $i + 1);
+					if ($value !== null && !in_array($mes, $cut, true)) {
+						$carried[$side][] = $mes;
+					}
+				}
+			}
+			$carried[$side] = array_values(array_unique($carried[$side]));
+		}
+
+		return $carried;
 	}
 
 	/**
