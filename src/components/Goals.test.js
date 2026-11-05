@@ -36,6 +36,7 @@ function answer(changes = {}) {
 			{ id: 'rem-a', nombre: 'REM Serie A', origen: 'datos públicos DEIS', fecha_corte: '2026-02', filas: 9, estado: 'ok', anios: [] },
 			{ id: 'piv', nombre: 'Población inscrita validada (FONASA)', origen: 'FONASA', fecha_corte: '2025-12-31', filas: 9, estado: 'ok', anios: [] },
 		],
+		fecha_corte_local: { 'rem-a': '2026-01', 'rem-p': null },
 		indicadores: [
 			{
 				codigo: 'I', nombre: 'Recuperación del desarrollo psicomotor', indicador: 'Porcentaje de recuperados', meta_nacional: 90, meta_comprometida: 70, peso: 12.5, nota: null,
@@ -82,7 +83,7 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		expect(axios.get).toHaveBeenCalledWith(INDICADORES, { params: { pares: 'tipo' } })
 		expect(wrapper.find('h2').text()).toBe('Metas Sanitarias 2026')
 		expect(wrapper.findAll('.estadistica-goals__meta')).toHaveLength(3)
-		expect(wrapper.text()).toContain('REM Serie A (datos públicos DEIS): cifras hasta febrero de 2026.')
+		expect(wrapper.text()).toContain('REM Serie A (datos públicos DEIS): cifras hasta febrero de 2026; su establecimiento informó hasta enero de 2026.')
 		expect(wrapper.text()).toContain('Población inscrita validada (FONASA): corte al 31-12-2025.')
 		expect(wrapper.text()).not.toContain('(FONASA) (FONASA)')
 		wrapper.unmount()
@@ -155,11 +156,12 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 	})
 
 	it('with no establishment, shows the country alone and offers no peers', async () => {
-		const wrapper = await shown(ok(answer({ establecimiento: null, pares: null })), { configured: false })
+		const wrapper = await shown(ok(answer({ establecimiento: null, pares: null, fecha_corte_local: null })), { configured: false })
 
 		expect(axios.get).toHaveBeenCalledWith(INDICADORES, { params: { pares: '' } })
 		expect(wrapper.find('fieldset').exists()).toBe(false)
 		expect(cells(card(wrapper, 0).find('thead tr'))).toEqual(['Mes', 'Nacional'])
+		expect(wrapper.text()).toContain('REM Serie A (datos públicos DEIS): cifras hasta febrero de 2026.')
 		wrapper.unmount()
 	})
 
