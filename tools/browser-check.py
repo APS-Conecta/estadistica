@@ -15,8 +15,9 @@ delegated group, opens the same tablero and sees the same figures with no
 controls to change it.
 
 And the Resumen (docs/adr/0009), the tab the app opens on: each card shows
-the figures GET resumen answers, a keyboard reaches every card, and the
-cards fit a phone's width.
+the figures GET resumen answers, which are GET indicadores' local series for
+the card's month, a keyboard reaches every card, and the cards fit a phone's
+width.
 
 It makes everything it needs and removes it all however it ends:
 - a few synthetic REM rows under a código of its own. They sit in 2009, the
@@ -219,6 +220,24 @@ def resumen_api_figures(answer):
         if meta["mes"] is not None else (None, None)) for meta in answer["metas"]}
 
 
+def resumen_against_indicadores(resumen, indicadores):
+    """Each card's N, D and % are GET indicadores' local series for its month; a card with no
+    month is a manual meta or one whose local series has no porcentaje (AC 2)."""
+    series = {meta["codigo"]: {mes["mes"]: mes for mes in meta["meses"]} for meta in indicadores["indicadores"]}
+    failures = []
+    for card in resumen["metas"]:
+        meses = series.get(card["codigo"], {})
+        if card["mes"] is not None:
+            local = meses.get(card["mes"], {})
+            shown = {key: card[key] for key in ("numerador", "denominador", "porcentaje")}
+            expected = {key: local.get(key) for key in shown}
+            if shown != expected:
+                failures.append(f"Meta {card['codigo']}'s card shows {shown} for {card['mes']}, GET indicadores' local series {expected}")
+        elif not card["manual"] and any(mes["porcentaje"] is not None for mes in meses.values()):
+            failures.append(f"Meta {card['codigo']}'s card has no month, while GET indicadores' local series has a porcentaje")
+    return failures
+
+
 def keyboard_reaches(page, count):
     """The card titles a keyboard focuses, tabbing from the top of the page."""
     reached = []
@@ -270,9 +289,11 @@ def main():
         made["reader"] = True
 
         expected = api_figures(answer)
-        resumen = resumen_api_figures(ocs("GET", "resumen", token))
+        resumen_answer = ocs("GET", "resumen", token)
+        resumen = resumen_api_figures(resumen_answer)
         if resumen.get(f"Meta VI {RESUMEN_YEAR}") != ("62,5 %", "5 de 8"):
             failures.append(f"the API did not answer the seeded Resumen figures for Meta VI: {resumen}")
+        failures += resumen_against_indicadores(resumen_answer, ocs("GET", f"indicadores?anio={resumen_answer['anio']}&pares=", token))
         if expected != {"enero de 2009": ("4", "3"), "febrero de 2009": ("6", "5,5")}:
             failures.append(f"the API did not answer the seeded figures: {expected}")
 
@@ -357,7 +378,7 @@ def main():
         return 1
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
-    print("ok    the Resumen opens first, its cards show GET resumen's figures, a keyboard reaches each one, and it fits a phone")
+    print("ok    the Resumen opens first, its cards show GET resumen's figures, which are GET indicadores' local months, a keyboard reaches each one, and it fits a phone")
     print("\nAll good.")
     return 0
 
