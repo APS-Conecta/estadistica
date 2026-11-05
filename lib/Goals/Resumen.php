@@ -68,7 +68,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * @psalm-import-type Parte from GoalSeed
  * @psalm-import-type Etiqueta from QueryExecutor
  * @psalm-import-type Fuente from Sources
- * @psalm-type Ruta = array{fuente: string, desde: ?string, hasta: ?string, sumar: list<list<Etiqueta>>, restar: list<list<Etiqueta>>}
+ * @psalm-type Ruta = array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<Etiqueta>>, restar: list<list<Etiqueta>>}
  * @psalm-type Cifra = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, origen: ?string, fecha_corte: ?string}
  * @psalm-type Historico = array{anio: int, estado: ?string, cierre: ?float, meses: list<Cifra>, ruta: array{numerador: ?Ruta, denominador: ?Ruta}}
  * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<Historico>, origen: ?string, fecha_corte: ?string}
@@ -76,9 +76,6 @@ use OCP\AppFramework\Db\DoesNotExistException;
  */
 class Resumen {
 	public const NOT_COMPARABLE = 'sin datos comparables';
-
-	/** A denominador of FONASA's inscritos: no periodo, no códigos. */
-	private const POPULATION = ['fuente' => Sources::PIV, 'desde' => null, 'hasta' => null, 'sumar' => [], 'restar' => []];
 
 	public function __construct(
 		private Goals $goals,
@@ -122,8 +119,8 @@ class Resumen {
 				);
 				$fonasa = $indicador['base'] === GoalSeed::BASE_POPULATION && !($counted['indicadores'][$i]['poblacion']['comprometida'] ?? false);
 				$ruta = [
-					'numerador' => self::ruta($moved[$year][$i]['numerador'], $label),
-					'denominador' => $fonasa ? self::POPULATION : self::ruta($moved[$year][$i]['denominador'], $label),
+					'numerador' => self::ruta($moved[$year][$i]['numerador'], $fuentes, $label),
+					'denominador' => $fonasa ? self::population($fuentes[Sources::PIV]) : self::ruta($moved[$year][$i]['denominador'], $fuentes, $label),
 				];
 				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear(), $fuente, $ruta);
 			}
@@ -198,23 +195,36 @@ class Resumen {
 	}
 
 	/**
-	 * A part of a meta's ruta as the source panel shows it: its fuente, its
-	 * periodo (YYYY-MM) and each consulta's códigos, labelled by $labels.
+	 * A part of a meta's ruta as the source panel shows it: its fuente, named
+	 * as GET fuentes names it, its periodo (YYYY-MM) and each consulta's
+	 * códigos, labelled by $labels.
 	 *
 	 * @param ?Parte $part
+	 * @param array<string, Fuente> $fuentes by id, as GET fuentes serves them
 	 * @param Closure(QuerySpec): list<Etiqueta> $labels
 	 * @return ?Ruta
 	 */
-	public static function ruta(?array $part, Closure $labels): ?array {
+	public static function ruta(?array $part, array $fuentes, Closure $labels): ?array {
 		$month = static fn (int $yyyymm): string => sprintf('%04d-%02d', intdiv($yyyymm, 100), $yyyymm % 100);
 
 		return $part === null ? null : [
 			'fuente' => $part['fuente'],
+			'nombre' => $fuentes[$part['fuente']]['nombre'],
 			'desde' => $month($part['desde']),
 			'hasta' => $month($part['hasta']),
 			'sumar' => array_map($labels, $part['sumar']),
 			'restar' => array_map($labels, $part['restar']),
 		];
+	}
+
+	/**
+	 * A denominador of FONASA's inscritos: no periodo, no códigos.
+	 *
+	 * @param Fuente $piv as GET fuentes serves it
+	 * @return Ruta
+	 */
+	private static function population(array $piv): array {
+		return ['fuente' => $piv['id'], 'nombre' => $piv['nombre'], 'desde' => null, 'hasta' => null, 'sumar' => [], 'restar' => []];
 	}
 
 	/**

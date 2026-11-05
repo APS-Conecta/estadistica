@@ -1,10 +1,10 @@
 <!--
 	The source panel (docs/adr/0009): where one figure of a Resumen card comes
 	from, for its own month. The origen and its fecha de corte, each part's
-	ruta (fuente, periodo, and the códigos × columnas added and taken away,
-	labelled by that year's diccionario, as GET resumen answers them), and the
-	metas' referencia. It is the app sidebar, beside the content as Nextcloud
-	lays one out; Escape closes it.
+	ruta (its fuente's name, periodo, and the códigos × columnas added and
+	taken away, labelled by that year's diccionario, as GET resumen answers
+	them), and the metas' referencia. It is the app sidebar, beside the
+	content as Nextcloud lays one out; Escape closes it.
 -->
 <template>
 	<Teleport to="#content-vue">
@@ -21,22 +21,19 @@
 					Origen: {{ cifra.origen }}, con cifras hasta {{ monthName(cifra.fecha_corte) }}.
 				</p>
 
-				<section v-for="parte in partes" :key="parte.nombre">
-					<h3>{{ parte.nombre }}</h3>
+				<section v-for="parte in partes" :key="parte.label">
+					<h3>{{ parte.label }}</h3>
 					<p v-if="!parte.ruta">
 						Lo comprometió el establecimiento.
 					</p>
-					<p v-else-if="parte.ruta.fuente === 'piv'">
-						Población inscrita validada por FONASA.
-					</p>
 					<template v-else>
-						<p>REM Serie {{ parte.ruta.fuente.slice(4).toUpperCase() }}, de {{ monthName(parte.ruta.desde) }} a {{ monthName(parte.ruta.hasta) }}.</p>
-						<template v-for="signo in signos(parte.ruta)" :key="signo.nombre">
+						<p>{{ parte.ruta.nombre }}<template v-if="parte.ruta.desde">, de {{ monthName(parte.ruta.desde) }} a {{ monthName(parte.ruta.hasta) }}</template>.</p>
+						<template v-for="sign in signs(parte.ruta)" :key="sign.label">
 							<p class="estadistica-fuente__signo">
-								{{ signo.nombre }}
+								{{ sign.label }}
 							</p>
 							<ul>
-								<li v-for="(codigo, i) in signo.codigos" :key="i" class="estadistica-fuente__codigo">
+								<li v-for="(codigo, i) in sign.codigos" :key="i" class="estadistica-fuente__codigo">
 									<strong>{{ codigo.codigo }}</strong> {{ codigo.prestacion }}
 									<span v-if="codigo.hoja" class="estadistica-fuente__hoja">
 										Hoja {{ codigo.hoja }}, {{ codigo.seccion }}{{ codigo.nota ? ` (${codigo.nota})` : '' }}
@@ -91,7 +88,7 @@ export default {
 		partes() {
 			return this.meta.manual
 				? []
-				: [{ nombre: 'Numerador', ruta: this.cifra.ruta.numerador }, { nombre: 'Denominador', ruta: this.cifra.ruta.denominador }]
+				: [{ label: 'Numerador', ruta: this.cifra.ruta.numerador }, { label: 'Denominador', ruta: this.cifra.ruta.denominador }]
 		},
 	},
 
@@ -99,9 +96,9 @@ export default {
 		monthName,
 
 		/** What a part adds and takes away, each consulta's códigos in one list. */
-		signos(ruta) {
-			return [{ nombre: 'Suma:', codigos: ruta.sumar.flat() }, { nombre: 'Resta:', codigos: ruta.restar.flat() }]
-				.filter((signo) => signo.codigos.length > 0)
+		signs(ruta) {
+			return [{ label: 'Suma:', codigos: ruta.sumar.flat() }, { label: 'Resta:', codigos: ruta.restar.flat() }]
+				.filter((sign) => sign.codigos.length > 0)
 		},
 	},
 }

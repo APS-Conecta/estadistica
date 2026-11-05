@@ -646,7 +646,7 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame([125.0, 'datos públicos DEIS', '2098-12'], [$february['porcentaje'], $february['origen'], $february['fecha_corte']], 'a 2098 month comes from the 2098 zip');
 
 		$numerador = $i[2099]['ruta']['numerador'];
-		self::assertSame(['rem-a', '2099-01', '2099-12', []], [$numerador['fuente'], $numerador['desde'], $numerador['hasta'], $numerador['restar']]);
+		self::assertSame(['rem-a', 'REM Serie A', '2099-01', '2099-12', []], [$numerador['fuente'], $numerador['nombre'], $numerador['desde'], $numerador['hasta'], $numerador['restar']], 'named as GET fuentes names it');
 		$consulta = $this->api()->consultas(['fuente' => 'rem-a', 'periodo' => ['desde' => '2099-01', 'hasta' => '2099-12'], 'filtros' => ['codigos' => ['02010420', '03500366'], 'columnas' => ['col08', 'col09', 'col10', 'col11']]])->getData();
 		self::assertSame([$consulta['etiquetas']['codigos']], $numerador['sumar'], 'labelled as the same consulta');
 		self::assertSame(['Evaluación de recuperación', 'Niños de 12 a 17 meses'], [$numerador['sumar'][0][0]['prestacion'], $numerador['sumar'][0][0]['columnas']['col08']]);
@@ -658,7 +658,7 @@ class GoalsTest extends IntegrationTestCase {
 			'Meta I\'s window, moved onto 2098',
 		);
 
-		self::assertSame(['fuente' => 'piv', 'desde' => null, 'hasta' => null, 'sumar' => [], 'restar' => []], self::historico($cards['T'])[2099]['ruta']['denominador']);
+		self::assertSame(['fuente' => 'piv', 'nombre' => 'Población inscrita validada (FONASA)', 'desde' => null, 'hasta' => null, 'sumar' => [], 'restar' => []], self::historico($cards['T'])[2099]['ruta']['denominador']);
 		self::assertNull(self::historico($cards['C'])[2099]['ruta']['denominador'], 'only a commitment gives it');
 	}
 

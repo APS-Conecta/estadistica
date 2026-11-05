@@ -54,7 +54,15 @@
 								Cierre
 							</th>
 							<td v-for="year in lines" :key="year.anio">
-								{{ year.cierre === null ? '—' : percent(year.cierre) }}
+								<button v-if="year.cierre !== null"
+									type="button"
+									class="estadistica-cifra"
+									@click="$emit('fuente', { ...figureOf(year, '12'), ruta: year.ruta }, $event)">
+									{{ percent(year.cierre) }}
+								</button>
+								<template v-else>
+									—
+								</template>
 							</td>
 						</tr>
 					</tfoot>

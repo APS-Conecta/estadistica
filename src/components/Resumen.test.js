@@ -229,12 +229,12 @@ const etiqueta = (codigo, prestacion, fields) => ({
 /** Meta I's ruta moved onto `anio`, its first código labelled `prestacion` by that year's diccionario. */
 const rutaI = (anio, prestacion) => ({
 	numerador: {
-		fuente: 'rem-a', desde: `${anio}-01`, hasta: `${anio}-12`, restar: [],
+		fuente: 'rem-a', nombre: 'REM Serie A', desde: `${anio}-01`, hasta: `${anio}-12`, restar: [],
 		// A código no diccionario names: «sin descripción», and no hoja.
 		sumar: [[etiqueta('02010420', prestacion), { codigo: '09000001', hoja: '', seccion: '', prestacion: 'sin descripción', columnas: { col08: 'sin descripción' }, nota: null }]],
 	},
 	denominador: {
-		fuente: 'rem-a', desde: `${anio - 1}-10`, hasta: `${anio}-09`,
+		fuente: 'rem-a', nombre: 'REM Serie A', desde: `${anio - 1}-10`, hasta: `${anio}-09`,
 		sumar: [[etiqueta('02010321', 'Con rezago'), etiqueta('02010322', 'Con riesgo', { columnas: { col10: '18 a 23 meses' } })]],
 		restar: [[etiqueta('03500331', 'Trasladados', { hoja: 'A05', seccion: 'SECCIÓN B: EGRESOS', nota: 'etiqueta de 2027' })]],
 	},
@@ -251,8 +251,8 @@ const withSources = () => {
 	v.historico = [year(2026, [], {
 		meses: [{ mes: '2026-06', numerador: 1287, denominador: 3500.5, porcentaje: 36.77, origen: 'datos públicos DEIS', fecha_corte: '2026-11' }],
 		ruta: {
-			numerador: { fuente: 'rem-p', desde: '2026-01', hasta: '2026-12', sumar: [[etiqueta('P4150602', 'Con HbA1c bajo 7 %', { hoja: 'P4', seccion: 'SECCIÓN B: METAS', columnas: { col01: 'Total' } })]], restar: [] },
-			denominador: { fuente: 'piv', desde: null, hasta: null, sumar: [], restar: [] },
+			numerador: { fuente: 'rem-p', nombre: 'REM Serie P', desde: '2026-01', hasta: '2026-12', sumar: [[etiqueta('P4150602', 'Con HbA1c bajo 7 %', { hoja: 'P4', seccion: 'SECCIÓN B: METAS', columnas: { col01: 'Total' } })]], restar: [] },
+			denominador: { fuente: 'piv', nombre: 'Población inscrita validada (FONASA)', desde: null, hasta: null, sumar: [], restar: [] },
 		},
 	})]
 	return resumen
@@ -332,12 +332,24 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 		wrapper.unmount()
 	})
 
+	it('opens from a year\'s cierre, for its December with that year\'s ruta', async () => {
+		const wrapper = await mounted()
+
+		const [cierre2025, cierre2026] = card(wrapper, 'I').findAll('tfoot td')
+		expect(cierre2026.find('button').exists(), 'a year not over has no cierre').toBe(false)
+		const text = (await opened(wrapper, cierre2025.find('button'))).text()
+		expect(text).toContain('Cifra de diciembre de 2025')
+		expect(text).toContain('Origen: datos públicos DEIS, con cifras hasta diciembre de 2025.')
+		expect(text).toContain('02010420 RECUPERADOS')
+		wrapper.unmount()
+	})
+
 	it('says when a denominador is not counted in the REM', async () => {
 		const wrapper = await mounted()
 
 		const text = (await opened(wrapper, figures(wrapper, 'V')[2])).text()
 		expect(text).toContain('REM Serie P, de enero de 2026 a diciembre de 2026.')
-		expect(text).toContain('Población inscrita validada por FONASA.')
+		expect(text).toContain('Población inscrita validada (FONASA).')
 		wrapper.unmount()
 	})
 

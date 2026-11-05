@@ -82,7 +82,7 @@
 
 			<!-- Mounted afresh on each figure, so each opening moves the focus into the panel. -->
 			<ResumenFuente v-if="fuente"
-				:key="fuente.vez"
+				:key="fuente.opening"
 				:meta="fuente.meta"
 				:cifra="fuente.cifra"
 				:anio="resumen.anio"
@@ -113,7 +113,7 @@ export default {
 			resumen: null,
 			missing: false,
 			failed: '',
-			/** The open source panel's card and month ({meta, cifra, vez}), and the figure that opened it. */
+			/** The open source panel's card and month ({meta, cifra, opening}), and the figure that opened it. */
 			fuente: null,
 			opener: null,
 		}
@@ -141,7 +141,7 @@ export default {
 		},
 
 		open(meta, cifra, event) {
-			this.fuente = { meta, cifra, vez: (this.fuente?.vez ?? 0) + 1 }
+			this.fuente = { meta, cifra, opening: (this.fuente?.opening ?? 0) + 1 }
 			this.opener = event.currentTarget
 		},
 

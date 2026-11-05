@@ -68,7 +68,7 @@ final class ApiContractTest extends TestCase {
 
 	private const CIFRA = ['mes', 'numerador', 'denominador', 'porcentaje', 'origen', 'fecha_corte'];
 
-	private const RUTA = ['fuente', 'desde', 'hasta', 'sumar', 'restar'];
+	private const RUTA = ['fuente', 'nombre', 'desde', 'hasta', 'sumar', 'restar'];
 
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 
@@ -308,8 +308,8 @@ final class ApiContractTest extends TestCase {
 			2026,
 			$spec->columnas,
 		)];
-		$ruta = ['numerador' => Resumen::ruta($i['numerador'], $label), 'denominador' => Resumen::ruta($i['denominador'], $label)];
 		$fuente = Sources::rem('rem-a', [], []);
+		$ruta = ['numerador' => Resumen::ruta($i['numerador'], ['rem-a' => $fuente], $label), 'denominador' => Resumen::ruta($i['denominador'], ['rem-a' => $fuente], $label)];
 
 		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false, $fuente, $ruta)];
 		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente)]);
