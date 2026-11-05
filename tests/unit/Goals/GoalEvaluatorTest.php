@@ -149,7 +149,7 @@ final class GoalEvaluatorTest extends TestCase {
 				'R' => ['local' => self::points(['2025-11' => 2]), 'nacional' => [], 'pares' => null],
 			]);
 
-		$indicator = GoalEvaluator::indicator($meta, ['meta' => 70.0, 'denominador' => null, 'cumplimiento' => null], $answers, [], true, 2026, 2, 202602);
+		$indicator = GoalEvaluator::indicator($meta, ['meta' => 70.0, 'denominador' => null, 'cumplimiento' => null], $answers, [], true, 2026, 2, 202602, 202602);
 
 		// January: 3 ÷ (10 − 2) = 37.5 %; February: 6 ÷ 8 = 75 %. The country: 30 ÷ 200, then 90 ÷ 200.
 		self::assertSame([
@@ -158,6 +158,22 @@ final class GoalEvaluatorTest extends TestCase {
 		], $indicator['meses']);
 		self::assertSame([70.0, null, null, null], [$indicator['meta_comprometida'], $indicator['cumplimiento'], $indicator['denominador_comprometido'], $indicator['poblacion']]);
 		self::assertSame('rem-a', $indicator['numerador']['fuente'], 'the route is served as the seed wrote it');
+	}
+
+	/** #25: the local series ends at the establishment's own last month; the country's runs to the fuente's fecha de corte. */
+	public function testTheLocalSeriesEndsAtItsOwnLastMonth(): void {
+		$meta = self::metas()['indicadores'][0];
+		$answers = self::answers($meta['numerador'], ['N' => ['local' => self::points(['2026-01' => 3]), 'nacional' => self::points(['2026-01' => 30, '2026-02' => 60]), 'pares' => null]])
+			+ self::answers($meta['denominador'], [
+				'D' => ['local' => self::points(['2025-11' => 10]), 'nacional' => self::points(['2025-11' => 200]), 'pares' => null],
+				'R' => ['local' => [], 'nacional' => [], 'pares' => null],
+			]);
+
+		$indicator = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, [], true, 2026, 2, 202602, 202601);
+
+		// January: 3 ÷ 10 = 30 %. February is past the local's own January: no figure, while the country's 90 ÷ 200 = 45 % stands.
+		self::assertSame([3.0, 10.0, 30.0], [$indicator['meses'][0]['numerador'], $indicator['meses'][0]['denominador'], $indicator['meses'][0]['porcentaje']]);
+		self::assertSame([null, null, null, 45.0], [$indicator['meses'][1]['numerador'], $indicator['meses'][1]['denominador'], $indicator['meses'][1]['porcentaje'], $indicator['meses'][1]['nacional']]);
 	}
 
 	/** a11, a12: a people meta. A committed denominator wins for the local series; the country and the peers stay FONASA's. */
@@ -171,17 +187,17 @@ final class GoalEvaluatorTest extends TestCase {
 		$band = static fn (int $mujeres): array => ['corte' => '2025-12-31', 'factor' => 1.0, 'manual' => false, 'bands' => [20 => ['M' => $mujeres]]];
 		$inscritos = ['local' => $band(100), 'nacional' => $band(10000), 'pares' => $band(1000)];
 
-		$fonasa = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606);
+		$fonasa = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606, 202606);
 		self::assertSame(['comprometida' => false, 'corte' => '2025-12-31', 'factor' => 1.0, 'prorrateado' => false], $fonasa['poblacion']);
 		// June: 40 ÷ 100 = 40 %, the country 3000 ÷ 10000 = 30 %, the peers 500 ÷ 1000 = 50 %. May has no corte yet.
 		self::assertSame(['mes' => '2026-06', 'numerador' => 40.0, 'denominador' => 100.0, 'porcentaje' => 40.0, 'brecha_comprometida' => null, 'brecha_nacional' => -40.0, 'nacional' => 30.0, 'pares' => 50.0], $fonasa['meses'][5]);
 		self::assertSame([null, 100.0, null, null, null], [$fonasa['meses'][4]['numerador'], $fonasa['meses'][4]['denominador'], $fonasa['meses'][4]['porcentaje'], $fonasa['meses'][4]['nacional'], $fonasa['meses'][4]['pares']]);
 
-		$committed = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => 80.0, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606);
+		$committed = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => 80.0, 'cumplimiento' => null], $answers, $inscritos, true, 2026, 6, 202606, 202606);
 		self::assertSame(['comprometida' => true, 'corte' => null, 'factor' => null, 'prorrateado' => false], $committed['poblacion']);
 		self::assertSame([80.0, 80.0, 50.0, 30.0, 50.0], [$committed['denominador_comprometido'], $committed['meses'][5]['denominador'], $committed['meses'][5]['porcentaje'], $committed['meses'][5]['nacional'], $committed['meses'][5]['pares']]);
 
-		$noCorte = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, ['local' => null, 'nacional' => null, 'pares' => null], true, 2026, 6, 202606);
+		$noCorte = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, ['local' => null, 'nacional' => null, 'pares' => null], true, 2026, 6, 202606, 202606);
 		self::assertSame([null, null, null], [$noCorte['meses'][5]['denominador'], $noCorte['meses'][5]['nacional'], $noCorte['meses'][5]['pares']], 'no corte serves the year: no % anywhere');
 	}
 
@@ -191,7 +207,7 @@ final class GoalEvaluatorTest extends TestCase {
 		$answers = self::answers($meta['numerador'], ['P' => ['local' => null, 'nacional' => self::points(['2026-06' => 3000]), 'pares' => null]]);
 		$inscritos = ['local' => null, 'nacional' => ['corte' => '2024-12-31', 'factor' => 1.03, 'manual' => false, 'bands' => [20 => ['M' => 10000]]], 'pares' => null];
 
-		$indicator = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, false, 2026, 6, null);
+		$indicator = GoalEvaluator::indicator($meta, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], $answers, $inscritos, false, 2026, 6, null, null);
 
 		self::assertSame(['comprometida' => false, 'corte' => '2024-12-31', 'factor' => 1.03, 'prorrateado' => false], $indicator['poblacion'], 'the country\'s corte, grown a year');
 		// 3000 ÷ (10000 × 1.03) = 29.13 %.
@@ -202,7 +218,7 @@ final class GoalEvaluatorTest extends TestCase {
 	public function testAManualMetaIsItsCumplimiento(): void {
 		$meta = self::metas()['indicadores'][2];
 
-		$indicator = GoalEvaluator::indicator($meta, ['meta' => 100.0, 'denominador' => null, 'cumplimiento' => 100.0], [], [], true, 2026, 9, 202609);
+		$indicator = GoalEvaluator::indicator($meta, ['meta' => 100.0, 'denominador' => null, 'cumplimiento' => 100.0], [], [], true, 2026, 9, 202609, 202609);
 
 		self::assertSame([true, 100.0, [], null, null], [$indicator['manual'], $indicator['cumplimiento'], $indicator['meses'], $indicator['numerador'], $indicator['denominador']]);
 	}
