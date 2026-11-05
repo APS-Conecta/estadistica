@@ -51,7 +51,7 @@ final class ApiContractTest extends TestCase {
 
 	private const TARJETA = ['pregunta', 'ancho'];
 
-	private const METAS = ['anios', 'anio', 'nombre', 'referencia', 'nota', 'diccionarios', 'version', 'establecimiento', 'pares', 'aviso', 'fuentes', 'indicadores'];
+	private const METAS = ['anios', 'anio', 'nombre', 'referencia', 'nota', 'diccionarios', 'version', 'establecimiento', 'pares', 'aviso', 'fuentes', 'fecha_corte_local', 'indicadores'];
 
 	private const META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'peso', 'nota', 'numerador', 'denominador', 'manual', 'cumplimiento', 'denominador_comprometido', 'poblacion', 'meses'];
 
@@ -255,8 +255,8 @@ final class ApiContractTest extends TestCase {
 		$inscritos = ['corte' => '2025-12-31', 'factor' => 1.0, 'manual' => false, 'bands' => [20 => ['M' => 100]]];
 		$commitment = ['meta' => 70.0, 'denominador' => null, 'cumplimiento' => null];
 
-		$indicator = GoalEvaluator::indicator($ii, $commitment, [], ['local' => $inscritos, 'nacional' => $inscritos, 'pares' => null], true, 2026, 6, 202606);
-		$answer = GoalEvaluator::response([2026], $metas, '900001', ['tipo' => 'CESFAM'], null, [Sources::rem('rem-a', [], []), Sources::piv([])], [$indicator]);
+		$indicator = GoalEvaluator::indicator($ii, $commitment, [], ['local' => $inscritos, 'nacional' => $inscritos, 'pares' => null], true, 2026, 6, 202606, 202606);
+		$answer = GoalEvaluator::response([2026], $metas, '900001', ['tipo' => 'CESFAM'], null, [Sources::rem('rem-a', [], []), Sources::piv([])], ['rem-a' => '2026-06', 'rem-p' => null], [$indicator]);
 
 		self::assertSame(self::METAS, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::META, array_keys($indicator));

@@ -177,9 +177,12 @@ export default {
 				if (!fuente.fecha_corte) {
 					return `${fuente.nombre}: sin cifras cargadas.`
 				}
+				// The establishment's own last month in this serie, which ends its local Serie A months.
+				const own = this.metas.fecha_corte_local?.[fuente.id]
+				const local = own ? `; su establecimiento informó hasta ${monthName(own)}` : ''
 				const until = fuente.id === 'piv'
 					? `corte al ${fuente.fecha_corte.split('-').reverse().join('-')}`
-					: `cifras hasta ${monthName(fuente.fecha_corte)}`
+					: `cifras hasta ${monthName(fuente.fecha_corte)}${local}`
 				// «Población inscrita validada (FONASA)» already names its publisher.
 				const nombre = fuente.nombre.includes(fuente.origen) ? fuente.nombre : `${fuente.nombre} (${fuente.origen})`
 				return `${nombre}: ${until}.`

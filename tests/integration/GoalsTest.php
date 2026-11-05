@@ -59,7 +59,8 @@ use OCP\Server;
  *     900001  2099-02  02010321   10=5             denominador +5
  *     900001  2099-02  03500334   11=2             denominador −2
  *     900001  2099-03  02010420   11=3             numerador +3
- *     900001  2099-10  02010321   08=100           past September: never
+ *     900001  2099-10  02010321   08=100           past September: never; 900001's last month
+ *     900001  2099-11  02010420   (every cell blank) no written number: not a reported month
  *     900002  2098-11  02010321   08=20            the country's denominador
  *     900002  2099-01  02010420   08=10            the country's numerador
  *     900003  2099-12  02010420   08=1             the country's; sets the corte at December
@@ -116,6 +117,7 @@ class GoalsTest extends IntegrationTestCase {
 				. ZipFixture::row(2099, 2, '900001', '03500334', [11 => '2'])
 				. ZipFixture::row(2099, 3, '900001', '02010420', [11 => '3'])
 				. ZipFixture::row(2099, 10, '900001', '02010321', [8 => '100'])
+				. ZipFixture::row(2099, 11, '900001', '02010420')
 				. ZipFixture::row(2099, 12, '900003', '02010420', [8 => '1'])],
 			[2099, 'P', ZipFixture::row(2099, 6, '900001', 'P1206010', [1 => '30', 2 => '2'])
 				. ZipFixture::row(2099, 6, '900001', 'P1206020', [1 => '8'])
@@ -236,14 +238,14 @@ class GoalsTest extends IntegrationTestCase {
 
 	/**
 	 * a13: Meta I for a closed month is the hand-sum of its Anexo 3 route.
-	 * December: numerador 3 + 1 + 3 = 7; denominador (10 + 5) − (1 + 2) = 12,
-	 * October to September, so October's 100 never counts.
+	 * October, 900001's last month: numerador 3 + 1 + 3 = 7; denominador
+	 * (10 + 5) − (1 + 2) = 12, October to September, so October's 100 never counts.
 	 */
 	public function testMetaIIsTheHandSumOfItsRoute(): void {
 		$meses = $this->evaluate()['I']['meses'];
 
 		self::assertCount(12, $meses);
-		self::assertSame(['2099-12', 7.0, 12.0, 58.33], [$meses[11]['mes'], $meses[11]['numerador'], $meses[11]['denominador'], $meses[11]['porcentaje']]);
+		self::assertSame(['2099-10', 7.0, 12.0, 58.33], [$meses[9]['mes'], $meses[9]['numerador'], $meses[9]['denominador'], $meses[9]['porcentaje']]);
 		// Month by month: January 4 ÷ (10 − 1) = 44.44 %; February 4 ÷ 12 = 33.33 %; March 7 ÷ 12.
 		self::assertSame([[4.0, 9.0, 44.44], [4.0, 12.0, 33.33], [7.0, 12.0, 58.33]], array_map(
 			static fn (array $mes): array => [$mes['numerador'], $mes['denominador'], $mes['porcentaje']],
@@ -253,8 +255,26 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame([56.25, 48.28], [$meses[11]['nacional'], $meses[0]['nacional']]);
 		// The CESFAM peers leave out 900003's December 1: 17 ÷ 32 = 53.13 %.
 		self::assertSame(53.13, $meses[11]['pares']);
-		self::assertSame(-31.67, $meses[11]['brecha_nacional'], '58.33 − 90');
-		self::assertNull($meses[11]['brecha_comprometida'], 'nothing committed yet');
+		self::assertSame(-31.67, $meses[9]['brecha_nacional'], '58.33 − 90');
+		self::assertNull($meses[9]['brecha_comprometida'], 'nothing committed yet');
+	}
+
+	/**
+	 * #25: only 900003 reported December, and 900001's own Serie A ends in
+	 * October (its November row is blank), so its Meta I has no figure after
+	 * October, while the country and the peers still reach December and the
+	 * fuente's fecha de corte stays December's.
+	 */
+	public function testTheLocalSeriesEndsAtItsOwnLastReportedMonth(): void {
+		$answer = $this->evaluator()->evaluate(2099, Server::get(EstablishmentConfig::class)->get(), ['tipo']);
+		$meses = array_column($answer['indicadores'], null, 'codigo')['I']['meses'];
+
+		self::assertSame([null, null, null], [$meses[10]['numerador'], $meses[10]['denominador'], $meses[10]['porcentaje']], 'November is past 900001\'s own last month');
+		self::assertSame([null, null], [$meses[11]['numerador'], $meses[11]['porcentaje']]);
+		self::assertSame([7.0, 12.0, 58.33], [$meses[9]['numerador'], $meses[9]['denominador'], $meses[9]['porcentaje']], 'October is its own');
+		self::assertSame([56.25, 53.13], [$meses[11]['nacional'], $meses[11]['pares']], 'the country and the peers are unchanged');
+		self::assertSame(['rem-a' => '2099-10', 'rem-p' => '2099-12'], $answer['fecha_corte_local']);
+		self::assertSame('2099-12', $answer['fuentes'][0]['fecha_corte'], 'the country\'s fecha de corte stays');
 	}
 
 	/**
@@ -311,7 +331,7 @@ class GoalsTest extends IntegrationTestCase {
 
 		$metas = $this->evaluate();
 
-		self::assertSame([60.0, -1.67], [$metas['I']['meta_comprometida'], $metas['I']['meses'][11]['brecha_comprometida']], '58.33 − 60');
+		self::assertSame([60.0, -1.67], [$metas['I']['meta_comprometida'], $metas['I']['meses'][9]['brecha_comprometida']], '58.33 − 60');
 		// Meta C: January 900001 col08 = 2, over the 8 committed = 25 %, and no country to compare.
 		self::assertSame([2.0, 8.0, 25.0, -5.0, null, null], [
 			$metas['C']['meses'][0]['numerador'], $metas['C']['meses'][0]['denominador'], $metas['C']['meses'][0]['porcentaje'],

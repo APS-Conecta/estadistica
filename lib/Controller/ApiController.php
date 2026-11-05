@@ -390,7 +390,10 @@ class ApiController extends OCSController {
 	 * 90 is 90 %.
 	 *
 	 * The local series is this install's establishment (app config, suite
-	 * ADR-0009). The peers are the register's establishments that share the
+	 * ADR-0009). fecha_corte_local is its own last month with a written
+	 * number in each serie (YYYY-MM by fuente id; null without an
+	 * establishment): a Serie A month past it has no local figure, while the
+	 * country's and the peers' end at the fuente's fecha de corte. The peers are the register's establishments that share the
 	 * chosen traits with it; aviso says why there are none when some were
 	 * asked for.
 	 *
@@ -399,7 +402,7 @@ class ApiController extends OCSController {
 	 *
 	 * @param ?int $anio the metas' year; the newest with metas up to the current year when omitted
 	 * @param string $pares what the peers share with this establishment, comma-separated: tipo, dependencia, nivel, servicio, region or comuna; empty for no peers
-	 * @return DataResponse<Http::STATUS_OK, array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, indicadores: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?array{comprometida: bool, corte: ?string, factor: ?float, prorrateado: bool}, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, fecha_corte_local: ?array<string, ?string>, indicadores: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?array{comprometida: bool, corte: ?string, factor: ?float, prorrateado: bool}, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The year's metas, month by month
 	 * 400: The year cannot hold metas, or a peer trait is not one — {message: the Spanish sentence}

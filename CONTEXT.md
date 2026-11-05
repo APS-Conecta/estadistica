@@ -34,8 +34,10 @@ nacional and the pares are DEIS's alone. Its origen is «planilla del establecim
 
 **Fuente** — one body of figures the app keeps and can say the age of: `rem-a`, `rem-p`, `establecimientos` (the Base
 de Establecimientos) and `piv`. Each names its **origen** (the publisher, «datos públicos DEIS» or «FONASA»; «planilla
-del establecimiento» for the months a planilla covers) and its **fecha de corte**, the date its data was cut. No
-consulta asks the register: it is read beside the REM.
+del establecimiento» for the months a planilla covers) and its **fecha de corte**, the date its data was cut. A
+Serie A meta's local series ends at the establishment's own fecha de corte instead: its last month with a written
+number in that serie (`fecha_corte_local` in the API). The nacional and the pares end at the fuente's. No consulta
+asks the register: it is read beside the REM.
 _Avoid_: dataset, and the publisher as a synonym: one publisher has three fuentes here.
 
 **Incompleto** — a year and serie that loaded, but whose member failed a completeness or plausibility check. It is
