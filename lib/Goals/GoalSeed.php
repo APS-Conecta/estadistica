@@ -125,6 +125,31 @@ final class GoalSeed {
 	}
 
 	/**
+	 * $metas moved by whole years (docs/adr/0009): their anio and every
+	 * periodo of every ruta, so Meta I's October-to-September window moves
+	 * with them. The ruta as the seed wrote it stays as written.
+	 *
+	 * @param Metas $metas
+	 * @return Metas
+	 */
+	public static function shift(array $metas, int $years): array {
+		$metas['anio'] += $years;
+		foreach ($metas['indicadores'] as &$meta) {
+			foreach (['numerador', 'denominador'] as $side) {
+				if ($meta[$side] !== null) {
+					$meta[$side]['desde'] += 100 * $years;
+					$meta[$side]['hasta'] += 100 * $years;
+					$meta[$side]['sumar'] = array_map(static fn (QuerySpec $spec): QuerySpec => $spec->shift($years), $meta[$side]['sumar']);
+					$meta[$side]['restar'] = array_map(static fn (QuerySpec $spec): QuerySpec => $spec->shift($years), $meta[$side]['restar']);
+				}
+			}
+		}
+		unset($meta);
+
+		return $metas;
+	}
+
+	/**
 	 * @return Indicador
 	 * @throws RefusedException
 	 */

@@ -89,6 +89,17 @@ final class GoalSeedTest extends TestCase {
 		self::assertSame('rem-a', $meta['ruta']['denominador']['fuente'], 'the route is kept as the file wrote it');
 	}
 
+	/** docs/adr/0009: the histórico moves every periodo by whole years, Meta I's October-to-September window with it. */
+	public function testTheMetasMoveByWholeYears(): void {
+		$metas = GoalSeed::shift(GoalSeed::parse(self::shipped(), 2026), -2);
+		$meta = array_column($metas['indicadores'], null, 'codigo')['I'];
+
+		self::assertSame(2024, $metas['anio']);
+		self::assertSame([202401, 202412, 202401, 202412], [$meta['numerador']['desde'], $meta['numerador']['hasta'], $meta['numerador']['sumar'][0]->desde, $meta['numerador']['sumar'][0]->hasta]);
+		self::assertSame([202310, 202409, 202310, 202409], [$meta['denominador']['desde'], $meta['denominador']['hasta'], $meta['denominador']['restar'][0]->desde, $meta['denominador']['restar'][0]->hasta]);
+		self::assertSame(['03500331', '03500334'], $meta['denominador']['restar'][0]->codigos, 'only the periodo moves');
+	}
+
 	/** a9, a13: Meta II is P12 §A.1 col01 + col02 over the PIV's mujeres 25–64; VII adds two códigos with their own columns. */
 	public function testTheSerieProutesAndThePopulationDenominators(): void {
 		$byCode = array_column(GoalSeed::parse(self::shipped(), 2026)['indicadores'], null, 'codigo');

@@ -23,7 +23,7 @@ import {
 	BarController, BarElement, CategoryScale, Chart, Legend, LinearScale, LineController, LineElement,
 	PointElement, Tooltip,
 } from 'chart.js'
-import { dimensionName, groupLabel } from './query.js'
+import { dimensionName, groupLabel, monthName } from './query.js'
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, LineController, LineElement, PointElement,
 	Legend, Tooltip)
@@ -285,6 +285,50 @@ export function chartConfig(panel, tipo, max, theme) {
 			},
 		},
 	}
+}
+
+/** Each earlier year's dash, in turn, so two past years differ by more than colour. */
+const PAST_DASHES = [[6, 3], [2, 3], [10, 3, 2, 3]]
+
+/**
+ * A Resumen meta's histórico as one line panel (docs/adr/0009): a line per
+ * year, the most recent in the local series' colour and thicker, each
+ * earlier year in the muted text colour with a dash of its own, and the meta
+ * as a flat dashed line. A month sin informar stays null, which Chart.js
+ * leaves as a gap. The legend names every line, so colour never stands
+ * alone, and the table under the chart holds every figure.
+ *
+ * @param {Array<{anio: number, meses: Array<{mes: string, porcentaje: ?number}>}>} years the years drawn, oldest first
+ * @param {string[]} months the months on the axis, as 'MM'
+ * @param {number} current the most recent year
+ * @param {{nombre: string, valor: number}} meta
+ * @param {object} theme themeOf's
+ */
+export function historicoConfig(years, months, current, meta, theme) {
+	const lines = years.map((year, index) => ({
+		nombre: yearName(year.anio, current),
+		data: months.map((month) => year.meses.find((mes) => mes.mes.endsWith(`-${month}`))?.porcentaje ?? null),
+		style: year.anio === current
+			? { borderColor: theme.colors.local, backgroundColor: theme.colors.local, borderWidth: 3 }
+			: { borderColor: theme.muted, backgroundColor: theme.muted, borderDash: PAST_DASHES[(years.length - 1 - index) % PAST_DASHES.length] },
+	}))
+	const panel = {
+		labels: months.map((month) => monthName(`2000-${month}`).slice(0, 3)),
+		datasets: [...lines, {
+			nombre: meta.nombre,
+			data: months.map(() => meta.valor),
+			style: { borderColor: theme.text, backgroundColor: theme.text, borderWidth: 1, borderDash: [4, 4], pointRadius: 0, pointHoverRadius: 0 },
+		}],
+	}
+	const config = chartConfig(panel, 'linea', 100, theme)
+	config.data.datasets.forEach((dataset, index) => Object.assign(dataset, panel.datasets[index].style))
+	config.options.scales.y.ticks.callback = (value) => `${formatValue(value)} %`
+	return config
+}
+
+/** A year as the histórico's legend and table name it: the most recent says so. */
+export function yearName(anio, current) {
+	return anio === current ? `${anio} (más reciente)` : String(anio)
 }
 
 /** Draws one panel on its canvas. The caller destroys the chart it gets back. */

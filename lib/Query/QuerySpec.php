@@ -162,6 +162,16 @@ final class QuerySpec {
 	}
 
 	/**
+	 * The same consulta over its periodo moved by whole years: the Resumen's
+	 * histórico (docs/adr/0009). It asks a seed's ruta, already judged by
+	 * from(), over an earlier year.
+	 */
+	public function shift(int $years): self {
+		return new self($this->fuente, $this->serie, $this->desde + 100 * $years, $this->hasta + 100 * $years, $this->hoja,
+			$this->seccion, $this->codigos, $this->columnas, $this->agrupar, $this->metrica, $this->nacional, $this->pares);
+	}
+
+	/**
 	 * @param array<array-key, mixed> $object
 	 * @param list<string> $allowed
 	 * @throws RefusedException

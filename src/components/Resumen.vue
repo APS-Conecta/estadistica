@@ -2,9 +2,10 @@
 	Resumen (docs/adr/0009): the view that opens first. One card per meta of
 	the newest metas, for this install's establishment: the percentage and
 	«N de D» of the meta's last month with a figure, dated by the
-	establishment's own last month in the meta's serie, and whether it
-	cumple, in colour and in words. Read from GET resumen alone, so the page shows what
-	the API answers.
+	establishment's own last month in the meta's serie, whether it cumple, in
+	colour and in words, and its histórico: a line per comparable year with the
+	table under it. Read from GET resumen alone, so the page shows what the API
+	answers.
 -->
 <template>
 	<section class="estadistica-resumen">
@@ -65,6 +66,8 @@
 								({{ percent(meta.meta_comprometida ?? meta.meta_nacional) }})
 							</p>
 						</div>
+
+						<ResumenHistorico v-if="meta.historico.length" :meta="meta" />
 					</article>
 				</li>
 			</ul>
@@ -77,11 +80,12 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { ocsGet, ocsMessageFrom, warnError } from '../api.js'
 import { formatValue } from '../charts.js'
 import { monthName } from '../query.js'
+import ResumenHistorico from './ResumenHistorico.vue'
 
 export default {
 	name: 'EstadisticaResumen',
 
-	components: { NcNoteCard },
+	components: { NcNoteCard, ResumenHistorico },
 
 	data() {
 		return {
@@ -139,7 +143,7 @@ export default {
 /* As many cards as fit, one per row on a phone. */
 .estadistica-resumen__metas {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 	gap: 12px;
 	margin: 0;
 	padding: 0;

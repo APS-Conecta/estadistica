@@ -454,13 +454,24 @@ class ApiController extends OCSController {
 	 * typed. Only the establishment's own figures are asked: no country, no
 	 * peers.
 	 *
+	 * The card's year is the latest with REM figures, never past the metas'
+	 * own: next year's metas, loaded in October, are counted over this year.
+	 * historico is the meta over each year of the ventana up to that one,
+	 * oldest first, its periodos moved by whole years: each month's mes,
+	 * numerador, denominador and % (Serie P at its June and December cortes),
+	 * and cierre, December's %, once the year is over. estado is «sin datos
+	 * comparables» for a year whose own diccionario labels a código × columna
+	 * of the ruta otherwise (case, accents and plurals aside), borrows its
+	 * diccionario, or whose periodos reach before the ventana; such a year has
+	 * no months. A manual meta, or one waiting for its ruta oficial, has none.
+	 *
 	 * The establishment is this install's (app config), unless the request
 	 * names another DEIS code (suite ADR-0009).
 	 *
 	 * ponytail: built on each request, where docs/adr/0009 stores it once per change.
 	 *
 	 * @param ?string $establecimiento the six-digit DEIS code whose Resumen to build; this install's when omitted
-	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<array{anio: int, estado: ?string, cierre: ?float, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float}>}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The newest metas' cards
 	 * 400: The DEIS code is not one — {message: the Spanish sentence}
