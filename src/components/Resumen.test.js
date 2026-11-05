@@ -353,20 +353,23 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 		wrapper.unmount()
 	})
 
-	it('is reached by keyboard, closes with Escape and gives the focus back to the figure', async () => {
+	it('is reached by keyboard, closes with Escape and gives the focus back to the figure, on the card, in the table and at a cierre', async () => {
 		const wrapper = await mounted()
 
-		const figure = figures(wrapper, 'I')[1]
-		expect(figure.element.tagName).toBe('BUTTON')
+		const table = card(wrapper, 'I').findAll('tbody tr')[2].findAll('td')[0].find('button')
+		const cierre = card(wrapper, 'I').findAll('tfoot td')[0].find('button')
 		const first = await opened(wrapper, figures(wrapper, 'V')[0])
-		await opened(wrapper, figure)
-		expect(first.exists(), 'each figure opens a panel of its own').toBe(false)
-		expect(panel(wrapper).element.contains(document.activeElement), 'the focus moves into the panel').toBe(true)
-		await panel(wrapper).find('aside').trigger('keydown', { key: 'Escape' })
-		await flushPromises()
+		for (const [figure, month] of [[figures(wrapper, 'I')[1], 'octubre de 2026'], [table, 'marzo de 2025'], [cierre, 'diciembre de 2025']]) {
+			expect(figure.element.tagName).toBe('BUTTON')
+			expect((await opened(wrapper, figure)).text()).toContain(`Cifra de ${month}`)
+			expect(first.exists(), 'each figure opens a panel of its own').toBe(false)
+			expect(panel(wrapper).element.contains(document.activeElement), 'the focus moves into the panel').toBe(true)
+			await panel(wrapper).find('aside').trigger('keydown', { key: 'Escape' })
+			await flushPromises()
 
-		expect(panel(wrapper).exists()).toBe(false)
-		expect(document.activeElement).toBe(figure.element)
+			expect(panel(wrapper).exists(), `Escape closes the ${month} panel`).toBe(false)
+			expect(document.activeElement, `the focus is back on the ${month} figure`).toBe(figure.element)
+		}
 		wrapper.unmount()
 	})
 })
