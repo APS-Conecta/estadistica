@@ -15,6 +15,7 @@ use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\IRequest;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -37,18 +38,21 @@ final class AdminControllerTest extends TestCase {
 
 	private Goals&MockObject $goals;
 
+	private Planillas&MockObject $planillas;
+
 	protected function setUp(): void {
 		$this->window = $this->createMock(YearWindow::class);
 		$this->deis = $this->createMock(DeisRepository::class);
 		$this->drops = $this->createMock(DroppedFiles::class);
 		$this->piv = $this->createMock(PivImporter::class);
 		$this->goals = $this->createMock(Goals::class);
+		$this->planillas = $this->createMock(Planillas::class);
 	}
 
 	private function controller(): AdminController {
 		return new AdminController($this->createMock(IRequest::class), $this->window, $this->drops,
 			$this->createMock(IngestStateMapper::class), $this->deis, $this->createMock(Catalog::class),
-			$this->createMock(Register::class), $this->piv, $this->goals);
+			$this->createMock(Register::class), $this->piv, $this->goals, $this->planillas);
 	}
 
 	/** The choice is recorded first; only then is DEIS asked again, and the window answered as stored. */
@@ -86,6 +90,15 @@ final class AdminControllerTest extends TestCase {
 		$response = $this->controller()->drop('/REM/SERIE_REM_2026.zip');
 
 		self::assertSame([422, ['message' => 'El ZIP mezcla años.']], [$response->getStatus(), $response->getData()]);
+	}
+
+	public function testThePlanillaFolderIsChosenByPathAndARefusalIsA422InSpanish(): void {
+		$this->planillas->expects(self::once())->method('choose')->with('/REM/notas.txt')
+			->willThrowException(new RefusedException('Eso es un archivo, no una carpeta.'));
+
+		$response = $this->controller()->planillas('/REM/notas.txt');
+
+		self::assertSame([422, ['message' => 'Eso es un archivo, no una carpeta.']], [$response->getStatus(), $response->getData()]);
 	}
 
 	/** @return array<string, array{string}> */

@@ -15,6 +15,7 @@ use OCA\Estadistica\Rem\HttpRange;
 use OCA\Estadistica\Rem\LocalRange;
 use OCA\Estadistica\Rem\RemImporter;
 use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Http\Client\IClient;
@@ -37,18 +38,21 @@ class RemJobTest extends TestCase {
 
 	private DeisRepository&MockObject $deis;
 
+	private Planillas&MockObject $planillas;
+
 	protected function setUp(): void {
 		$this->states = $this->createMock(IngestStateMapper::class);
 		$this->drops = $this->createMock(DroppedFiles::class);
 		$this->importer = $this->createMock(RemImporter::class);
 		$this->deis = $this->createMock(DeisRepository::class);
+		$this->planillas = $this->createMock(Planillas::class);
 	}
 
 	private function job(): RemJob {
 		$window = $this->createMock(YearWindow::class);
 		$window->method('firstYear')->willReturn(2023);
 
-		return new RemJob($this->createMock(ITimeFactory::class), $this->states, $this->drops, $this->importer, $this->deis, $window);
+		return new RemJob($this->createMock(ITimeFactory::class), $this->states, $this->drops, $this->importer, $this->deis, $window, $this->planillas);
 	}
 
 	private function tick(): void {
@@ -76,6 +80,22 @@ class RemJobTest extends TestCase {
 		self::assertSame(3600, $job->getInterval());
 		self::assertTrue($job->isTimeSensitive(), 'decided at the class\'s creation: Nextcloud ratchets it');
 		self::assertFalse($job->getAllowParallelRuns());
+	}
+
+	/** A saved planilla is read within the hour, whatever REM work the tick has. */
+	public function testEveryTickReadsThePlanillaFolderBeforeItsOneUnitOfWork(): void {
+		$calls = [];
+		$this->planillas->expects(self::once())->method('scan')->willReturnCallback(function () use (&$calls): void {
+			$calls[] = 'scan';
+		});
+		$this->deis->method('checkDue')->willReturn(true);
+		$this->deis->method('check')->willReturnCallback(function () use (&$calls): void {
+			$calls[] = 'check';
+		});
+
+		$this->tick();
+
+		self::assertSame(['scan', 'check'], $calls);
 	}
 
 	public function testAYearTheWindowLetGoIsForgottenBeforeAnythingElse(): void {

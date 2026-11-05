@@ -87,6 +87,7 @@ class PivImportTest extends IntegrationTestCase {
 			Server::get(Register::class),
 			Server::get(PivImporter::class),
 			Server::get(Goals::class),
+			$this->planillasFor(self::UID),
 		);
 	}
 

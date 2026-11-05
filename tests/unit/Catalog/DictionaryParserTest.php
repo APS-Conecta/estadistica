@@ -93,6 +93,9 @@ class DictionaryParserTest extends TestCase {
 				6 => 'POR EDAD › 1 año › Hombres',
 				7 => 'POR EDAD › 1 año › Mujeres',
 			],
+			// Where its figures sit, D12 to J12: the layout a planilla is read through.
+			'fila' => 12,
+			'celdas' => [1 => 4, 2 => 5, 3 => 6, 4 => 7, 5 => 8, 6 => 9, 7 => 10],
 		], $parsed['entries'][0]);
 	}
 
@@ -120,7 +123,7 @@ class DictionaryParserTest extends TestCase {
 
 	public function testANewSectionReadsItsOwnHeaderAndMarkers(): void {
 		self::assertSame(
-			['codigo' => '03500400', 'hoja' => 'A03', 'seccion' => 'SECCIÓN B: SEGUNDA SECCIÓN', 'prestacion' => 'Visita', 'columnas' => [1 => 'Realizadas']],
+			['codigo' => '03500400', 'hoja' => 'A03', 'seccion' => 'SECCIÓN B: SEGUNDA SECCIÓN', 'prestacion' => 'Visita', 'columnas' => [1 => 'Realizadas'], 'fila' => 21, 'celdas' => [1 => 3]],
 			self::entries()['03500400'],
 		);
 	}

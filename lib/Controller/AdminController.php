@@ -16,6 +16,7 @@ use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\YearWindow;
 use OCA\Estadistica\Settings\AdminSettings;
 use OCP\AppFramework\Controller;
@@ -51,6 +52,7 @@ class AdminController extends Controller {
 		private Register $register,
 		private PivImporter $piv,
 		private Goals $goals,
+		private Planillas $planillas,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -97,7 +99,8 @@ class AdminController extends Controller {
 	 * silent (a4): a check that cannot reach DEIS must not read as a quiet day
 	 * (docs/adr/0005). And the PIV: FONASA's cortes, and this install's
 	 * establishment's figures, FONASA's beside the ones typed here. And the
-	 * metas: each year's, and this establishment's commitments.
+	 * metas: each year's, and this establishment's commitments. And the
+	 * planilla folder, with each file's state.
 	 */
 	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
 	public function ingests(): JSONResponse {
@@ -108,7 +111,19 @@ class AdminController extends Controller {
 			'deis' => $this->deis->status(),
 			'piv' => $this->piv->status(),
 			'metas' => $this->goals->status(),
+			'planillas' => $this->planillas->status(),
 		]);
+	}
+
+	/**
+	 * The folder where the establishment saves its planillas, picked in the
+	 * caller's own Files with the platform's picker, which hands over a path.
+	 * The job reads it at its next run, as the person who chose it, and the
+	 * section lists each file's state (docs/adr/0010).
+	 */
+	#[AuthorizedAdminSetting(settings: AdminSettings::class)]
+	public function planillas(string $path = ''): JSONResponse {
+		return $this->attempt(fn (): array => $this->planillas->choose($path));
 	}
 
 	/**

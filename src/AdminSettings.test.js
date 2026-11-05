@@ -29,9 +29,12 @@ const NO_PIV = { cortes: [], local: null }
 /** No metas loaded and no establishment configured (Goals::status). */
 const NO_METAS = { years: [], local: null }
 
-/** The section, mounted over one ingests() answer, once that answer has rendered. ingests() always answers piv and metas. */
+/** No planilla folder chosen yet (Planillas::status). */
+const NO_PLANILLAS = { folder: null, owner: null, error: null, files: [] }
+
+/** The section, mounted over one ingests() answer, once that answer has rendered. ingests() always answers piv, metas and planillas. */
 async function section(data) {
-	axios.get.mockResolvedValueOnce({ data: { piv: NO_PIV, metas: NO_METAS, ...data } })
+	axios.get.mockResolvedValueOnce({ data: { piv: NO_PIV, metas: NO_METAS, planillas: NO_PLANILLAS, ...data } })
 	const wrapper = mount(AdminSettings)
 	await flushPromises()
 	return wrapper
@@ -122,7 +125,7 @@ describe('AdminSettings — where each year came from, and narrowing the window'
 		const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
 		const wrapper = await narrowing()
 		axios.put.mockResolvedValue({ data: { firstYear: 2024, chosen: 2024, earliest: 2009, currentYear: 2026 } })
-		axios.get.mockResolvedValue({ data: { ingests: [], dictionaries: [], register: null, deis, piv: NO_PIV, metas: NO_METAS } })
+		axios.get.mockResolvedValue({ data: { ingests: [], dictionaries: [], register: null, deis, piv: NO_PIV, metas: NO_METAS, planillas: NO_PLANILLAS } })
 
 		wrapper.vm.firstYear = '2024'
 		await wrapper.vm.save()
@@ -243,7 +246,7 @@ describe('AdminSettings — the PIV (a11)', () => {
 		axios.post.mockResolvedValueOnce({
 			data: { piv: { cortes: ['2025-12-31'], establishments: 2091, inscritos: 15788220, unknownAge: 3642 } },
 		})
-		axios.get.mockResolvedValueOnce({ data: { ingests: [], dictionaries: [], register: null, deis, piv: { cortes: [CORTE], local: null }, metas: NO_METAS } })
+		axios.get.mockResolvedValueOnce({ data: { ingests: [], dictionaries: [], register: null, deis, piv: { cortes: [CORTE], local: null }, metas: NO_METAS, planillas: NO_PLANILLAS } })
 
 		await wrapper.findAll('button').find((button) => button.text() === 'Elegir un archivo en Archivos…').trigger('click')
 		await flushPromises()
@@ -373,6 +376,61 @@ describe('AdminSettings — the metas (a9, a10, a12)', () => {
 		expect(wrapper.text()).toContain('Recibidas las metas de 2027 (versión 1): 1 meta, ya en uso.')
 		expect(wrapper.find('select').element.value).toBe('2027')
 		expect(wrapper.text()).toContain('Metas Sanitarias 2027, versión 1')
+		wrapper.unmount()
+	})
+})
+
+describe('AdminSettings — the planilla folder and each planilla\'s state (ADR-0010)', () => {
+	afterEach(() => {
+		vi.resetAllMocks()
+		delete window.OC
+	})
+
+	const planillas = {
+		folder: '/Planillas REM',
+		owner: 'estadistica',
+		error: null,
+		files: [
+			{ name: 'marzo corregida.xlsm', mtime: 1790000060, state: 'leido', serie: 'A', anio: 2026, mes: 3, error: null },
+			{ name: 'marzo.xlsm', mtime: 1790000000, state: 'reemplazado', serie: 'A', anio: 2026, mes: 3, error: null },
+			{ name: 'otro cesfam.xlsm', mtime: 1790000000, state: 'rechazado', serie: null, anio: null, mes: null, error: 'La planilla es del establecimiento 900002, no del configurado en esta instalación (900001).' },
+		],
+	}
+
+	it('lists every file: read with its serie and month, superseded, or refused with the reason', async () => {
+		const wrapper = await section({ ingests: [], dictionaries: [], register: null, deis, planillas })
+
+		expect(wrapper.text()).toContain('Carpeta: «/Planillas REM», en los archivos de estadistica.')
+		const rows = wrapper.findAll('.estadistica-admin__planillas tbody tr').map((row) => row.text())
+		expect(rows).toHaveLength(3)
+		expect(rows[0]).toContain('marzo corregida.xlsm')
+		expect(rows[0]).toContain('Leída: Serie A, marzo de 2026')
+		expect(rows[1]).toContain('Reemplazada por una más reciente de la Serie A, marzo de 2026')
+		expect(rows[2]).toContain('Rechazada: La planilla es del establecimiento 900002')
+		wrapper.unmount()
+	})
+
+	it('says when the chosen folder cannot be reached', async () => {
+		const error = 'No se encuentra la carpeta de planillas elegida: se borró, o quien la eligió ya no tiene acceso a ella. Elija otra.'
+		const wrapper = await section({ ingests: [], dictionaries: [], register: null, deis, planillas: { ...NO_PLANILLAS, owner: 'estadistica', error } })
+
+		expect(wrapper.text()).toContain(error)
+		wrapper.unmount()
+	})
+
+	it('chooses the folder with the platform\'s picker and hands over its path', async () => {
+		window.OC = { dialogs: { FILEPICKER_TYPE_CHOOSE: 1, filepicker: vi.fn((title, choose) => choose('/Planillas REM')) } }
+		axios.put.mockResolvedValueOnce({ data: { ...NO_PLANILLAS, folder: '/Planillas REM', owner: 'admin' } })
+		const wrapper = await section({ ingests: [], dictionaries: [], register: null, deis })
+
+		expect(wrapper.text()).toContain('Todavía no hay una carpeta de planillas elegida.')
+		await wrapper.findAll('button').find((button) => button.text() === 'Elegir la carpeta en Archivos…').trigger('click')
+		await flushPromises()
+
+		expect(window.OC.dialogs.filepicker.mock.calls[0][3]).toEqual(['httpd/unix-directory'])
+		expect(axios.put).toHaveBeenCalledWith('/apps/estadistica/admin/planillas', { path: '/Planillas REM' })
+		expect(wrapper.text()).toContain('Carpeta: «/Planillas REM», en los archivos de admin.')
+		expect(wrapper.text()).toContain('Sus planillas se leen en la próxima hora.')
 		wrapper.unmount()
 	})
 })

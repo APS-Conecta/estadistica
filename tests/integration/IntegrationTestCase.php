@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Tests\Integration;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Db\DashboardMapper;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Db\QuestionMapper;
@@ -14,6 +15,8 @@ use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Register\Register;
 use OCA\Estadistica\Service\DroppedFiles;
+use OCA\Estadistica\Service\EstablishmentConfig;
+use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\SavedContent;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -29,6 +32,7 @@ use OCP\IUserSession;
 use OCP\Server;
 use OCP\Settings\IManager;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 /**
  * Shared plumbing for tests against the throwaway instance's real PostgreSQL
@@ -69,6 +73,21 @@ abstract class IntegrationTestCase extends TestCase {
 			Server::get(Register::class),
 			Server::get(PivImporter::class),
 			Server::get(Goals::class),
+		);
+	}
+
+	/** The planilla folder as the app wires it, chosen by $uid the way the FilePicker drives it. */
+	final protected function planillasFor(string $uid): Planillas {
+		return new Planillas(
+			Server::get(IDBConnection::class),
+			Server::get(IAppConfig::class),
+			Server::get(IRootFolder::class),
+			$this->sessionOf($uid),
+			Server::get(EstablishmentConfig::class),
+			Server::get(Catalog::class),
+			Server::get(ITempManager::class),
+			Server::get(ITimeFactory::class),
+			Server::get(LoggerInterface::class),
 		);
 	}
 

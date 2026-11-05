@@ -50,7 +50,11 @@ use OCA\Estadistica\Xlsx\XlsxReader;
  * the REM rows carry have no label (2017, 2023, 2025, 2026 Serie A; 2026
  * Serie P: 0). The catalogue counts those as «sin descripción».
  *
- * @psalm-type Entry = array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<int, string>}
+ * Each entry also keeps where its figures sit: its row (fila) and, per
+ * column, the sheet column of its marker (celdas). That is the layout a
+ * planilla is read through (PlanillaReader).
+ *
+ * @psalm-type Entry = array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<int, string>, fila: int, celdas: array<int, int>}
  * @psalm-type Parsed = array{hojas: array<string, string>, entries: list<Entry>, duplicates: int, unreadable: int, skippedSheets: int}
  */
 final class DictionaryParser {
@@ -221,13 +225,16 @@ final class DictionaryParser {
 				$seen[$codigo] = true;
 
 				$columnas = [];
+				$celdas = [];
 				foreach ($markers as $column => $number) {
 					$columnas[$number] = self::label(array_map(
 						static fn (int $headerRow): string => self::at($cells, $origins, $headerRow, $column),
 						$header,
 					));
+					$celdas[$number] = $column;
 				}
 				ksort($columnas);
+				ksort($celdas);
 
 				$entries[] = [
 					'codigo' => $codigo,
@@ -238,6 +245,8 @@ final class DictionaryParser {
 						range(2, max(2, min(array_keys($markers)) - 1)),
 					)]),
 					'columnas' => $columnas,
+					'fila' => $row,
+					'celdas' => $celdas,
 				];
 			}
 		}

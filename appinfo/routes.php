@@ -17,5 +17,6 @@ return [
 		['name' => 'admin#ingests', 'url' => '/admin/ingests', 'verb' => 'GET'],
 		['name' => 'admin#piv', 'url' => '/admin/piv', 'verb' => 'PUT'],
 		['name' => 'admin#goals', 'url' => '/admin/goals', 'verb' => 'PUT'],
+		['name' => 'admin#planillas', 'url' => '/admin/planillas', 'verb' => 'PUT'],
 	],
 ];

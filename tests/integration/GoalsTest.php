@@ -468,6 +468,7 @@ class GoalsTest extends IntegrationTestCase {
 			Server::get(Register::class),
 			Server::get(PivImporter::class),
 			$this->goals(),
+			$this->planillasFor('admin'),
 		);
 	}
 }
