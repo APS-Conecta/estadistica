@@ -25,7 +25,7 @@ const refused = (status, message) => Promise.reject(Object.assign(new Error(`HTT
 const meta = (codigo, fields) => ({
 	codigo, nombre: `La meta ${codigo}`, indicador: 'Un indicador', meta_nacional: 90, meta_comprometida: null, manual: false,
 	estado: null, mes: null, datos_al: null, numerador: null, denominador: null, porcentaje: null, cumple: null, historico: [],
-	origen: null, fecha_corte: null, ...fields,
+	origen: null, fecha_corte: null, meta_minima: null, ...fields,
 })
 
 /** GET resumen for 900001: cumple against a commitment, misses the nacional, a Serie P figure older than its month, both statuses, sin informar and Meta VIII. */
@@ -108,6 +108,31 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
 		}
 		expect(card(wrapper, 'VIII').text()).toContain('Cumplimiento informado: 100 %')
 		expect(card(wrapper, 'VIII').text()).toContain('Cumple la meta nacional (100 %)')
+		wrapper.unmount()
+	})
+
+	it('shows each meta mínima as a reference from its base year\'s cierre, and why a meta has none (#51)', async () => {
+		const minima = {
+			I: { porcentaje: 62, base: 2025, motivo: null },
+			V: { porcentaje: 52.6, base: 2025, motivo: null },
+			VII: { porcentaje: 68, base: 2025, motivo: 'sin la meta comprometida 2025, se cierra el 40 % de la brecha' },
+			II: { porcentaje: null, base: 2025, motivo: 'falta el denominador oficial de 2025' },
+			'IV.A': { porcentaje: null, base: null, motivo: 'esperando ruta oficial' },
+			VIII: { porcentaje: 100, base: null, motivo: null },
+		}
+		const data = answer()
+		data.metas = data.metas.map((card) => ({ ...card, meta_minima: minima[card.codigo] ?? null }))
+		const wrapper = await shown(ok(data))
+
+		expect(card(wrapper, 'I').text()).toContain('Meta mínima 2026: 62,0 % — referencia: la meta la fija el Servicio de Salud')
+		expect(card(wrapper, 'I').text()).toContain('Desde el cierre 2025.')
+		expect(card(wrapper, 'V').text()).toContain('Meta mínima 2026: 52,6 % — referencia: la meta la fija el Servicio de Salud')
+		expect(card(wrapper, 'VII').text()).toContain('Desde el cierre 2025; sin la meta comprometida 2025, se cierra el 40 % de la brecha.')
+		expect(card(wrapper, 'II').text()).toContain('Sin meta mínima 2026: falta el denominador oficial de 2025.')
+		expect(card(wrapper, 'IV.A').text()).toContain('Sin meta mínima 2026: esperando ruta oficial.')
+		expect(card(wrapper, 'VIII').text()).toContain('Meta mínima 2026: 100,0 % — referencia: la meta la fija el Servicio de Salud')
+		expect(card(wrapper, 'VIII').text()).not.toContain('cierre')
+		expect(card(wrapper, 'VI').text()).not.toContain('mínima')
 		wrapper.unmount()
 	})
 

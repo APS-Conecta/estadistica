@@ -43,6 +43,13 @@ use OCA\Estadistica\Service\YearWindow;
  *   OOTT estimates the sick among the inscritos (IV.A, V, VII); or
  *   {"comprometido": true}, a figure only the establishment's commitment gives.
  * - A manual meta (VIII) has neither: an admin types its cumplimiento.
+ * - "meta_minima" is the meta's rule for its meta mínima (Res. Exenta 732,
+ *   docs/adr/0009), in whole percents: close "brecha" % of the gap to the
+ *   meta nacional, "brecha_si_cumplio" % instead when the base year reached
+ *   its meta comprometida, never under "piso"; or a "fija" minimum. Without
+ *   it the meta shows no meta mínima. Meta II's «a base ≤ 40 % commits to at
+ *   least 50 %» is "piso": 50, since closing 30 % from above 40 already
+ *   passes 52.
  * - Percentages are written as percentages: meta_nacional 90 is 90 %, peso
  *   12.5 is 12.5 %, prevalencia 1.8 is 1.8 %. A meta without peso has none:
  *   the resolución de metas fixes none (2027).
@@ -52,7 +59,8 @@ use OCA\Estadistica\Service\YearWindow;
  *
  * @psalm-type Parte = array{fuente: string, serie: string, desde: int, hasta: int, sumar: non-empty-list<QuerySpec>, restar: list<QuerySpec>}
  * @psalm-type Grupo = array{desde: int, hasta: ?int, sexo: ?string, prevalencia: float}
- * @psalm-type Indicador = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, peso: ?float, nota: ?string, manual: bool, base: ?string, numerador: ?Parte, denominador: ?Parte, poblacion: list<Grupo>, ruta: array{numerador: ?array<string, mixed>, denominador: ?array<string, mixed>}}
+ * @psalm-type Regla = array{brecha: ?int, brecha_si_cumplio: ?int, piso: ?int, fija: ?int}
+ * @psalm-type Indicador = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, peso: ?float, nota: ?string, manual: bool, base: ?string, numerador: ?Parte, denominador: ?Parte, poblacion: list<Grupo>, ruta: array{numerador: ?array<string, mixed>, denominador: ?array<string, mixed>}, meta_minima: ?Regla}
  * @psalm-type Metas = array{anio: int, version: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, indicadores: non-empty-list<Indicador>}
  */
 final class GoalSeed {
@@ -178,7 +186,7 @@ final class GoalSeed {
 			throw new RefusedException('El codigo de un indicador es el número de la meta, como "I" o "III.A".');
 		}
 		$meta = 'Meta ' . $codigo;
-		self::keys($raw, ['codigo', 'nombre', 'indicador', 'meta_nacional', 'peso', 'nota', 'numerador', 'denominador', 'manual'], $meta);
+		self::keys($raw, ['codigo', 'nombre', 'indicador', 'meta_nacional', 'peso', 'nota', 'numerador', 'denominador', 'manual', 'meta_minima'], $meta);
 
 		$manual = $raw['manual'] ?? false;
 		if (!is_bool($manual)) {
@@ -198,6 +206,7 @@ final class GoalSeed {
 			'denominador' => null,
 			'poblacion' => [],
 			'ruta' => ['numerador' => null, 'denominador' => null],
+			'meta_minima' => self::rule($raw['meta_minima'] ?? null, $meta),
 		];
 
 		if ($manual) {
@@ -284,6 +293,37 @@ final class GoalSeed {
 			'sumar' => $specs['sumar'],
 			'restar' => $specs['restar'],
 		];
+	}
+
+	/**
+	 * A meta mínima rule: whole percents, so the Resumen computes it exactly.
+	 *
+	 * @return ?Regla
+	 * @throws RefusedException
+	 */
+	private static function rule(mixed $raw, string $meta): ?array {
+		if ($raw === null) {
+			return null;
+		}
+		$what = $meta . ': meta_minima';
+		$keys = ['brecha', 'brecha_si_cumplio', 'piso', 'fija'];
+		if (!is_array($raw) || array_is_list($raw)) {
+			throw new RefusedException(sprintf('%s es un objeto, como {"brecha": 30, "piso": 60} o {"fija": 80}.', $what));
+		}
+		self::keys($raw, $keys, $what);
+		$rule = [];
+		foreach ($keys as $key) {
+			$value = $raw[$key] ?? null;
+			if ($value !== null && (!is_int($value) || $value < 0 || $value > 100)) {
+				throw new RefusedException(sprintf('%s: %s es un porcentaje entero de 0 a 100.', $what, $key));
+			}
+			$rule[$key] = $value;
+		}
+		if (($rule['brecha'] === null) === ($rule['fija'] === null) || ($rule['brecha_si_cumplio'] !== null && $rule['brecha'] === null)) {
+			throw new RefusedException(sprintf('%s lleva brecha, el porcentaje de la brecha a la meta nacional que se cierra (con brecha_si_cumplio, si hace falta), o fija; no ambas.', $what));
+		}
+
+		return $rule;
 	}
 
 	/**

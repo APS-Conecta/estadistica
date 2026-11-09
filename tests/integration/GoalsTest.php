@@ -788,6 +788,84 @@ class GoalsTest extends IntegrationTestCase {
 	}
 
 	/**
+	 * #51, Res. Exenta 732: each meta's meta mínima starts from the cierre of
+	 * its base year, the last one over with its December published: 2098 on
+	 * 15-12-2099. Meta I closes 30 % of the gap from 2098's 50 % to 90: 62 %.
+	 * Meta T, under Meta II's rule without its floor, closes 40 % of the gap
+	 * from 10 % to 80, 38 %, while no 2098 meta comprometida is typed, and
+	 * says so; 30 %, 31 %, once 2098's 10 % reached the typed one; 40 % again
+	 * once it did not. Meta II has no 2098 figure, so no minimum, and says
+	 * why. Meta VIII is 100 %; Meta C's seed writes no rule, so it has none.
+	 */
+	public function testTheMetaMinimaStartsFromItsBaseYearsCierre(): void {
+		$this->fonasa('31-12-2097');
+		$this->fonasa('31-12-2098');
+		$this->goals()->store(self::ruled(['I' => ['brecha' => 30, 'piso' => 60], 'II' => ['brecha' => 50], 'T' => ['brecha' => 40, 'brecha_si_cumplio' => 30], 'VIII' => ['fija' => 100]]));
+		$this->goals()->store(self::seed(2098));
+		$shown = static fn (?float $porcentaje, ?int $base, ?string $motivo = null): array => ['porcentaje' => $porcentaje, 'base' => $base, 'motivo' => $motivo];
+
+		self::assertSame([
+			'I' => $shown(62.0, 2098),
+			'II' => $shown(null, 2098, 'falta el denominador oficial de 2098'),
+			'T' => $shown(38.0, 2098, 'sin la meta comprometida 2098, se cierra el 40 % de la brecha'),
+			'C' => null,
+			'VIII' => $shown(100.0, null),
+		], $this->minima());
+
+		$this->goals()->commit(2098, [['codigo' => 'T', 'meta' => 10]]);
+		self::assertSame($shown(31.0, 2098), $this->minima()['T'], '2098\'s 10 % reached the 10 % committed');
+		$this->goals()->commit(2098, [['codigo' => 'T', 'meta' => 10.01]]);
+		self::assertSame($shown(38.0, 2098), $this->minima()['T'], 'and not 10.01 %');
+	}
+
+	/**
+	 * #51: the base year moves to a year once its December is published. On
+	 * 15-02-2100, 2099 is over. While REM-P 2099 reaches only June, Meta T's
+	 * base is still 2098: half the gap from 10 % to 80 is 45 %. Once
+	 * December 2099 is loaded, its 45 de 350 = 12.86 % is the base: 46.4 %.
+	 * Meta I's 2099 has its December too (900003's), but 900001 reported up
+	 * to October: no cierre to start from, and it says so.
+	 */
+	public function testTheBaseYearMovesOnceItsDecemberIsPublished(): void {
+		$this->clock = $this->at(gmmktime(12, 0, 0, 2, 15, 2100));
+		$this->fonasa('31-12-2097');
+		$this->fonasa('31-12-2098');
+		$this->goals()->store(self::ruled(['I' => ['brecha' => 50], 'T' => ['brecha' => 50]]));
+		[[, , $p2099]] = array_values(array_filter(self::loads(), static fn (array $load): bool => $load[0] === 2099 && $load[1] === 'P'));
+		$this->load(2099, 'P', ZipFixture::row(2099, 6, '900001', 'P1206010', [1 => '30', 2 => '2']) . ZipFixture::row(2099, 6, '900001', 'P1206020', [1 => '8']), self::LABELS_P);
+
+		self::assertSame(['porcentaje' => 45.0, 'base' => 2098, 'motivo' => null], $this->minima()['T'], 'December 2099 not published yet');
+
+		$this->load(2099, 'P', $p2099, self::LABELS_P);
+		$minima = $this->minima();
+		self::assertSame(['porcentaje' => 46.4, 'base' => 2099, 'motivo' => null], $minima['T']);
+		self::assertSame(['porcentaje' => null, 'base' => 2099, 'motivo' => 'no hay cierre comparable de 2099'], $minima['I']);
+	}
+
+	/** @return array<string, ?array<string, mixed>> each card's meta mínima, by codigo, as GET resumen serves it */
+	private function minima(): array {
+		$metas = $this->api()->resumen()->getData()['metas'];
+
+		return array_combine(array_column($metas, 'codigo'), array_map(static fn (array $card): ?array => $card['meta_minima'], $metas));
+	}
+
+	/**
+	 * @param array<string, array<string, int>> $rules a meta mínima rule by codigo
+	 * @return array<string, mixed> 2099's metas, the metas $rules names carrying their rule
+	 */
+	private static function ruled(array $rules): array {
+		$seed = self::seed();
+		foreach ($seed['indicadores'] as &$meta) {
+			if (isset($rules[$meta['codigo']])) {
+				$meta['meta_minima'] = $rules[$meta['codigo']];
+			}
+		}
+		unset($meta);
+
+		return $seed;
+	}
+
+	/**
 	 * @param array<string, mixed> $card
 	 * @return array<int, array<string, mixed>> a card's histórico, by year
 	 */
