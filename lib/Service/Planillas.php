@@ -10,6 +10,7 @@ use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Query\QueryCompiler;
 use OCA\Estadistica\Rem\PlanillaReader;
 use OCA\Estadistica\Rem\RemReader;
 use OCA\Estadistica\Xlsx\XlsxReader;
@@ -43,9 +44,10 @@ use Throwable;
  *   file no longer there is forgotten, rows and all. The folder is the single
  *   truth.
  * - **States.** «leido», with its serie and month; «rechazado», with the
- *   Spanish reason; «reemplazado», a leído planilla of a serie and month that
- *   has a newer one (by modification time, then file id). Only «rechazado» is
- *   stored as such: the others are read from the files beside them.
+ *   Spanish reason; «reemplazado», a leído planilla that is not the one that
+ *   counts for its serie and month (QueryCompiler::PLANILLAS). Only
+ *   «rechazado» is stored as such: the others are read from the files beside
+ *   them.
  *
  * A leído planilla's figures are kept in estadistica_planilla_rem, apart from
  * DEIS's, with their file, and the newest one of each serie and month is its
@@ -142,22 +144,16 @@ class Planillas {
 		$path = $folder === null ? null : $this->rootFolder->getUserFolder($owner)->getRelativePath($folder->getPath());
 
 		$result = $this->db->executeQuery(
-			'SELECT name, mtime, serie, anio, mes, error FROM *PREFIX*estadistica_planilla '
-			. 'ORDER BY anio DESC NULLS LAST, mes DESC, serie, mtime DESC, file_id DESC',
+			'SELECT p.name, p.mtime, p.serie, p.anio, p.mes, p.error, n.file_id AS newest FROM *PREFIX*estadistica_planilla p '
+			. 'LEFT JOIN (' . QueryCompiler::PLANILLAS . ') n USING (file_id) '
+			. 'ORDER BY p.anio DESC NULLS LAST, p.mes DESC, p.serie, p.mtime DESC, p.file_id DESC',
 		);
 		$files = [];
-		$newest = [];
 		while (($row = $result->fetch()) !== false) {
-			$state = 'rechazado';
-			if ($row['error'] === null) {
-				$key = $row['serie'] . $row['anio'] . '-' . $row['mes'];
-				$state = isset($newest[$key]) ? 'reemplazado' : 'leido';
-				$newest[$key] = true;
-			}
 			$files[] = [
 				'name' => (string)$row['name'],
 				'mtime' => (int)$row['mtime'],
-				'state' => $state,
+				'state' => $row['error'] !== null ? 'rechazado' : ($row['newest'] !== null ? 'leido' : 'reemplazado'),
 				'serie' => $row['serie'],
 				'anio' => $row['anio'] === null ? null : (int)$row['anio'],
 				'mes' => $row['mes'] === null ? null : (int)$row['mes'],
