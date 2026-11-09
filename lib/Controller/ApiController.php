@@ -466,6 +466,19 @@ class ApiController extends OCSController {
 	 * diccionario, or whose periodos reach before the ventana; such a year has
 	 * no months. A manual meta, or one waiting for its ruta oficial, has none.
 	 *
+	 * What a figure's source panel shows (docs/adr/0009): origen and
+	 * fecha_corte, on the card for its mes and on each month of historico,
+	 * say where that month comes from («datos públicos DEIS», cut at that
+	 * year's load's last month, YYYY-MM). Each year of historico carries its
+	 * ruta: the numerador's and the denominador's fuente, its nombre as GET
+	 * fuentes serves it, periodo (desde, hasta: YYYY-MM, moved to that year)
+	 * and the códigos to add (sumar) and subtract (restar), one list per
+	 * consulta, each labelled for its columns by that year's diccionario as
+	 * POST consultas labels it. A denominador of FONASA's inscritos is fuente
+	 * piv, named, with no periodo and no códigos; one
+	 * only a commitment gives is null. referencia cites the metas' resolución
+	 * and OOTT.
+	 *
 	 * The establishment is this install's (app config), unless the request
 	 * names another DEIS code (suite ADR-0009). This install's is the stored
 	 * Resumen, rebuilt in the background after each change it reads
@@ -473,7 +486,7 @@ class ApiController extends OCSController {
 	 * another establishment's is built on each request and never stored.
 	 *
 	 * @param ?string $establecimiento the six-digit DEIS code whose Resumen to build; this install's when omitted
-	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<array{anio: int, estado: ?string, cierre: ?float, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float}>}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, referencia: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<array{anio: int, estado: ?string, cierre: ?float, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, origen: ?string, fecha_corte: ?string}>, ruta: array{numerador: ?array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>, restar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>}, denominador: ?array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>, restar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>}}}>, origen: ?string, fecha_corte: ?string}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The newest metas' cards
 	 * 400: The DEIS code is not one — {message: the Spanish sentence}
