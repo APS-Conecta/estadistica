@@ -19,6 +19,7 @@ use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Goals\Resumen;
 use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Migration\EnsureSeedData;
+use OCA\Estadistica\Migration\Version000013Date20261109120000;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Piv\Population;
 use OCA\Estadistica\Query\QueryExecutor;
@@ -1038,6 +1039,28 @@ class GoalsTest extends IntegrationTestCase {
 		$col10 = $ask('03500366', 'col10');
 		self::assertSame([[], 1.0], [$col10['local'], $col10['nacional'][0]['valor']], 'a blank planilla cell is sin informar while DEIS has 1');
 		self::assertSame(10.0, $ask('02010420', 'col08', '900002')['local'][0]['valor'], 'another establishment reads DEIS');
+	}
+
+	/**
+	 * docs/adr/0010 through POST consultas: a planilla read before migration
+	 * 13 names no establishment, so it counts nowhere until the next scan
+	 * judges it again. Meanwhile January's local series is DEIS's 2 alone,
+	 * never DEIS's 2 plus the planilla's 6.
+	 */
+	public function testAPlanillaReadBeforeMigration13CountsFromTheNextScan(): void {
+		$this->planilla('enero.xlsm', 'ENERO', ['02010420' => [8 => 6]], self::SAVED);
+		$this->scan();
+		$this->db()->executeStatement('UPDATE *PREFIX*estadistica_planilla SET estab = NULL');
+		(new Version000013Date20261109120000($this->db()))->postSchemaChange($this->createStub(IOutput::class), static fn () => null, []);
+		$local = fn (): array => array_column($this->api()->consultas([
+			'fuente' => 'rem-a',
+			'periodo' => ['desde' => '2099-01', 'hasta' => '2099-01'],
+			'filtros' => ['codigos' => ['02010420'], 'columnas' => ['col08']],
+		])->getData()['series']['local'], 'valor');
+
+		self::assertSame([2.0], $local(), 'DEIS\'s alone');
+		$this->scan();
+		self::assertSame([6.0], $local(), 'the planilla, judged again');
 	}
 
 	/**

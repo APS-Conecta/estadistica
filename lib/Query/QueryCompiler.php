@@ -40,11 +40,14 @@ final class QueryCompiler {
 	public const MAX_GROUPS = 5000;
 
 	/**
-	 * The newest leído planilla of each establishment, serie and month: by
-	 * modification time, then file id (Planillas::status).
+	 * The planillas that count: the newest leído planilla of each
+	 * establishment, serie and month, by modification time, then file id. One
+	 * read before migration 13 names no establishment and counts nowhere until
+	 * the next scan judges it again. local(), QueryExecutor::planillas and
+	 * Planillas::status all read it.
 	 */
 	public const PLANILLAS = 'SELECT DISTINCT ON (estab, serie, anio, mes) file_id, estab, serie, anio, mes, mtime'
-		. ' FROM *PREFIX*estadistica_planilla WHERE error IS NULL ORDER BY estab, serie, anio, mes, mtime DESC, file_id DESC';
+		. ' FROM *PREFIX*estadistica_planilla WHERE error IS NULL AND estab IS NOT NULL ORDER BY estab, serie, anio, mes, mtime DESC, file_id DESC';
 
 	private const METRIC = [
 		'suma' => 'sum(c.valor)',
