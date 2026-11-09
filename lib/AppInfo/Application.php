@@ -6,10 +6,12 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\AppInfo;
 
+use OCA\Estadistica\Listener\NotaListener;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\TaskProcessing\Events\TaskSuccessfulEvent;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'estadistica';
@@ -19,6 +21,8 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
+		$context->registerEventListener(TaskSuccessfulEvent::class, NotaListener::class);
+
 		// Everything in this app is autowired, plus one autoload rule: aps-common
 		// ships as the committed vendor/aps/common/src subtree (release tarballs
 		// are `git archive` of the tracked tree, and vendor/autoload.php is not

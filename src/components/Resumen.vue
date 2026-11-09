@@ -5,7 +5,8 @@
 	establishment's own last month in the meta's serie, whether it cumple, in
 	colour and in words, and its histórico: a line per comparable year with the
 	table under it, and its meta mínima, a reference from its base year's
-	cierre, or why it has none. Read from GET resumen alone, so the page shows what the API
+	cierre, or why it has none. At the top, the nota a model wrote about what changed, when
+	there is one, labelled as a model's. Read from GET resumen alone, so the page shows what the API
 	answers. Each figure, on the card and in its table, is a button that opens
 	its source panel for the figure's month; closing it gives the focus back.
 -->
@@ -26,6 +27,14 @@
 
 		<template v-else>
 			<h2>{{ resumen.nombre }}</h2>
+
+			<!-- A model's text (CONTEXT.md, nota): untrusted, so plain text only, never v-html. -->
+			<aside v-if="resumen.nota" class="estadistica-resumen__nota">
+				<p>{{ resumen.nota }}</p>
+				<p class="estadistica-resumen__hint">
+					Escrita por un modelo de IA a partir de las cifras
+				</p>
+			</aside>
 
 			<ul class="estadistica-resumen__metas">
 				<li v-for="meta in resumen.metas" :key="meta.codigo">
@@ -199,6 +208,13 @@ export default {
 
 .estadistica-resumen__hint {
 	color: var(--color-text-maxcontrast);
+}
+
+.estadistica-resumen__nota {
+	padding: 8px 12px;
+	border-inline-start: 4px solid var(--color-primary-element);
+	border-radius: var(--border-radius-container);
+	background-color: var(--color-primary-element-light);
 }
 
 /* As many cards as fit, one per row on a phone. */

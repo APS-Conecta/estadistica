@@ -46,6 +46,7 @@ const answer = () => ({
 		meta('VI'),
 		meta('VIII', { manual: true, meta_nacional: 100, porcentaje: 100, cumple: true }),
 	],
+	nota: null,
 })
 
 async function shown(response = ok(answer()), options = {}) {
@@ -167,6 +168,30 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
 		expect(failed.findComponent({ name: 'NcNoteCard' }).props('type')).toBe('error')
 		expect(failed.text()).toContain('La consulta tardó más de 10 s y se canceló.')
 		failed.unmount()
+	})
+})
+
+describe('Resumen — the nota a model wrote about what changed (CONTEXT.md)', () => {
+	const LABEL = 'Escrita por un modelo de IA a partir de las cifras'
+
+	it('shows the nota at the top, as plain text, labelled as a model\'s', async () => {
+		const resumen = answer()
+		resumen.nota = 'La Meta I 2026 llegó a <b>58,3 %</b> (7 de 12) en octubre de 2026.'
+		const wrapper = await shown(ok(resumen))
+
+		const nota = wrapper.find('.estadistica-resumen__nota')
+		expect(nota.findAll('p').map((line) => line.text())).toEqual(['La Meta I 2026 llegó a <b>58,3 %</b> (7 de 12) en octubre de 2026.', LABEL])
+		expect(nota.find('b').exists()).toBe(false)
+		expect(nota.element.compareDocumentPosition(wrapper.find('.estadistica-resumen__metas').element)).toBe(window.Node.DOCUMENT_POSITION_FOLLOWING)
+		wrapper.unmount()
+	})
+
+	it('shows no nota, and no label, when there is none', async () => {
+		const wrapper = await shown()
+
+		expect(wrapper.find('.estadistica-resumen__nota').exists()).toBe(false)
+		expect(wrapper.text()).not.toContain(LABEL)
+		wrapper.unmount()
 	})
 })
 

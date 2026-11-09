@@ -13,6 +13,7 @@ use OCA\Estadistica\Db\Question;
 use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Goals\GoalSeed;
 use OCA\Estadistica\Goals\Resumen;
+use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Query\QueryCompiler;
 use OCA\Estadistica\Query\QueryExecutor;
 use OCA\Estadistica\Query\QuerySpec;
@@ -29,7 +30,8 @@ use ReflectionParameter;
  * read from the shapers that build it (Sources, QueryCompiler::points,
  * QueryExecutor::label and ::response, Question::toClient, Dashboard::toClient,
  * GoalEvaluator::response, ::indicator and ::month, Resumen::response and
- * ::card), so this test holds the two together without either copying the other.
+ * ::card, and ResumenStore::served), so this test holds the two together
+ * without either copying the other.
  */
 final class ApiContractTest extends TestCase {
 	private const FUENTE = ['id', 'nombre', 'origen', 'fecha_corte', 'filas', 'estado', 'anios'];
@@ -60,7 +62,7 @@ final class ApiContractTest extends TestCase {
 
 	private const POBLACION = ['comprometida', 'corte', 'factor', 'falta_oficial'];
 
-	private const RESUMEN = ['anio', 'nombre', 'referencia', 'establecimiento', 'metas'];
+	private const RESUMEN = ['anio', 'nombre', 'referencia', 'establecimiento', 'metas', 'nota'];
 
 	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'datos_al', 'numerador', 'denominador', 'porcentaje', 'cumple', 'historico', 'origen', 'fecha_corte', 'meta_minima'];
 
@@ -315,7 +317,7 @@ final class ApiContractTest extends TestCase {
 
 		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false, $fuente, $ruta, [])];
 		$minima = Resumen::minimum(['brecha' => 30, 'brecha_si_cumplio' => null, 'piso' => 60, 'fija' => null], $indicator, $historico[0], null);
-		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente, [], $minima)]);
+		$answer = ResumenStore::served(Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente, [], $minima)]), null);
 
 		self::assertSame(self::RESUMEN, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::TARJETA_META, array_keys($answer['metas'][0]));
@@ -330,6 +332,7 @@ final class ApiContractTest extends TestCase {
 	public function testTheSpecNamesExactlyTheKeysTheResumenServes(): void {
 		$data = self::data(self::RESUMEN_PATH);
 		self::assertSame(self::RESUMEN, array_keys($data['properties']));
+		self::assertTrue($data['properties']['nota']['nullable'] ?? false, 'no provider, no nota');
 		$tarjeta = $data['properties']['metas']['items']['properties'];
 		self::assertSame(self::TARJETA_META, array_keys($tarjeta));
 		self::assertSame(self::MINIMA, array_keys($tarjeta['meta_minima']['properties']));

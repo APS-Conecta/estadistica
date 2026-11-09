@@ -17,6 +17,7 @@ use OCA\Estadistica\Domain\Establishment;
 use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Goals\Goals;
+use OCA\Estadistica\Goals\Nota;
 use OCA\Estadistica\Goals\Resumen;
 use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Migration\EnsureSeedData;
@@ -41,6 +42,7 @@ use OCA\Estadistica\Xlsx\XlsxReader;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -50,7 +52,11 @@ use OCP\IDBConnection;
 use OCP\IRequest;
 use OCP\Migration\IOutput;
 use OCP\Server;
+use OCP\TaskProcessing\Events\TaskSuccessfulEvent;
+use OCP\TaskProcessing\IManager;
+use OCP\TaskProcessing\Task;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 
 /**
  * The Metas Sanitarias against the instance's real PostgreSQL (acceptance a9–a13).
@@ -393,11 +399,38 @@ class GoalsTest extends IntegrationTestCase {
 		return new Sources(Server::get(IngestStateMapper::class), Server::get(Catalog::class), Server::get(Register::class), $this->window($clock), Server::get(PivImporter::class));
 	}
 
-	/** The stored Resumen, on this test's clock unless $clock says otherwise. */
-	private function resumen(?ITimeFactory $clock = null): ResumenStore {
+	/** The stored Resumen, on this test's clock unless $clock says otherwise, asking $tasks for its nota (none available unless given). */
+	private function resumen(?ITimeFactory $clock = null, ?IManager $tasks = null): ResumenStore {
 		$clock ??= $this->clock;
+		$nota = new Nota($tasks ?? $this->taskProcessing([]), Server::get(LoggerInterface::class));
 
-		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock), $this->sources($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
+		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock), $this->sources($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class), $nota);
+	}
+
+	/**
+	 * Nextcloud's TaskProcessing, faked at its interface: these task types
+	 * available, each task it schedules kept in $scheduled, or $failure thrown.
+	 *
+	 * @param list<string> $types
+	 * @param list<Task> $scheduled
+	 */
+	private function taskProcessing(array $types, array &$scheduled = [], ?\Throwable $failure = null): IManager {
+		$tasks = $this->createStub(IManager::class);
+		$tasks->method('getAvailableTaskTypeIds')->willReturn($types);
+		$tasks->method('scheduleTask')->willReturnCallback(static function (Task $task) use (&$scheduled, $failure): void {
+			if ($failure !== null) {
+				throw $failure;
+			}
+			$scheduled[] = $task;
+		});
+
+		return $tasks;
+	}
+
+	/** $task answered with $output, delivered where Nextcloud delivers a task's result. */
+	private static function answer(Task $task, string $output): void {
+		$task->setOutput(['output' => $output]);
+		Server::get(IEventDispatcher::class)->dispatchTyped(new TaskSuccessfulEvent($task));
 	}
 
 	/** How many rebuilds wait in the background work. */
@@ -405,10 +438,10 @@ class GoalsTest extends IntegrationTestCase {
 		return iterator_count(Server::get(IJobList::class)->getJobsIterator(ResumenJob::class, null, 0));
 	}
 
-	/** The queued rebuild, run the way ResumenJob runs it, on $clock. */
-	private function rebuild(?ITimeFactory $clock = null): void {
+	/** The queued rebuild, run the way ResumenJob runs it, on $clock, asking $tasks for its nota. */
+	private function rebuild(?ITimeFactory $clock = null, ?IManager $tasks = null): void {
 		Server::get(IJobList::class)->remove(ResumenJob::class);
-		$this->resumen($clock)->rebuild();
+		$this->resumen($clock, $tasks)->rebuild();
 	}
 
 	/** @return array<string, array<string, mixed>> 2099's metas for this install's establishment, by codigo */
@@ -1042,6 +1075,84 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertCount(1, $first);
 		self::assertSame($first, $stored());
 		self::assertSame(['builtAt' => gmmktime(13, 0, 0, 12, 15, 2099), 'error' => null], $this->admin()->ingests()->getData()['resumen']);
+	}
+
+	/**
+	 * The nota (CONTEXT.md): a rebuild that changes the fingerprint asks a
+	 * text-to-text provider for one, with the figures that changed. FONASA's
+	 * file gives Meta T its first figures, so those are the task's. The answer
+	 * is kept while the fingerprint it was written for is the stored one; a
+	 * rebuild that changes nothing asks nothing and keeps it, and one that
+	 * changes a figure drops it until its own answer comes.
+	 */
+	public function testAChangeAsksForOneNotaKeptWhileItsFiguresAreTheStoredOnes(): void {
+		$scheduled = [];
+		$tasks = $this->taskProcessing(['core:text2text'], $scheduled);
+		$this->rebuild(null, $tasks);
+		self::assertSame([], $scheduled, 'the first Resumen has nothing to change from');
+
+		$this->fonasa('31-12-2098');
+		$this->rebuild(null, $tasks);
+		self::assertCount(1, $scheduled);
+		[$task] = $scheduled;
+		$fingerprint = $this->db()->executeQuery('SELECT fingerprint FROM *PREFIX*estadistica_resumen WHERE estab = 900001')->fetchOne();
+		self::assertSame(['core:text2text', 'estadistica', null, $fingerprint], [$task->getTaskTypeId(), $task->getAppId(), $task->getUserId(), $task->getCustomId()]);
+		self::assertStringStartsWith(Nota::INSTRUCTION . "\n\n", $task->getInput()['input']);
+		self::assertStringContainsString("- Meta T 2099, porcentaje: antes sin cifra, ahora 12,9 %.\n- Meta T 2099, numerador: antes sin cifra, ahora 45.\n- Meta T 2099, denominador: antes sin cifra, ahora 350.", $task->getInput()['input']);
+		self::assertNull($this->api()->resumen()->getData()['nota'], 'no nota until the provider answers');
+
+		self::answer($task, 'La Meta T 2099 llegó a 12,9 % (45 de 350).');
+		self::assertSame('La Meta T 2099 llegó a 12,9 % (45 de 350).', $this->api()->resumen()->getData()['nota']);
+
+		$this->rebuild($this->at(gmmktime(13, 0, 0, 12, 15, 2099)), $tasks);
+		self::assertCount(1, $scheduled, 'the same fingerprint asks for no nota');
+		self::assertSame('La Meta T 2099 llegó a 12,9 % (45 de 350).', $this->api()->resumen()->getData()['nota']);
+
+		$this->commit([['codigo' => 'I', 'meta' => 50]]);
+		$this->rebuild(null, $tasks);
+		self::assertCount(2, $scheduled);
+		self::assertStringContainsString('- Meta I 2099, meta comprometida: antes sin cifra, ahora 50 %.', $scheduled[1]->getInput()['input']);
+		self::assertNull($this->api()->resumen()->getData()['nota'], 'a nota is dropped with the figures it was written for');
+		self::answer($task, 'La Meta T 2099 llegó a 12,9 % (45 de 350).');
+		self::assertNull($this->api()->resumen()->getData()['nota'], 'an answer for an earlier fingerprint is not kept');
+	}
+
+	/**
+	 * A nota with a number the stored Resumen does not show is dropped: the
+	 * model's 12,86 % is the stored figure, but the screen writes 12,9 %.
+	 */
+	public function testANotaWithANumberTheResumenDoesNotShowIsDropped(): void {
+		$scheduled = [];
+		$tasks = $this->taskProcessing(['core:text2text'], $scheduled);
+		$this->rebuild(null, $tasks);
+		$this->fonasa('31-12-2098');
+		$this->rebuild(null, $tasks);
+
+		self::answer($scheduled[0], 'La Meta T 2099 llegó a 12,86 % (45 de 350).');
+
+		self::assertNull($this->api()->resumen()->getData()['nota']);
+	}
+
+	/**
+	 * With no text-to-text provider, no task is asked and there is no nota.
+	 * A provider that fails leaves no nota either, and the rebuild it was
+	 * asked from still stores the new Resumen.
+	 */
+	public function testNoProviderOrAFailingOneLeavesNoNotaAndTheRebuildSucceeds(): void {
+		$scheduled = [];
+		$this->rebuild();
+		$this->fonasa('31-12-2098');
+		$this->rebuild(null, $this->taskProcessing(['core:text2image'], $scheduled));
+		self::assertSame([], $scheduled);
+		self::assertNull($this->api()->resumen()->getData()['nota']);
+
+		$this->commit([['codigo' => 'I', 'meta' => 50]]);
+		$this->rebuild(null, $this->taskProcessing(['core:text2text'], $scheduled, new RuntimeException('the provider is down')));
+
+		$resumen = $this->api()->resumen()->getData();
+		self::assertSame(50.0, array_column($resumen['metas'], null, 'codigo')['I']['meta_comprometida'], 'the rebuild stored the new Resumen');
+		self::assertNull($resumen['nota']);
+		self::assertNull($this->admin()->ingests()->getData()['resumen']['error']);
 	}
 
 	/**
