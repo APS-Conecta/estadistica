@@ -82,6 +82,14 @@ final class NotaTest extends TestCase {
 			'rounded to a whole' => ['La Meta V 2099 llegó a 45 %.', false],
 			'written with a trailing zero' => ['La Meta V 2099 llegó a 45,20 %.', false],
 			'invalid UTF-8' => ["La Meta V 2099 llegó a 99 % \xff", false],
+			'a cardinal' => ['La Meta V 2099 llegó a 45,2 %, cinco puntos menos que en 2098.', false],
+			'a compound cardinal' => ['La Meta V 2099 suma veinticinco personas más.', false],
+			'a double' => ['La Meta V 2099 suma el doble que en 2098.', false],
+			'a half' => ['La Meta V 2099 va en la mitad de su meta mínima.', false],
+			'an accented cardinal' => ['La Meta V 2099 suma veintitrés personas más.', false],
+			'a capitalised cardinal' => ['Mil personas más en la Meta V 2099.', false],
+			'an article or a pronoun' => ['Una meta cambió: la Meta V 2099, uno de los indicadores, llegó a 45,2 %.', true],
+			'words that only contain a number word' => ['La Meta V 2099 no cuenta dosis: no se movió ni un milímetro, y es el tercero en hacerlo.', true],
 		];
 	}
 
@@ -124,6 +132,7 @@ final class NotaTest extends TestCase {
 		self::assertCount(1, $scheduled);
 		[$task] = $scheduled;
 		self::assertSame(['core:text2text', 'estadistica', null, self::FINGERPRINT], [$task->getTaskTypeId(), $task->getAppId(), $task->getUserId(), $task->getCustomId()]);
+		self::assertStringContainsString('Escribe cada cifra con dígitos, tal como aparece abajo, nunca con palabras.', $task->getInput()['input']);
 		self::assertSame(['input' => Nota::INSTRUCTION . "\n\n"
 			. "- Meta V 2099, porcentaje: antes 40,1 %, ahora 45,2 %.\n"
 			. "- Meta V 2099, numerador: antes 1.100, ahora 1.234.\n"

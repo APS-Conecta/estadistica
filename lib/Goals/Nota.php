@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Goals;
 
+use APS\Common\Text;
 use OCA\Estadistica\AppInfo\Application;
 use OCP\TaskProcessing\IManager;
 use OCP\TaskProcessing\Task;
@@ -26,7 +27,8 @@ use Throwable;
  * - **Checked number by number.** check() keeps the answer only when every
  *   number in it, as es-CL writes it, is a figure the Resumen screen shows,
  *   or a year the Resumen names, or a month it names with its year
- *   («11/2099»), never alone; an answer it cannot read is no nota.
+ *   («11/2099»), never alone, and none is written in words («dos», «el
+ *   doble»); an answer it cannot read is no nota.
  * - **Never in the way.** A provider that fails is logged and leaves no nota;
  *   the rebuild that asked carries on.
  *
@@ -36,7 +38,25 @@ use Throwable;
 class Nota {
 	public const INSTRUCTION = 'Escribe una nota breve en español sobre lo que cambió en el Resumen de las Metas Sanitarias. '
 		. 'Di solo lo que cambió, con las cifras exactas tal como aparecen abajo, sin causas y sin consejos. '
-		. 'No calcules ni redondees cifras.';
+		. 'No calcules ni redondees cifras. '
+		. 'Escribe cada cifra con dígitos, tal como aparece abajo, nunca con palabras.';
+
+	/**
+	 * The number words check() drops, as Text::fold writes them: the cardinals
+	 * from «dos» up, and the multiplicative and fraction words. Never «un»,
+	 * «una» or «uno», which are also articles and pronouns.
+	 */
+	private const NUMBER_WORDS = [
+		'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+		'once', 'doce', 'trece', 'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve',
+		'veinte', 'veintiun', 'veintiuno', 'veintiuna', 'veintidos', 'veintitres', 'veinticuatro',
+		'veinticinco', 'veintiseis', 'veintisiete', 'veintiocho', 'veintinueve',
+		'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa',
+		'cien', 'ciento', 'doscientos', 'doscientas', 'trescientos', 'trescientas', 'cuatrocientos', 'cuatrocientas',
+		'quinientos', 'quinientas', 'seiscientos', 'seiscientas', 'setecientos', 'setecientas',
+		'ochocientos', 'ochocientas', 'novecientos', 'novecientas', 'mil', 'millon', 'millones',
+		'doble', 'triple', 'mitad', 'tercio',
+	];
 
 	private const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
@@ -68,13 +88,14 @@ class Nota {
 
 	/**
 	 * $answer, trimmed, when every number in it is one $resumen shows or
-	 * names; else null.
+	 * names, and it writes none in words; else null.
 	 *
 	 * @param Respuesta $resumen
 	 */
 	public static function check(string $answer, array $resumen): ?string {
 		$answer = trim($answer);
-		if (preg_match_all('/\d{1,2}\/\d{4}|\d(?:[\d.,]*\d)?(?:\s*%)?/u', $answer, $numbers) === false) {
+		if (preg_match_all('/\d{1,2}\/\d{4}|\d(?:[\d.,]*\d)?(?:\s*%)?/u', $answer, $numbers) === false
+			|| array_intersect(preg_split('/\P{L}+/u', Text::fold($answer)) ?: [], self::NUMBER_WORDS) !== []) {
 			return null;
 		}
 		$allowed = self::allowed($resumen);
