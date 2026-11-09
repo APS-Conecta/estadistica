@@ -59,10 +59,11 @@ work.*
   the client. Only whitelisted, bound fields may reach SQL (ADR-0006).
 - **Saved titles are untrusted on output.** `src/` has no `v-html`, and Vue text binding escapes them.
 - **Model output is untrusted text.** The nota is bounded three ways. Its task carries aggregates only: the
-  fixed Spanish instruction and the Resumen card figures that changed, as the screen writes them, with no
-  names, files or planilla text. `Nota::check` drops the answer unless every number in it, as es-CL writes it,
-  is a figure the stored Resumen shows, a year it names, or a month it names with its year («11/2099», never a
-  bare month), and drops an answer it cannot read. Vue renders it as text, never `v-html`,
+  fixed Spanish instruction, which asks for every figure in digits, and the Resumen card figures that changed,
+  as the screen writes them, with no names, files or planilla text. `Nota::check` drops the answer unless every
+  number in it, as es-CL writes it, is a figure the stored Resumen shows, a year it names, or a month it names
+  with its year («11/2099», never a bare month); it drops an answer that writes a number in words (one closed
+  set, whole words, case and accents folded: «dos», «veintitrés», «el doble», «la mitad») and one it cannot read. Vue renders it as text, never `v-html`,
   labelled «Escrita por un modelo de IA a partir de las cifras».
 - **The platform (Nextcloud)** owns authentication, sessions and CSRF tokens; PostgreSQL only (ADR-0002).
 
@@ -72,6 +73,8 @@ work.*
   planillas cover (ADR-0010). A planilla's figures, its cached formula values included, are taken as saved,
   like the report the establishment sends its Servicio de Salud. Who may write there is the folder's
   Nextcloud sharing, which the establishment controls; the admin section lists every file and its state.
-- **The nota's words are the model's.** The validator checks the numbers written in digits. A number spelled
-  in words, or a wrong claim with no number in it, is not caught. The label says a model wrote it, and every
-  figure on the cards below it is the stored one.
+- **The nota's words are the model's.** The validator checks every number written in digits and drops a nota
+  that writes a word from the closed set of number words. A wrong claim with no number in it is not caught,
+  and neither is a number word outside that set, e.g. «un», «una», «uno» (also articles), «cero», «medio»,
+  «cuarto», «miles», «docena». The label says a model wrote it, and every figure on the cards below it is the
+  stored one.
