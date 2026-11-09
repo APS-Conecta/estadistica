@@ -151,7 +151,10 @@ class ApiController extends OCSController {
 	 * The local series is this install's establishment (app config), unless
 	 * the request names another DEIS code: a parameter, not an implicit
 	 * «ours» (suite ADR-0009). The app's own pages never send one, because a
-	 * clinic selector is a governance decision nobody has taken.
+	 * clinic selector is a governance decision nobody has taken. For each
+	 * serie and month an establishment's planilla covers, its local series
+	 * is the newest planilla's figures, a blank cell sin informar; the
+	 * national and the peer series are DEIS's alone (docs/adr/0010).
 	 *
 	 * It is a POST because the spec is a JSON document, and it spends the read
 	 * limit because it writes nothing.
@@ -468,8 +471,10 @@ class ApiController extends OCSController {
 	 *
 	 * What a figure's source panel shows (docs/adr/0009): origen and
 	 * fecha_corte, on the card for its mes and on each month of historico,
-	 * say where that month comes from («datos públicos DEIS», cut at that
-	 * year's load's last month, YYYY-MM). Each year of historico carries its
+	 * say where that month comes from: «planilla del establecimiento», saved
+	 * that day (YYYY-MM-DD), for a month its planilla covers (docs/adr/0010),
+	 * else «datos públicos DEIS», cut at that year's load's last month
+	 * (YYYY-MM). Each year of historico carries its
 	 * ruta: the numerador's and the denominador's fuente, its nombre as GET
 	 * fuentes serves it, periodo (desde, hasta: YYYY-MM, moved to that year)
 	 * and the códigos to add (sumar) and subtract (restar), one list per

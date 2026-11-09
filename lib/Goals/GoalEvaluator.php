@@ -114,10 +114,12 @@ class GoalEvaluator {
 	 * Each year reads its own denominador comprometido, the official figure
 	 * of that year; the meta comprometida and the cumplimiento informado stay
 	 * the metas year's. Beside each meta, the months its local Serie P
-	 * figure only carries an earlier corte (carried()).
+	 * figure only carries an earlier corte (carried()); and, the same beside
+	 * every year, the months the establishment's planillas cover
+	 * (QueryExecutor::planillas), read in that snapshot.
 	 *
 	 * @param Metas $metas
-	 * @return array<int, array{indicadores: list<Meta>, carried: list<Carried>, fecha_corte_local: ?array<string, ?string>}> by year, oldest first; the last is the current year
+	 * @return array<int, array{indicadores: list<Meta>, carried: list<Carried>, fecha_corte_local: ?array<string, ?string>, planillas: array<string, array<string, string>>}> by year, oldest first; the last is the current year
 	 * @throws RefusedException
 	 */
 	public function history(array $metas, int $firstYear, Establishment $local): array {
@@ -155,12 +157,12 @@ class GoalEvaluator {
 	 * @param non-empty-array<int, array{0: Metas, 1: array<string, Commitment>}> $years each year's metas and commitments, by year
 	 * @param ?array<string, string> $peers
 	 * @param array<string, Fuente> $fuentes
-	 * @return array<int, array{indicadores: list<Meta>, carried: list<Carried>, fecha_corte_local: ?array<string, ?string>}>
+	 * @return array<int, array{indicadores: list<Meta>, carried: list<Carried>, fecha_corte_local: ?array<string, ?string>, planillas: array<string, array<string, string>>}>
 	 * @throws RefusedException
 	 */
 	private function count(array $years, ?int $estab, ?array $peers, bool $nacional, array $fuentes): array {
 		$now = $this->time->getTime();
-		[$answers, $own] = $this->ask(array_column($years, 0), $estab, $peers, $nacional);
+		[$answers, $own, $planillas] = $this->ask(array_column($years, 0), $estab, $peers, $nacional);
 
 		$counted = [];
 		foreach ($years as $anio => [$metas, $commitments]) {
@@ -182,7 +184,7 @@ class GoalEvaluator {
 				$indicadores[] = self::indicator($meta, $commitment, $answers, $inscritos, $estab !== null, $anio, $months, $through, $localThrough);
 				$carried[] = self::carried($meta, $answers, $anio, $months);
 			}
-			$counted[$anio] = ['indicadores' => $indicadores, 'carried' => $carried, 'fecha_corte_local' => $own[$anio] ?? null];
+			$counted[$anio] = ['indicadores' => $indicadores, 'carried' => $carried, 'fecha_corte_local' => $own[$anio] ?? null, 'planillas' => $planillas];
 		}
 
 		return $counted;
@@ -429,12 +431,13 @@ class GoalEvaluator {
 
 	/**
 	 * Every REM route of each year's metas, each asked for the scopes wanted,
-	 * and the establishment's own last month in each serie of each year, in
-	 * one read-only snapshot, so no meta mixes two loads.
+	 * the establishment's own last month in each serie of each year, and the
+	 * months its planillas cover, in one read-only snapshot, so no meta mixes
+	 * two loads.
 	 *
 	 * @param list<Metas> $list
 	 * @param ?array<string, string> $peers
-	 * @return array{0: array<int, array<string, ?list<Punto>>>, 1: array<int, array<string, ?string>>} the answers by spl_object_id of the route's QuerySpec; the last months by year and fuente, none without an establishment
+	 * @return array{0: array<int, array<string, ?list<Punto>>>, 1: array<int, array<string, ?string>>, 2: array<string, array<string, string>>} the answers by spl_object_id of the route's QuerySpec; the last months by year and fuente; the planilla months (QueryExecutor::planillas); none of the last two without an establishment
 	 */
 	private function ask(array $list, ?int $estab, ?array $peers, bool $nacional): array {
 		$specs = [];
@@ -464,7 +467,7 @@ class GoalEvaluator {
 				];
 			}
 
-			return [$answers, $own];
+			return [$answers, $own, $estab === null ? [] : $this->executor->planillas($estab)];
 		});
 	}
 

@@ -53,7 +53,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   each only in its own month: a corte not reported is sin informar, never
  *   the one before it. A year already over carries its cierre: December's %.
  * - **Its source**, which a click on any figure shows (docs/adr/0009): each
- *   month's origen and the fecha de corte of its year's load (origin()),
+ *   month's origen, the planilla's with the day it was saved or else the
+ *   fecha de corte of its year's load (origin()),
  *   each year's ruta with its periodos moved (ruta()), each código labelled
  *   by that year's diccionario as POST consultas labels it
  *   (QueryExecutor::label), and the metas' referencia.
@@ -112,6 +113,7 @@ class Resumen {
 		$current = array_key_last($history);
 		$labels = $this->labels($metas, array_keys($history));
 		$fuentes = array_column($this->sources->all(), null, 'id');
+		$planillas = $history[$current]['planillas'];
 		$moved = [];
 		foreach (array_keys($history) as $year) {
 			$moved[$year] = GoalSeed::shift($metas, $year - $anio)['indicadores'];
@@ -119,6 +121,7 @@ class Resumen {
 		$cards = [];
 		foreach ($metas['indicadores'] as $i => $indicador) {
 			$fuente = $fuentes[$indicador['numerador']['fuente'] ?? ''] ?? null;
+			$saved = $planillas[Sources::REM[$fuente['id'] ?? ''] ?? ''] ?? [];
 			$historico = [];
 			foreach ($history as $year => $counted) {
 				$comparable = $year === $current || self::comparable(GoalSeed::terms($indicador), $labels, $year, $current, $year - $anio, $firstYear);
@@ -131,7 +134,7 @@ class Resumen {
 					'numerador' => self::ruta($moved[$year][$i]['numerador'], $fuentes, $label),
 					'denominador' => $fonasa ? self::population($fuentes[Sources::PIV]) : self::ruta($moved[$year][$i]['denominador'], $fuentes, $label),
 				];
-				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear(), $fuente, $ruta);
+				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear(), $fuente, $ruta, $saved);
 			}
 			$meta = $history[$current]['indicadores'][$i];
 			$base = self::base($historico, $fuente, $this->window->currentYear());
@@ -139,7 +142,7 @@ class Resumen {
 			$previous = $base === null || $estab === null || ($indicador['meta_minima']['brecha_si_cumplio'] ?? null) === null
 				? null
 				: $this->goals->commitments($base['anio'], $estab)[$indicador['codigo']]['meta'] ?? null;
-			$cards[] = self::card($meta, $current, $history[$current]['fecha_corte_local'], $historico, $fuente, self::minimum($indicador['meta_minima'], $meta, $base, $previous));
+			$cards[] = self::card($meta, $current, $history[$current]['fecha_corte_local'], $historico, $fuente, $saved, self::minimum($indicador['meta_minima'], $meta, $base, $previous));
 		}
 
 		return self::response($anio, $metas['nombre'], $metas['referencia'], $local->isConfigured() ? $local->deisCode : null, $cards);
@@ -165,10 +168,11 @@ class Resumen {
 	 * @param ?array<string, ?string> $fechaCorteLocal the establishment's own last month (YYYY-MM) by fuente; null without one
 	 * @param list<Historico> $historico
 	 * @param ?Fuente $fuente the numerador's, as GET fuentes serves it
+	 * @param array<string, string> $planillas the months a planilla covers in the numerador's serie, each with the day it was saved
 	 * @param ?Minima $minima its meta mínima (minimum())
 	 * @return Tarjeta
 	 */
-	public static function card(array $meta, int $anio, ?array $fechaCorteLocal, array $historico, ?array $fuente, ?array $minima): array {
+	public static function card(array $meta, int $anio, ?array $fechaCorteLocal, array $historico, ?array $fuente, array $planillas, ?array $minima): array {
 		$waiting = self::waiting($meta);
 		$last = null;
 		foreach ($waiting ? [] : $meta['meses'] as $mes) {
@@ -191,7 +195,7 @@ class Resumen {
 			'porcentaje' => $porcentaje,
 			'cumple' => $porcentaje === null ? null : $porcentaje >= ($meta['meta_comprometida'] ?? $meta['meta_nacional']),
 			'historico' => $waiting || $meta['manual'] ? [] : $historico,
-			...self::origin($fuente, $last['mes'] ?? null),
+			...self::origin($fuente, $last['mes'] ?? null, $planillas),
 			'meta_minima' => $minima,
 		];
 	}
@@ -264,7 +268,7 @@ class Resumen {
 		$base = null;
 		foreach ($historico as $year) {
 			$december = sprintf('%d-12', $year['anio']);
-			if ($year['anio'] < $currentYear && self::origin($fuente, $december)['fecha_corte'] === $december) {
+			if ($year['anio'] < $currentYear && self::origin($fuente, $december, [])['fecha_corte'] === $december) {
 				$base = $year;
 			}
 		}
@@ -283,15 +287,19 @@ class Resumen {
 	}
 
 	/**
-	 * Where a month's figures come from (docs/adr/0010): its fuente's origen
-	 * and the fecha de corte of that year's load; nothing without one.
-	 * ponytail: a month a planilla covers is «planilla del establecimiento»
-	 * with the file's date (#54).
+	 * Where a month's figures come from (docs/adr/0010): a month a planilla
+	 * covers is «planilla del establecimiento», with the day its file was
+	 * saved (YYYY-MM-DD); any other is its fuente's origen, with the fecha
+	 * de corte of that year's load (YYYY-MM); nothing without one.
 	 *
 	 * @param ?Fuente $fuente
+	 * @param array<string, string> $planillas YYYY-MM → the day its planilla was saved
 	 * @return array{origen: ?string, fecha_corte: ?string}
 	 */
-	public static function origin(?array $fuente, ?string $mes): array {
+	public static function origin(?array $fuente, ?string $mes, array $planillas): array {
+		if (isset($planillas[$mes ?? ''])) {
+			return ['origen' => Sources::ORIGIN_PLANILLA, 'fecha_corte' => $planillas[$mes]];
+		}
 		$load = $mes === null ? null : array_column($fuente['anios'] ?? [], null, 'anio')[(int)substr($mes, 0, 4)] ?? null;
 
 		return ['origen' => $load === null ? null : ($fuente['origen'] ?? null), 'fecha_corte' => $load['fecha_corte'] ?? null];
@@ -339,9 +347,10 @@ class Resumen {
 	 * @param Carried $carried the months its Serie P figures only carry an earlier corte (GoalEvaluator::history)
 	 * @param ?Fuente $fuente the numerador's, for each month's origin()
 	 * @param array{numerador: ?Ruta, denominador: ?Ruta} $ruta the year's, its periodos moved
+	 * @param array<string, string> $planillas the months a planilla covers in the numerador's serie, for origin()
 	 * @return Historico
 	 */
-	public static function year(array $meta, array $carried, int $anio, bool $comparable, bool $over, ?array $fuente, array $ruta): array {
+	public static function year(array $meta, array $carried, int $anio, bool $comparable, bool $over, ?array $fuente, array $ruta, array $planillas): array {
 		if (!$comparable) {
 			return ['anio' => $anio, 'estado' => self::NOT_COMPARABLE, 'cierre' => null, 'meses' => [], 'ruta' => $ruta];
 		}
@@ -352,7 +361,7 @@ class Resumen {
 			if (!$cortes || in_array(substr($mes['mes'], 5), ['06', '12'], true)) {
 				$numerador = in_array($mes['mes'], $carried['numerador'], true) ? null : $mes['numerador'];
 				$denominador = in_array($mes['mes'], $carried['denominador'], true) ? null : $mes['denominador'];
-				$meses[] = ['mes' => $mes['mes'], 'numerador' => $numerador, 'denominador' => $denominador, 'porcentaje' => $numerador === null || $denominador === null ? null : $mes['porcentaje'], ...self::origin($fuente, $mes['mes'])];
+				$meses[] = ['mes' => $mes['mes'], 'numerador' => $numerador, 'denominador' => $denominador, 'porcentaje' => $numerador === null || $denominador === null ? null : $mes['porcentaje'], ...self::origin($fuente, $mes['mes'], $planillas)];
 			}
 		}
 

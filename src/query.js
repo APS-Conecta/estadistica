@@ -63,6 +63,18 @@ export function monthName(yearMonth) {
 	return `${MONTHS[Number(month) - 1] ?? month} de ${year}`
 }
 
+/**
+ * Where a month's figures come from, as GET resumen says it (docs/adr/0010):
+ * the planilla with the day its file was saved (AAAA-MM-DD), or DEIS with
+ * the last month its zip holds (AAAA-MM).
+ */
+export function originText(origen, fechaCorte) {
+	const [year, month, day] = String(fechaCorte).split('-')
+	return day === undefined
+		? `${origen}, con cifras hasta ${monthName(fechaCorte)}`
+		: `${origen}, guardada el ${Number(day)} de ${monthName(`${year}-${month}`)}`
+}
+
 export function dimensionName(id) {
 	return DIMENSIONS.find((dimension) => dimension.id === id)?.nombre ?? id
 }

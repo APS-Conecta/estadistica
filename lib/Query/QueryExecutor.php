@@ -260,18 +260,37 @@ class QueryExecutor {
 	/**
 	 * The establishment's last month of $anio with a written number in Serie
 	 * $serie, as YYYY-MM, or null when it wrote none: its own fecha de corte,
-	 * which another establishment's later month never moves (#25). Like
-	 * series(), it runs only inside readOnly().
+	 * which another establishment's later month never moves (#25). It reads
+	 * the local series' rows, so a planilla's month counts (docs/adr/0010).
+	 * Like series(), it runs only inside readOnly().
 	 */
 	public function lastReported(string $serie, int $anio, int $estab): ?string {
 		$cells = implode(', ', array_map(static fn (int $i): string => sprintf('col%02d', $i), range(1, RemReader::COLUMNS)));
 		$result = $this->db->executeQuery(
-			"SELECT max(mes) FROM *PREFIX*estadistica_rem WHERE estab = ? AND anio = ? AND serie = ? AND COALESCE($cells) IS NOT NULL",
+			'SELECT max(mes) FROM ' . QueryCompiler::local() . " r WHERE estab = ? AND anio = ? AND serie = ? AND COALESCE($cells) IS NOT NULL",
 			[$estab, $anio, $serie],
 		);
 		$mes = $result->fetchOne();
 		$result->closeCursor();
 
 		return $mes === null || $mes === false ? null : sprintf('%04d-%02d', $anio, (int)$mes);
+	}
+
+	/**
+	 * The months the establishment's planillas cover, each with the day its
+	 * newest one was saved (YYYY-MM-DD): serie → YYYY-MM → day. Like
+	 * lastReported(), it runs only inside readOnly().
+	 *
+	 * @return array<string, array<string, string>>
+	 */
+	public function planillas(int $estab): array {
+		$result = $this->db->executeQuery('SELECT serie, anio, mes, mtime FROM (' . QueryCompiler::PLANILLAS . ') n WHERE estab = ?', [$estab]);
+		$months = [];
+		while (($row = $result->fetch()) !== false) {
+			$months[(string)$row['serie']][sprintf('%04d-%02d', (int)$row['anio'], (int)$row['mes'])] = gmdate('Y-m-d', (int)$row['mtime']);
+		}
+		$result->closeCursor();
+
+		return $months;
 	}
 }

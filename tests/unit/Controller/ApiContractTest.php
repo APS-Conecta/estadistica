@@ -313,9 +313,9 @@ final class ApiContractTest extends TestCase {
 		$fuente = Sources::rem('rem-a', [], []);
 		$ruta = ['numerador' => Resumen::ruta($i['numerador'], ['rem-a' => $fuente], $label), 'denominador' => Resumen::ruta($i['denominador'], ['rem-a' => $fuente], $label)];
 
-		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false, $fuente, $ruta)];
+		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false, $fuente, $ruta, [])];
 		$minima = Resumen::minimum(['brecha' => 30, 'brecha_si_cumplio' => null, 'piso' => 60, 'fija' => null], $indicator, $historico[0], null);
-		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente, $minima)]);
+		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente, [], $minima)]);
 
 		self::assertSame(self::RESUMEN, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::TARJETA_META, array_keys($answer['metas'][0]));
