@@ -62,7 +62,9 @@ final class ApiContractTest extends TestCase {
 
 	private const RESUMEN = ['anio', 'nombre', 'referencia', 'establecimiento', 'metas'];
 
-	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'datos_al', 'numerador', 'denominador', 'porcentaje', 'cumple', 'historico', 'origen', 'fecha_corte'];
+	private const TARJETA_META = ['codigo', 'nombre', 'indicador', 'meta_nacional', 'meta_comprometida', 'manual', 'estado', 'mes', 'datos_al', 'numerador', 'denominador', 'porcentaje', 'cumple', 'historico', 'origen', 'fecha_corte', 'meta_minima'];
+
+	private const MINIMA = ['porcentaje', 'base', 'motivo'];
 
 	private const HISTORICO = ['anio', 'estado', 'cierre', 'meses', 'ruta'];
 
@@ -312,10 +314,12 @@ final class ApiContractTest extends TestCase {
 		$ruta = ['numerador' => Resumen::ruta($i['numerador'], ['rem-a' => $fuente], $label), 'denominador' => Resumen::ruta($i['denominador'], ['rem-a' => $fuente], $label)];
 
 		$historico = [Resumen::year($indicator, ['numerador' => [], 'denominador' => []], 2026, true, false, $fuente, $ruta, [])];
-		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente, [])]);
+		$minima = Resumen::minimum(['brecha' => 30, 'brecha_si_cumplio' => null, 'piso' => 60, 'fija' => null], $indicator, $historico[0], null);
+		$answer = Resumen::response(2026, $metas['nombre'], $metas['referencia'], '900001', [Resumen::card($indicator, 2026, ['rem-a' => '2026-06', 'rem-p' => '2026-06'], $historico, $fuente, [], $minima)]);
 
 		self::assertSame(self::RESUMEN, array_keys($answer), 'the served key set moved — update the @return docblock and regenerate the spec');
 		self::assertSame(self::TARJETA_META, array_keys($answer['metas'][0]));
+		self::assertSame(self::MINIMA, array_keys($answer['metas'][0]['meta_minima']));
 		self::assertSame(self::HISTORICO, array_keys($answer['metas'][0]['historico'][0]));
 		self::assertSame(self::CIFRA, array_keys($answer['metas'][0]['historico'][0]['meses'][0]));
 		self::assertSame(['numerador', 'denominador'], array_keys($answer['metas'][0]['historico'][0]['ruta']));
@@ -328,6 +332,8 @@ final class ApiContractTest extends TestCase {
 		self::assertSame(self::RESUMEN, array_keys($data['properties']));
 		$tarjeta = $data['properties']['metas']['items']['properties'];
 		self::assertSame(self::TARJETA_META, array_keys($tarjeta));
+		self::assertSame(self::MINIMA, array_keys($tarjeta['meta_minima']['properties']));
+		self::assertTrue($tarjeta['meta_minima']['nullable'] ?? false, 'a seed without the rule shows no meta mínima');
 		self::assertSame(self::HISTORICO, array_keys($tarjeta['historico']['items']['properties']));
 		self::assertSame(self::CIFRA, array_keys($tarjeta['historico']['items']['properties']['meses']['items']['properties']));
 		$ruta = $tarjeta['historico']['items']['properties']['ruta'];

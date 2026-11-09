@@ -151,6 +151,18 @@ final class GoalSeedTest extends TestCase {
 		self::assertSame(array_fill(0, 8, null), array_column($metas['indicadores'], 'peso'), 'Res. 732 fixes no pesos');
 		self::assertSame(['rem', 'poblacion', 'poblacion', 'poblacion', 'rem', 'rem', 'rem', null], array_column($metas['indicadores'], 'base'));
 		self::assertTrue($metas['indicadores'][7]['manual']);
+		$rule = static fn (?int $brecha, ?int $siCumplio, ?int $piso, ?int $fija): array => ['brecha' => $brecha, 'brecha_si_cumplio' => $siCumplio, 'piso' => $piso, 'fija' => $fija];
+		self::assertSame([
+			$rule(30, null, 60, null),
+			$rule(40, 30, 50, null),
+			$rule(50, null, null, null),
+			$rule(50, null, null, null),
+			$rule(50, null, null, null),
+			$rule(50, null, null, null),
+			$rule(null, null, null, 80),
+			$rule(null, null, null, 100),
+		], array_column($metas['indicadores'], 'meta_minima'), 'Res. 732\'s meta mínima rules, I to VIII');
+		self::assertSame([null], array_unique(array_column(GoalSeed::parse(self::shipped(), 2026)['indicadores'], 'meta_minima')), '2026\'s seed writes none');
 
 		$byCode = array_column($metas['indicadores'], null, 'codigo');
 		self::assertSame([202701, 202712, 202610, 202709], [$byCode['I']['numerador']['desde'], $byCode['I']['numerador']['hasta'], $byCode['I']['denominador']['desde'], $byCode['I']['denominador']['hasta']]);
@@ -269,6 +281,9 @@ final class GoalSeedTest extends TestCase {
 		yield 'a prevalence of 0' => [fn (array $s): array => $meta($s, ['denominador' => ['poblacion' => [['desde' => 15, 'prevalencia' => 0]]]]), 'prevalencia es un porcentaje mayor que 0'];
 		yield 'a population with a fuente too' => [fn (array $s): array => $meta($s, ['denominador' => ['poblacion' => [['desde' => 0]], 'fuente' => 'rem-a']]), 'Meta I, denominador no admite «fuente»'];
 		yield 'oficial as text' => [fn (array $s): array => $meta($s, ['numerador' => ['oficial' => 'no'] + $s['indicadores'][0]['numerador']]), 'Meta I, numerador: oficial es true o false'];
+		yield 'a meta mínima of a decimal percent' => [fn (array $s): array => $meta($s, ['meta_minima' => ['brecha' => 30.5]]), 'Meta I: meta_minima: brecha es un porcentaje entero de 0 a 100.'];
+		yield 'a meta mínima both closing and fixed' => [fn (array $s): array => $meta($s, ['meta_minima' => ['brecha' => 30, 'fija' => 80]]), 'Meta I: meta_minima lleva brecha'];
+		yield 'a meta mínima with an unknown key' => [fn (array $s): array => $meta($s, ['meta_minima' => ['techo' => 90]]), 'Meta I: meta_minima no admite «techo»'];
 		yield 'comprometido false' => [fn (array $s): array => $meta($s, ['denominador' => ['comprometido' => false]]), '"comprometido" solo puede ser true'];
 	}
 

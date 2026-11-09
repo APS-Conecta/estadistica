@@ -481,7 +481,18 @@ class ApiController extends OCSController {
 	 * consulta, each labelled for its columns by that year's diccionario as
 	 * POST consultas labels it. A denominador of FONASA's inscritos is fuente
 	 * piv, named, with no periodo and no códigos; one
-	 * only a commitment gives is null. referencia cites the metas' resolución
+	 * only a commitment gives is null.
+	 *
+	 * meta_minima (Res. Exenta 732) is the lowest meta comprometida the
+	 * meta's seed rule allows, a reference only: porcentaje, rounded half up
+	 * to one decimal, from the cierre of base, the last year of historico
+	 * that is over and whose December is published, and for Meta II that
+	 * year's meta comprometida. motivo says why there is no porcentaje
+	 * («esperando ruta oficial», «falta el denominador oficial de <año>», «no
+	 * hay cierre comparable de <año>», «no hay cierre comparable» when the
+	 * ventana holds no complete year), or why Meta II applies its stricter
+	 * branch. A manual meta's is its fixed minimum, with no base. Null when
+	 * the seed writes no rule. referencia cites the metas' resolución
 	 * and OOTT.
 	 *
 	 * The establishment is this install's (app config), unless the request
@@ -491,7 +502,7 @@ class ApiController extends OCSController {
 	 * another establishment's is built on each request and never stored.
 	 *
 	 * @param ?string $establecimiento the six-digit DEIS code whose Resumen to build; this install's when omitted
-	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, referencia: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<array{anio: int, estado: ?string, cierre: ?float, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, origen: ?string, fecha_corte: ?string}>, ruta: array{numerador: ?array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>, restar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>}, denominador: ?array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>, restar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>}}}>, origen: ?string, fecha_corte: ?string}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{anio: int, nombre: string, referencia: string, establecimiento: ?string, metas: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<array{anio: int, estado: ?string, cierre: ?float, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, origen: ?string, fecha_corte: ?string}>, ruta: array{numerador: ?array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>, restar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>}, denominador: ?array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>, restar: list<list<array{codigo: string, hoja: string, seccion: string, prestacion: string, columnas: array<string, string>, nota: ?string}>>}}}>, origen: ?string, fecha_corte: ?string, meta_minima: ?array{porcentaje: ?float, base: ?int, motivo: ?string}}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The newest metas' cards
 	 * 400: The DEIS code is not one — {message: the Spanish sentence}

@@ -58,6 +58,10 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   each year's ruta with its periodos moved (ruta()), each código labelled
  *   by that year's diccionario as POST consultas labels it
  *   (QueryExecutor::label), and the metas' referencia.
+ * - **Meta mínima** (Res. Exenta 732): the lowest meta comprometida the
+ *   meta's seed rule allows, from the cierre of its base year, the last
+ *   complete one of the histórico (base()), and for Meta II that year's
+ *   meta comprometida (minimum()).
  *
  * Built here, the one way; ResumenStore keeps the configured
  * establishment's once per change.
@@ -67,16 +71,20 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * @psalm-import-type Metas from GoalSeed
  * @psalm-import-type Label from Catalog
  * @psalm-import-type Parte from GoalSeed
+ * @psalm-import-type Regla from GoalSeed
  * @psalm-import-type Etiqueta from QueryExecutor
  * @psalm-import-type Fuente from Sources
  * @psalm-type Ruta = array{fuente: string, nombre: string, desde: ?string, hasta: ?string, sumar: list<list<Etiqueta>>, restar: list<list<Etiqueta>>}
  * @psalm-type Cifra = array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, origen: ?string, fecha_corte: ?string}
  * @psalm-type Historico = array{anio: int, estado: ?string, cierre: ?float, meses: list<Cifra>, ruta: array{numerador: ?Ruta, denominador: ?Ruta}}
- * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<Historico>, origen: ?string, fecha_corte: ?string}
+ * @psalm-type Minima = array{porcentaje: ?float, base: ?int, motivo: ?string}
+ * @psalm-type Tarjeta = array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, manual: bool, estado: ?string, mes: ?string, datos_al: ?string, numerador: ?float, denominador: ?float, porcentaje: ?float, cumple: ?bool, historico: list<Historico>, origen: ?string, fecha_corte: ?string, meta_minima: ?Minima}
  * @psalm-type Respuesta = array{anio: int, nombre: string, referencia: string, establecimiento: ?string, metas: list<Tarjeta>}
  */
 class Resumen {
 	public const NOT_COMPARABLE = 'sin datos comparables';
+
+	private const WAITING = 'esperando ruta oficial';
 
 	public function __construct(
 		private Goals $goals,
@@ -100,6 +108,7 @@ class Resumen {
 		}
 
 		$firstYear = $this->window->firstYear();
+		$estab = $local->isConfigured() ? (int)$local->deisCode : null;
 		$history = $this->evaluator->history($metas, $firstYear, $local);
 		$current = array_key_last($history);
 		$labels = $this->labels($metas, array_keys($history));
@@ -127,7 +136,13 @@ class Resumen {
 				];
 				$historico[] = self::year($counted['indicadores'][$i], $counted['carried'][$i], $year, $comparable, $year < $this->window->currentYear(), $fuente, $ruta, $saved);
 			}
-			$cards[] = self::card($history[$current]['indicadores'][$i], $current, $history[$current]['fecha_corte_local'], $historico, $fuente, $saved);
+			$meta = $history[$current]['indicadores'][$i];
+			$base = self::base($historico, $fuente, $this->window->currentYear());
+			// Only Meta II's rule reads the base year's meta comprometida.
+			$previous = $base === null || $estab === null || ($indicador['meta_minima']['brecha_si_cumplio'] ?? null) === null
+				? null
+				: $this->goals->commitments($base['anio'], $estab)[$indicador['codigo']]['meta'] ?? null;
+			$cards[] = self::card($meta, $current, $history[$current]['fecha_corte_local'], $historico, $fuente, $saved, self::minimum($indicador['meta_minima'], $meta, $base, $previous));
 		}
 
 		return self::response($anio, $metas['nombre'], $metas['referencia'], $local->isConfigured() ? $local->deisCode : null, $cards);
@@ -154,10 +169,11 @@ class Resumen {
 	 * @param list<Historico> $historico
 	 * @param ?Fuente $fuente the numerador's, as GET fuentes serves it
 	 * @param array<string, string> $planillas the months a planilla covers in the numerador's serie, each with the day it was saved
+	 * @param ?Minima $minima its meta mínima (minimum())
 	 * @return Tarjeta
 	 */
-	public static function card(array $meta, int $anio, ?array $fechaCorteLocal, array $historico, ?array $fuente, array $planillas): array {
-		$waiting = ($meta['numerador']['oficial'] ?? true) === false || ($meta['denominador']['oficial'] ?? true) === false;
+	public static function card(array $meta, int $anio, ?array $fechaCorteLocal, array $historico, ?array $fuente, array $planillas, ?array $minima): array {
+		$waiting = self::waiting($meta);
 		$last = null;
 		foreach ($waiting ? [] : $meta['meses'] as $mes) {
 			$last = $mes['porcentaje'] === null ? $last : $mes;
@@ -171,7 +187,7 @@ class Resumen {
 			'meta_nacional' => $meta['meta_nacional'],
 			'meta_comprometida' => $meta['meta_comprometida'],
 			'manual' => $meta['manual'],
-			'estado' => $waiting ? 'esperando ruta oficial' : self::missing($meta, $anio),
+			'estado' => $waiting ? self::WAITING : self::missing($meta, $anio),
 			'mes' => $last['mes'] ?? null,
 			'datos_al' => $fechaCorteLocal[$meta['numerador']['fuente'] ?? ''] ?? null,
 			'numerador' => $last['numerador'] ?? null,
@@ -180,7 +196,94 @@ class Resumen {
 			'cumple' => $porcentaje === null ? null : $porcentaje >= ($meta['meta_comprometida'] ?? $meta['meta_nacional']),
 			'historico' => $waiting || $meta['manual'] ? [] : $historico,
 			...self::origin($fuente, $last['mes'] ?? null, $planillas),
+			'meta_minima' => $minima,
 		];
+	}
+
+	/**
+	 * A meta's meta mínima (Res. Exenta 732): the lowest meta comprometida
+	 * its seed's rule allows, from $base's cierre. A base at or above the
+	 * meta nacional is kept. Else it closes the rule's brecha of the gap:
+	 * brecha_si_cumplio when the base reached $previous, brecha when not, and
+	 * when none is typed brecha too, saying why; never under its piso. A fija
+	 * minimum needs a base only to keep it (VII); a manual meta has no cierre,
+	 * so only its fija (VIII). Computed exactly in ten-thousandths of a point,
+	 * as the cierre has two decimals (GoalEvaluator) and the rule whole
+	 * percents, then half up to one decimal. No figure, no minimum: the
+	 * motivo says why. Null when the seed writes no rule.
+	 *
+	 * @param ?Regla $rule
+	 * @param Meta $meta the current year's, as its card reads it
+	 * @param ?Historico $base the meta's base year (base()); null when the ventana holds none
+	 * @param ?float $previous the base year's meta comprometida for this meta
+	 * @return ?Minima
+	 */
+	public static function minimum(?array $rule, array $meta, ?array $base, ?float $previous): ?array {
+		if ($rule === null) {
+			return null;
+		}
+		if ($meta['manual'] && $rule['fija'] !== null) {
+			return ['porcentaje' => (float)$rule['fija'], 'base' => null, 'motivo' => null];
+		}
+		$none = static fn (?int $anio, string $motivo): array => ['porcentaje' => null, 'base' => $anio, 'motivo' => $motivo];
+		if (self::waiting($meta)) {
+			return $none(null, self::WAITING);
+		}
+		if ($base === null) {
+			return $none(null, 'no hay cierre comparable');
+		}
+		if ($base['cierre'] === null) {
+			$estado = $base['estado'];
+
+			return $none($base['anio'], $estado === null || $estado === self::NOT_COMPARABLE ? sprintf('no hay cierre comparable de %d', $base['anio']) : $estado);
+		}
+
+		$cierre = (int)round($base['cierre'] * 100) * 100;
+		$nacional = (int)round($meta['meta_nacional'] * 100) * 100;
+		$brecha = $previous !== null && $base['cierre'] >= $previous ? $rule['brecha_si_cumplio'] ?? $rule['brecha'] : $rule['brecha'];
+		$minimum = match (true) {
+			$cierre >= $nacional => $cierre,
+			$rule['fija'] !== null => $rule['fija'] * 10000,
+			default => $cierre + intdiv(($nacional - $cierre) * (int)$brecha, 100),
+		};
+		$minimum = max($minimum, ($rule['piso'] ?? 0) * 10000);
+		$why = $rule['brecha_si_cumplio'] !== null && $previous === null && $cierre < $nacional
+			? sprintf('sin la meta comprometida %d, se cierra el %d %% de la brecha', $base['anio'], (int)$rule['brecha'])
+			: null;
+
+		return ['porcentaje' => intdiv($minimum + 500, 1000) / 10.0, 'base' => $base['anio'], 'motivo' => $why];
+	}
+
+	/**
+	 * A meta's base year for its meta mínima: the last year of its histórico
+	 * that is over and whose fuente's load reaches its December, so the base
+	 * moves to a year once its December is published. Null when there is
+	 * none, and for a manual meta, which has no fuente.
+	 *
+	 * @param list<Historico> $historico
+	 * @param ?Fuente $fuente the numerador's
+	 * @return ?Historico
+	 */
+	private static function base(array $historico, ?array $fuente, int $currentYear): ?array {
+		$base = null;
+		foreach ($historico as $year) {
+			$december = sprintf('%d-12', $year['anio']);
+			if ($year['anio'] < $currentYear && self::origin($fuente, $december, [])['fecha_corte'] === $december) {
+				$base = $year;
+			}
+		}
+
+		return $base;
+	}
+
+	/**
+	 * Whether a meta waits for its ruta oficial: its seed marks a ruta
+	 * "oficial": false; absent means oficial.
+	 *
+	 * @param Meta $meta
+	 */
+	private static function waiting(array $meta): bool {
+		return ($meta['numerador']['oficial'] ?? true) === false || ($meta['denominador']['oficial'] ?? true) === false;
 	}
 
 	/**

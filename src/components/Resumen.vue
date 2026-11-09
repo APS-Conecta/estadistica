@@ -4,7 +4,8 @@
 	«N de D» of the meta's last month with a figure, dated by the
 	establishment's own last month in the meta's serie, whether it cumple, in
 	colour and in words, and its histórico: a line per comparable year with the
-	table under it. Read from GET resumen alone, so the page shows what the API
+	table under it, and its meta mínima, a reference from its base year's
+	cierre, or why it has none. Read from GET resumen alone, so the page shows what the API
 	answers. Each figure, on the card and in its table, is a button that opens
 	its source panel for the figure's month; closing it gives the focus back.
 -->
@@ -74,6 +75,20 @@
 								({{ percent(meta.meta_comprometida ?? meta.meta_nacional) }})
 							</p>
 						</div>
+
+						<template v-if="meta.meta_minima">
+							<p v-if="meta.meta_minima.porcentaje === null" class="estadistica-resumen__hint">
+								Sin meta mínima {{ resumen.anio }}: {{ meta.meta_minima.motivo }}.
+							</p>
+							<template v-else>
+								<p class="estadistica-resumen__minima">
+									Meta mínima {{ resumen.anio }}: {{ tenth(meta.meta_minima.porcentaje) }} % — referencia: la meta la fija el Servicio de Salud
+								</p>
+								<p v-if="meta.meta_minima.base !== null" class="estadistica-resumen__hint">
+									Desde el cierre {{ meta.meta_minima.base }}<template v-if="meta.meta_minima.motivo">; {{ meta.meta_minima.motivo }}</template>.
+								</p>
+							</template>
+						</template>
 
 						<ResumenHistorico v-if="meta.historico.length" :meta="meta" @open="(cifra, event) => open(meta, cifra, event)" />
 					</article>
@@ -166,6 +181,11 @@ export default {
 		percent(value) {
 			return `${formatValue(value)} %`
 		},
+
+		/** A meta mínima, always with its one decimal: «62,0». */
+		tenth(value) {
+			return value.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+		},
 	},
 }
 </script>
@@ -223,7 +243,8 @@ export default {
 	font-variant-numeric: tabular-nums;
 }
 
-.estadistica-resumen__cumple {
+.estadistica-resumen__cumple,
+.estadistica-resumen__minima {
 	font-weight: bold;
 }
 

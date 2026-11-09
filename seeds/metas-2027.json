@@ -14,6 +14,7 @@
             "nombre": "Recuperación del Desarrollo Psicomotor",
             "indicador": "Porcentaje de niños y niñas de 12 a 23 meses diagnosticados con riesgo del desarrollo psicomotor (DSM) recuperados",
             "meta_nacional": 90,
+            "meta_minima": {"brecha": 30, "piso": 60},
             "nota": "Ruta preparada como la de 2026, del REM A03 sección A.2: numerador «Reevaluación › Normal (desde riesgo)» y «Reevaluación › Normal Rezago (desde riesgo)»; denominador «Primera Evaluación › Riesgo» menos «Derivados a Especialidad › Riesgo» y «Traslado de Establecimiento › Riesgo», una resta que la Res. 732 no escribe y que se mantiene de 2026. Columnas de «RANGO ETARIO Y SEXO › 12 - 17 meses › Hombres» a «RANGO ETARIO Y SEXO › 18 - 23 meses › Mujeres». El denominador va de octubre de 2026 a septiembre de 2027: cada mes suma desde octubre hasta ese mes.",
             "numerador": {
                 "fuente": "rem-a",
@@ -40,6 +41,7 @@
             "nombre": "Cobertura de tamizaje vigente para cáncer cervicouterino en personas de 25 a 64 años",
             "indicador": "Porcentaje de personas de 25 a 64 años con tamizaje vigente para cáncer cervicouterino",
             "meta_nacional": 80,
+            "meta_minima": {"brecha": 40, "brecha_si_cumplio": 30, "piso": 50},
             "nota": "La Res. 732 incluye mujeres y personas transmasculinas de 25 a 64 años. Numerador como la ruta 2026, del REM P12 sección A1: filas «25 a 29 años», «30 a 34 años», «35 a 39 años», «40 a 44 años», «45 a 49 años», «50 a 54 años», «55 a 59 años» y «60 a 64 años», columnas de «Mujeres con Tamizaje vigente para la detección precoz de Cáncer de Cuello Uterino» a «Trans Masculino con Tamizaje vigente para la deteccion precoz de Cáncer de Cuello Uterino». Denominador: solo mujeres inscritas, porque FONASA no informa personas transmasculinas; de 25 a 64 años corta los tramos de FONASA, así que espera el denominador comprometido.",
             "numerador": {
                 "fuente": "rem-p",
@@ -60,6 +62,7 @@
             "nombre": "Protección de la Salud Bucal en niños y niñas menores de 3 años",
             "indicador": "Porcentaje de niños y niñas menores de 3 años sin historia de caries",
             "meta_nacional": 65,
+            "meta_minima": {"brecha": 50},
             "nota": "Ruta preparada como la de la Meta III.B 2026 (6 años libres de caries), del REM A09 sección C, de enero a diciembre: la fila del índice igual a 0 de «Índice CEOD o COPD (Índice CEOD se usa en menores de 7 años, para resto se utiliza COPD)», columnas de «RANGO ETARIO Y SEXO › Menos de 1 año › Hombres» a «RANGO ETARIO Y SEXO › 2 años › Mujeres»: CEOD igual a 0 en menores de 3 años. Denominador: inscritos de 0 a 2 años; corta el tramo de 0 a 9 años de FONASA, así que espera el denominador comprometido.",
             "numerador": {
                 "fuente": "rem-a",
@@ -80,6 +83,7 @@
             "nombre": "Protección de la Salud Bucal en niños y niñas de 6 años",
             "indicador": "Porcentaje de niños y niñas de 6 años sin historia de caries",
             "meta_nacional": 26,
+            "meta_minima": {"brecha": 50},
             "nota": "La ruta de la Meta III.B 2026, del REM A09 sección C, de enero a diciembre: la fila del índice igual a 0 de «Índice CEOD o COPD (Índice CEOD se usa en menores de 7 años, para resto se utiliza COPD)», columnas de «RANGO ETARIO Y SEXO › 6 años › Hombres» a «RANGO ETARIO Y SEXO › 6 años › Mujeres»: a los 6 años, el CEOD/COPD de la Res. 732 es el CEOD. Denominador: inscritos de 6 años; corta el tramo de 0 a 9 años de FONASA, así que espera el denominador comprometido.",
             "numerador": {
                 "fuente": "rem-a",
@@ -100,6 +104,7 @@
             "nombre": "Compensación de Diabetes Mellitus 2 en personas de 15 años y más bajo control en APS",
             "indicador": "Porcentaje de personas de 15 años y más con Diabetes Mellitus 2 bajo control en APS, compensadas",
             "meta_nacional": 50,
+            "meta_minima": {"brecha": 50},
             "nota": "Ruta preparada como el numerador de la Meta IV.A 2026, del REM P4, que cuenta desde los 15 años: «Personas Bajo Control por Diabetes Mellitus › HbA1C<7%» más «Personas Bajo Control por Diabetes Mellitus › HbA1C<8%», en «TOTAL › Ambos sexos», sin separar las edades que escribe la Res. 732 (bajo 7 % de 15 a 79 años, bajo 8 % desde los 80). Denominador como el de la Meta IV.B 2026: «Personas bajo control según patología y factores de riesgo (existencia) › Diabetes Mellitus tipo 2», en la misma columna.",
             "numerador": {
                 "fuente": "rem-p",
@@ -123,6 +128,7 @@
             "nombre": "Compensación de Hipertensión Arterial (HTA) en personas de 15 años y más bajo control en APS",
             "indicador": "Porcentaje de personas de 15 años y más con HTA bajo control en APS, compensadas",
             "meta_nacional": 72,
+            "meta_minima": {"brecha": 50},
             "nota": "Ruta preparada como el numerador de la Meta V 2026, del REM P4, que cuenta desde los 15 años: «Personas Bajo Control por Hipertensión › PA < 140/90 mmHg» más «Personas Bajo Control por Hipertensión › PA < 150/90 mmHg», en «TOTAL › Ambos sexos», sin separar las edades que escribe la Res. 732 (bajo 140/90 de 15 a 79 años, bajo 150/90 desde los 80). Denominador leído como el de la Meta V 2027: «Personas bajo control según patología y factores de riesgo (existencia) › Hipertensión Arterial», en la misma columna.",
             "numerador": {
                 "fuente": "rem-p",
@@ -146,6 +152,7 @@
             "nombre": "Población bajo control con enfermedades respiratorias crónicas que alcanzan buen control de su patología",
             "indicador": "Porcentaje de población bajo control por enfermedades respiratorias crónicas (Asma y EPOC) de 5 años y más con nivel de control “Controlado” o “Control adecuado” en el año 2027",
             "meta_nacional": 80,
+            "meta_minima": {"fija": 80},
             "nota": "Numerador como la ruta 2026, del REM P3 sección D: «Asma Bronquial › Controlado» de «RANGO ETARIO Y SEXO › 5 a 9 años › Hombres» a «RANGO ETARIO Y SEXO › 80 y más años › Mujeres», más «Enfermedad Pulmonar Obstructiva Crónica (EPOC) › Logra Control Adecuado» en «TOTAL › Ambos sexos», sin separar los 40 años y más que escribe la Res. 732. Denominador: las personas bajo control, la existencia de la sección A en las mismas columnas: «Asma Bronquial › Leve», «Asma Bronquial › Moderado» y «Asma Bronquial › Severo»; «Enfermedad Pulmonar Obstructiva Crónica (EPOC) › Tipo A» y «Enfermedad Pulmonar Obstructiva Crónica (EPOC) › Tipo B».",
             "numerador": {
                 "fuente": "rem-p",
@@ -171,6 +178,7 @@
             "nombre": "Redes Comunitarias de Bienestar",
             "indicador": "Porcentaje de establecimientos de APS/comunas que cuentan con una Red Comunitaria de Bienestar desarrollada de acuerdo con los hitos establecidos para el año 2027",
             "meta_nacional": 100,
+            "meta_minima": {"fija": 100},
             "nota": "La Res. 732 cuenta los establecimientos o comunas cuya Red Comunitaria de Bienestar cumple los hitos del año: no hay cifras REM, así que se informa su cumplimiento a mano.",
             "manual": true
         }
