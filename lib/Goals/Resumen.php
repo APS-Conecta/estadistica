@@ -84,7 +84,6 @@ class Resumen {
 		private Catalog $catalog,
 		private YearWindow $window,
 		private Sources $sources,
-		private QueryExecutor $executor,
 	) {
 	}
 
@@ -105,7 +104,7 @@ class Resumen {
 		$current = array_key_last($history);
 		$labels = $this->labels($metas, array_keys($history));
 		$fuentes = array_column($this->sources->all(), null, 'id');
-		$planillas = $local->isConfigured() ? $this->executor->planillas((int)$local->deisCode) : [];
+		$planillas = $history[$current]['planillas'];
 		$moved = [];
 		foreach (array_keys($history) as $year) {
 			$moved[$year] = GoalSeed::shift($metas, $year - $anio)['indicadores'];

@@ -390,7 +390,7 @@ class GoalsTest extends IntegrationTestCase {
 	private function resumen(?ITimeFactory $clock = null): ResumenStore {
 		$clock ??= $this->clock;
 
-		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock), $this->sources($clock), Server::get(QueryExecutor::class)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
+		return new ResumenStore($this->db(), new Resumen($this->goals($clock), $this->evaluator($clock), Server::get(Catalog::class), $this->window($clock), $this->sources($clock)), Server::get(EstablishmentConfig::class), $clock, Server::get(LoggerInterface::class));
 	}
 
 	/** How many rebuilds wait in the background work. */

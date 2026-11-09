@@ -278,7 +278,8 @@ class QueryExecutor {
 
 	/**
 	 * The months the establishment's planillas cover, each with the day its
-	 * newest one was saved (YYYY-MM-DD): serie → YYYY-MM → day.
+	 * newest one was saved (YYYY-MM-DD): serie → YYYY-MM → day. Like
+	 * lastReported(), it runs only inside readOnly().
 	 *
 	 * @return array<string, array<string, string>>
 	 */
