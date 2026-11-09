@@ -61,7 +61,8 @@ work.*
 - **Model output is untrusted text.** The nota is bounded three ways. Its task carries aggregates only: the
   fixed Spanish instruction and the Resumen card figures that changed, as the screen writes them, with no
   names, files or planilla text. `Nota::check` drops the answer unless every number in it, as es-CL writes it,
-  is a figure the stored Resumen shows or a year or month it names. Vue renders it as text, never `v-html`,
+  is a figure the stored Resumen shows, a year it names, or a month it names with its year («11/2099», never a
+  bare month), and drops an answer it cannot read. Vue renders it as text, never `v-html`,
   labelled «Escrita por un modelo de IA a partir de las cifras».
 - **The platform (Nextcloud)** owns authentication, sessions and CSRF tokens; PostgreSQL only (ADR-0002).
 

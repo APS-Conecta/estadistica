@@ -81,12 +81,34 @@ final class NotaTest extends TestCase {
 			'rounded otherwise' => ['Cerró 2098 en 47,81 %.', false],
 			'rounded to a whole' => ['La Meta V 2099 llegó a 45 %.', false],
 			'written with a trailing zero' => ['La Meta V 2099 llegó a 45,20 %.', false],
+			'invalid UTF-8' => ["La Meta V 2099 llegó a 99 % \xff", false],
 		];
 	}
 
 	#[DataProvider('answers')]
 	public function testANotaIsKeptOnlyWhenEveryNumberIsOneTheResumenShows(string $answer, bool $kept): void {
 		self::assertSame($kept ? $answer : null, Nota::check("  $answer\n", self::resumen()));
+	}
+
+	/** @return array<string, array{0: string, 1: bool}> */
+	public static function answersOverAFullYear(): array {
+		return [
+			'points it invents' => ['La Meta V 2099 llegó a 45,2 %, 3 puntos menos que en septiembre.', false],
+			'people it invents' => ['Subió 7 puntos y suma 10 personas más.', false],
+			'the month of its data' => ['Datos al 11/2099.', true],
+		];
+	}
+
+	/** A real histórico names every month, so a month alone is no figure: only month/year is. */
+	#[DataProvider('answersOverAFullYear')]
+	public function testAMonthItNamesPassesOnlyWithItsYear(string $answer, bool $kept): void {
+		$resumen = self::resumen();
+		$december = $resumen['metas'][0]['historico'][0]['meses'][0];
+		$resumen['metas'][0]['historico'][0]['meses'] = array_map(
+			static fn (int $month): array => ['mes' => sprintf('2098-%02d', $month)] + $december,
+			range(1, 12),
+		);
+		self::assertSame($kept ? $answer : null, Nota::check($answer, $resumen));
 	}
 
 	public function testAnEmptyAnswerIsNoNota(): void {

@@ -25,7 +25,8 @@ use Throwable;
  *   later, to NotaListener, with the fingerprint it was asked for.
  * - **Checked number by number.** check() keeps the answer only when every
  *   number in it, as es-CL writes it, is a figure the Resumen screen shows,
- *   or a year or month the Resumen names.
+ *   or a year the Resumen names, or a month it names with its year
+ *   («11/2099»), never alone; an answer it cannot read is no nota.
  * - **Never in the way.** A provider that fails is logged and leaves no nota;
  *   the rebuild that asked carries on.
  *
@@ -73,7 +74,9 @@ class Nota {
 	 */
 	public static function check(string $answer, array $resumen): ?string {
 		$answer = trim($answer);
-		preg_match_all('/\d(?:[\d.,]*\d)?(?:\s*%)?/u', $answer, $numbers);
+		if (preg_match_all('/\d{1,2}\/\d{4}|\d(?:[\d.,]*\d)?(?:\s*%)?/u', $answer, $numbers) === false) {
+			return null;
+		}
 		$allowed = self::allowed($resumen);
 		foreach ($numbers[0] as $number) {
 			if (!isset($allowed[preg_replace('/\s*%$/u', ' %', $number)])) {
@@ -146,8 +149,8 @@ class Nota {
 	}
 
 	/**
-	 * Every number $resumen shows, as its screen writes it, and every year
-	 * and month it names, as keys.
+	 * Every number $resumen shows, as its screen writes it, every year it
+	 * names, and every month it names as «11/2099», as keys.
 	 *
 	 * @param Respuesta $resumen
 	 * @return array<string, true>
@@ -157,11 +160,12 @@ class Nota {
 		$named = static function (?string $date) use (&$allowed): void {
 			if ($date !== null) {
 				$allowed[(string)(int)substr($date, 0, 4)] = true;
-				$allowed[(string)(int)substr($date, 5, 2)] = true;
+				$allowed[(int)substr($date, 5, 2) . '/' . substr($date, 0, 4)] = true;
 			}
 		};
 		foreach ($resumen['metas'] as $meta) {
-			// A month's name («noviembre de 2099») matches no number; its year and month do.
+			// A month's name («noviembre de 2099») matches no number; its year does, and
+			// the month only with it («11/2099»): a histórico names every month.
 			$allowed += array_fill_keys(array_values(self::shown($meta)), true);
 			array_map($named, [$meta['mes'], $meta['datos_al'], $meta['fecha_corte']]);
 			if (($meta['meta_minima']['base'] ?? null) !== null) {
