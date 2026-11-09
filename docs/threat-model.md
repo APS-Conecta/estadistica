@@ -14,6 +14,8 @@ work.*
 - **The establishment's planillas:** what reading each file in the planilla folder found, and a read
   planilla's aggregate figures, kept apart from DEIS's (`estadistica_planilla`, `estadistica_planilla_rem`;
   `lib/Service/Planillas.php`, ADR-0010). The workbooks stay in Nextcloud Files; the app keeps no copy.
+- **The stored Resumen and its nota:** the configured establishment's Resumen document, and beside it the
+  nota a model wrote about what changed (`estadistica_resumen`; `lib/Goals/ResumenStore.php`, `lib/Goals/Nota.php`).
 - **No patient data.** The README says (in Spanish) that the app stores only aggregate counts that DEIS
   and FONASA publish and touches no patient data (`## Qué es`), and `CONTEXT.md:4` says "no patient data
   enters this context".
@@ -39,6 +41,7 @@ work.*
 | OCS preguntas and tableros: `GET`, `POST`, `PUT {id}`, `DELETE {id}` (`ApiController`) | logged-in users | `#[UserRateLimit]`; only the creator or an admin may change or delete (`SavedContent::owner`, `ForbiddenException`); unauthenticated writes return 403 (estadistica #4) |
 | Admin: `PUT /admin/window`, `POST /admin/drop`, `GET /admin/ingests`, `PUT /admin/planillas`, `PUT /admin/piv`, `PUT /admin/goals` (`AdminController`) | **admins, and users delegated the Estadística admin setting** | `#[AuthorizedAdminSetting(settings: AdminSettings::class)]` on each action (`lib/Controller/AdminController.php:67,88,105,124,139,157`; ADR-0003) |
 | Background job `RemJob` (`appinfo/info.xml:38`) | the server, on schedule | fetches DEIS at run time (ADR-0005, `lib/Rem/DeisRepository.php`); reads the planilla folder as the person who chose it (`Planillas::scan`) |
+| The nota's answer: Nextcloud TaskProcessing's `TaskSuccessfulEvent` (`lib/Listener/NotaListener.php`) | whatever text-to-text provider the Nextcloud admin connects | only this app's text-to-text task, matched by the fingerprint it was asked for, kept only while that fingerprint is the stored one and only when `Nota::check` passes it |
 | XLSX parser `lib/Xlsx/XlsxReader.php` (ZipArchive, then `XMLReader` and `DOMDocument`) | DEIS downloads; zips an admin drops; planillas staff save in the folder | `LIBXML_NONET` and no `LIBXML_NOENT` (`XlsxReader.php:277,287`); a 256 MiB inflate cap summed from the sizes the zip declares about itself (`:38`, `:60-63`), so a zip that under-declares is the edge to test |
 | PIV reader `lib/Piv/PivReader.php` | a CSV an admin drops | a locked eleven-column header; a file that adds a RUT or a name is refused whole, because that would be patient data (`PivReader.php:22`). Risks left: formula prefixes, encoding |
 | Dropped files: the path given to `POST /admin/drop` (`lib/Service/DroppedFiles.php`) | admins and delegates | resolved only inside the caller's own Nextcloud files; `Folder::get()` normalises `..` away (`DroppedFiles.php:237`) |
@@ -55,6 +58,11 @@ work.*
 - **The consulta spec is untrusted user input:** dimensions, filters, grouping and metric come from
   the client. Only whitelisted, bound fields may reach SQL (ADR-0006).
 - **Saved titles are untrusted on output.** `src/` has no `v-html`, and Vue text binding escapes them.
+- **Model output is untrusted text.** The nota is bounded three ways. Its task carries aggregates only: the
+  fixed Spanish instruction and the Resumen card figures that changed, as the screen writes them, with no
+  names, files or planilla text. `Nota::check` drops the answer unless every number in it, as es-CL writes it,
+  is a figure the stored Resumen shows or a year or month it names. Vue renders it as text, never `v-html`,
+  labelled «Escrita por un modelo de IA a partir de las cifras».
 - **The platform (Nextcloud)** owns authentication, sessions and CSRF tokens; PostgreSQL only (ADR-0002).
 
 ## Accepted risks
@@ -63,3 +71,6 @@ work.*
   planillas cover (ADR-0010). A planilla's figures, its cached formula values included, are taken as saved,
   like the report the establishment sends its Servicio de Salud. Who may write there is the folder's
   Nextcloud sharing, which the establishment controls; the admin section lists every file and its state.
+- **The nota's words are the model's.** The validator checks the numbers written in digits. A number spelled
+  in words, or a wrong claim with no number in it, is not caught. The label says a model wrote it, and every
+  figure on the cards below it is the stored one.

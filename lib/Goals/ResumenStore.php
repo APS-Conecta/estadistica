@@ -34,6 +34,11 @@ use Throwable;
  * - **A failure keeps the last good one.** A rebuild that fails leaves the
  *   stored document serving and records its Spanish reason, which the admin
  *   section shows until a rebuild succeeds.
+ * - **Its nota beside it** (CONTEXT.md). A rebuild that changes the
+ *   fingerprint drops the stored nota and asks Nota for the next, from the
+ *   previous document; note() keeps the answer only while the fingerprint it
+ *   was asked for is still the stored one, and only as Nota::check passes it.
+ *   read() serves it as nota, beside the document's keys (served()).
  *
  * @psalm-import-type Respuesta from Resumen
  */
@@ -48,6 +53,7 @@ class ResumenStore {
 		private EstablishmentConfig $establishment,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
+		private Nota $nota,
 	) {
 	}
 
@@ -55,21 +61,32 @@ class ResumenStore {
 	 * $local's Resumen: the stored one when $local is this install's
 	 * establishment and one is stored, else built now and not kept.
 	 *
-	 * @return Respuesta
+	 * @return Respuesta&array{nota: ?string} served()
 	 * @throws DoesNotExistException no metas are loaded
 	 * @throws RefusedException
 	 */
 	public function read(Establishment $local): array {
 		if ($local->isConfigured() && $local->deisCode === $this->establishment->get()->deisCode) {
-			$result = $this->db->executeQuery('SELECT document FROM *PREFIX*estadistica_resumen WHERE estab = ? AND document IS NOT NULL', [(int)$local->deisCode]);
-			$document = $result->fetchOne();
+			$result = $this->db->executeQuery('SELECT document, nota FROM *PREFIX*estadistica_resumen WHERE estab = ? AND document IS NOT NULL', [(int)$local->deisCode]);
+			$row = $result->fetch();
 			$result->closeCursor();
-			if ($document !== false) {
-				return json_decode((string)$document, true, 64, JSON_THROW_ON_ERROR);
+			if ($row !== false) {
+				return self::served(self::decode($row['document']), $row['nota']);
 			}
 		}
 
-		return $this->resumen->build($local);
+		return self::served($this->resumen->build($local), null);
+	}
+
+	/**
+	 * What GET resumen serves: the document's keys, and its nota beside them
+	 * (null when there is none), in one place so ApiContractTest reads them.
+	 *
+	 * @param Respuesta $document
+	 * @return Respuesta&array{nota: ?string}
+	 */
+	public static function served(array $document, ?string $nota): array {
+		return [...$document, 'nota' => $nota];
 	}
 
 	/** Builds the configured establishment's Resumen and stores it whole, the only row kept; a failure keeps the stored one and records why. */
@@ -81,9 +98,13 @@ class ResumenStore {
 		}
 		$estab = (int)$local->deisCode;
 		$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_resumen WHERE estab <> ?', [$estab]);
+		$result = $this->db->executeQuery('SELECT document, fingerprint FROM *PREFIX*estadistica_resumen WHERE estab = ? AND document IS NOT NULL', [$estab]);
+		$before = $result->fetch();
+		$result->closeCursor();
 
 		try {
-			$document = json_encode($this->resumen->build($local), self::JSON);
+			$built = $this->resumen->build($local);
+			$document = json_encode($built, self::JSON);
 		} catch (DoesNotExistException) {
 			// No metas loaded: nothing to show, and nothing failed.
 			return;
@@ -99,11 +120,41 @@ class ResumenStore {
 			return;
 		}
 
+		$fingerprint = hash('sha256', $document);
+		// The nota stays only with the fingerprint it was written for.
 		$this->db->executeStatement(
 			'INSERT INTO *PREFIX*estadistica_resumen (estab, document, fingerprint, built_at, error) VALUES (?, ?, ?, ?, NULL) '
-			. 'ON CONFLICT (estab) DO UPDATE SET document = EXCLUDED.document, fingerprint = EXCLUDED.fingerprint, built_at = EXCLUDED.built_at, error = NULL',
-			[$estab, $document, hash('sha256', $document), $this->time->getTime()],
+			. 'ON CONFLICT (estab) DO UPDATE SET document = EXCLUDED.document, fingerprint = EXCLUDED.fingerprint, built_at = EXCLUDED.built_at, error = NULL, '
+			. 'nota = CASE WHEN *PREFIX*estadistica_resumen.fingerprint = EXCLUDED.fingerprint THEN *PREFIX*estadistica_resumen.nota END',
+			[$estab, $document, $fingerprint, $this->time->getTime()],
 		);
+		if ($before !== false && $before['fingerprint'] !== $fingerprint) {
+			$this->nota->request(self::decode($before['document']), $built, $fingerprint);
+		}
+	}
+
+	/**
+	 * Keeps $answer as the stored Resumen's nota, when it was written for the
+	 * stored fingerprint and Nota::check passes it against that document.
+	 */
+	public function note(string $fingerprint, string $answer): void {
+		$local = $this->establishment->get();
+		if (!$local->isConfigured()) {
+			return;
+		}
+		$estab = (int)$local->deisCode;
+		$result = $this->db->executeQuery('SELECT document FROM *PREFIX*estadistica_resumen WHERE estab = ? AND fingerprint = ?', [$estab, $fingerprint]);
+		$document = $result->fetchOne();
+		$result->closeCursor();
+		$nota = $document === false ? null : Nota::check($answer, self::decode($document));
+		if ($nota !== null) {
+			$this->db->executeStatement('UPDATE *PREFIX*estadistica_resumen SET nota = ? WHERE estab = ? AND fingerprint = ?', [$nota, $estab, $fingerprint]);
+		}
+	}
+
+	/** @return Respuesta */
+	private static function decode(string $document): array {
+		return json_decode($document, true, 64, JSON_THROW_ON_ERROR);
 	}
 
 	/**
