@@ -27,7 +27,7 @@ use Throwable;
  * - **Checked number by number.** check() keeps the answer only when every
  *   number in it, as es-CL writes it, is a figure the Resumen screen shows,
  *   or a year the Resumen names, or a month it names with its year
- *   («11/2099»), never alone, and none is written in words («dos», «el
+ *   («11/2099»), never alone, and none is a word of NUMBER_WORDS («dos», «el
  *   doble»); an answer it cannot read is no nota.
  * - **Never in the way.** A provider that fails is logged and leaves no nota;
  *   the rebuild that asked carries on.
@@ -88,7 +88,7 @@ class Nota {
 
 	/**
 	 * $answer, trimmed, when every number in it is one $resumen shows or
-	 * names, and it writes none in words; else null.
+	 * names, and it writes no word of NUMBER_WORDS; else null.
 	 *
 	 * @param Respuesta $resumen
 	 */
