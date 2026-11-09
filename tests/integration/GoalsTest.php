@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace OCA\Estadistica\Tests\Integration;
 
+use OCA\Estadistica\AppInfo\Application;
 use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Controller\AdminController;
@@ -18,6 +19,7 @@ use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Goals\Resumen;
 use OCA\Estadistica\Goals\ResumenStore;
 use OCA\Estadistica\Migration\EnsureSeedData;
+use OCA\Estadistica\Migration\Version000013Date20261109120000;
 use OCA\Estadistica\Piv\PivImporter;
 use OCA\Estadistica\Piv\Population;
 use OCA\Estadistica\Query\QueryExecutor;
@@ -27,6 +29,7 @@ use OCA\Estadistica\Rem\DeisRepository;
 use OCA\Estadistica\Rem\LocalRange;
 use OCA\Estadistica\Rem\RemImporter;
 use OCA\Estadistica\Service\EstablishmentConfig;
+use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\SavedContent;
 use OCA\Estadistica\Service\Sources;
 use OCA\Estadistica\Service\YearWindow;
@@ -37,6 +40,8 @@ use OCA\Estadistica\Xlsx\XlsxReader;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
+use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IAppConfig;
@@ -130,7 +135,15 @@ class GoalsTest extends IntegrationTestCase {
 		'P1206050' => 'De 45 a 49 años', 'P1206060' => 'De 50 a 54 años', 'P1206070' => 'De 55 a 59 años', 'P1206080' => 'De 60 a 64 años',
 	];
 
+	/** The planilla folder, in admin's Files (docs/adr/0010). */
+	private const PLANILLAS = 'estadistica-planillas-goals-test';
+
+	/** When the planillas below are saved: 1 December 2099, 12:00 UTC. */
+	private const SAVED = 4099809600;
+
 	private bool $ownsRegister = false;
+
+	private ?Folder $planillas = null;
 
 	private ?int $droppedYear = null;
 
@@ -173,6 +186,13 @@ class GoalsTest extends IntegrationTestCase {
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_commitment WHERE estab BETWEEN ? AND ?', [900001, 900099]);
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_piv WHERE estab BETWEEN ? AND ?', [900001, 900099]);
 		$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_resumen WHERE estab BETWEEN ? AND ?', [900001, 900099]);
+		if ($this->planillas !== null) {
+			$this->planillas->delete();
+			$this->appConfig()->deleteKey(Application::APP_ID, Planillas::KEY_OWNER);
+			$this->appConfig()->deleteKey(Application::APP_ID, Planillas::KEY_FOLDER);
+			// No folder: the scan forgets every planilla it read.
+			$this->scan();
+		}
 		Server::get(IJobList::class)->remove(ResumenJob::class);
 		if ($this->ownsRegister) {
 			$this->db()->executeStatement('DELETE FROM *PREFIX*estadistica_establishment');
@@ -274,30 +294,67 @@ class GoalsTest extends IntegrationTestCase {
 
 	/**
 	 * One year and serie through the importer the job uses, with a
-	 * DICCIONARIO CODIGOS in DEIS's layout when $labels names the prestación
-	 * of each código: one hoja, one sección, the column headers above the
-	 * COLnn markers (Serie A col08–col11, Serie P col01–col02).
+	 * DICCIONARIO CODIGOS in DEIS's layout (hoja()) when $labels names the
+	 * prestación of each código.
 	 *
 	 * @param ?array<string, string> $labels código → prestación
 	 */
 	private function load(int $year, string $serie, string $rows, ?array $labels): void {
 		$members = ["Serie{$serie}{$year}.csv" => ZipFixture::header() . $rows];
 		if ($labels !== null) {
-			$columns = $serie === 'A'
-				? ['C' => ['COL08', 'Niños de 12 a 17 meses'], 'D' => ['COL09', 'Niñas de 12 a 17 meses'], 'E' => ['COL10', 'Niños de 18 a 23 meses'], 'F' => ['COL11', 'Niñas de 18 a 23 meses']]
-				: ['C' => ['COL01', 'Mujeres'], 'D' => ['COL02', 'Personas trans masculinas']];
-			$sheet = [
-				6 => ['B' => "REM-{$serie}12. HOJA DE PRUEBA"],
-				8 => ['B' => 'SECCIÓN A: SECCIÓN DE PRUEBA'],
-				9 => ['B' => 'PRESTACIÓN', ...array_map(static fn (array $column): string => $column[1], $columns)],
-			];
-			foreach (array_keys($labels) as $i => $codigo) {
-				$sheet[10 + $i] = ['A' => $codigo, 'B' => $labels[$codigo], ...array_map(static fn (array $column): string => $column[0], $columns)];
-			}
-			$members["Diccionarios/DICCIONARIO CODIGOS S{$serie}_99_V1.0.xlsm"] = (string)file_get_contents(XlsxFixture::workbook(["{$serie}12" => $sheet]));
+			$members["Diccionarios/DICCIONARIO CODIGOS S{$serie}_99_V1.0.xlsm"] = (string)file_get_contents(XlsxFixture::workbook(self::hoja($serie, $labels)));
 		}
 		$state = Server::get(RemImporter::class)->import(new LocalRange(ZipFixture::zip($members)), $year, $serie, IngestState::ORIGIN_FILE);
 		self::assertGreaterThan(0, $state->getRowCount(), "the $year $serie fixture loads");
+	}
+
+	/**
+	 * A diccionario's one hoja in DEIS's layout: one sección, the column
+	 * headers above the COLnn markers (Serie A col08–col11, Serie P
+	 * col01–col02), and a row per código of $labels with its prestación.
+	 *
+	 * @param array<string, string> $labels código → prestación
+	 * @return array<string, array<int, array<string, string>>> hoja → rows
+	 */
+	private static function hoja(string $serie, array $labels): array {
+		$columns = $serie === 'A'
+			? ['C' => ['COL08', 'Niños de 12 a 17 meses'], 'D' => ['COL09', 'Niñas de 12 a 17 meses'], 'E' => ['COL10', 'Niños de 18 a 23 meses'], 'F' => ['COL11', 'Niñas de 18 a 23 meses']]
+			: ['C' => ['COL01', 'Mujeres'], 'D' => ['COL02', 'Personas trans masculinas']];
+		$sheet = [
+			6 => ['B' => "REM-{$serie}12. HOJA DE PRUEBA"],
+			8 => ['B' => 'SECCIÓN A: SECCIÓN DE PRUEBA'],
+			9 => ['B' => 'PRESTACIÓN', ...array_map(static fn (array $column): string => $column[1], $columns)],
+		];
+		foreach (array_keys($labels) as $i => $codigo) {
+			$sheet[10 + $i] = ['A' => $codigo, 'B' => $labels[$codigo], ...array_map(static fn (array $column): string => $column[0], $columns)];
+		}
+
+		return ["{$serie}12" => $sheet];
+	}
+
+	/**
+	 * 900001's planilla of $mes 2099, Serie A, saved in the planilla folder as
+	 * $name at $mtime: DEIS's form drawn from 2099's diccionario, whose name
+	 * says «V1.0».
+	 *
+	 * @param array<string, array<int, int>> $figures código → column → value; every other cell is blank
+	 * @param array<string, int|string> $nombre NOMBRE's cells to change
+	 */
+	private function planilla(string $name, string $mes, array $figures, int $mtime, array $nombre = []): File {
+		if ($this->planillas === null) {
+			$this->planillas = Server::get(IRootFolder::class)->getUserFolder('admin')->newFolder(self::PLANILLAS);
+			$this->planillasFor('admin')->choose('/' . self::PLANILLAS);
+		}
+		$file = $this->planillas->newFile($name);
+		$file->putContent((string)file_get_contents(XlsxFixture::form('A', self::hoja('A', self::LABELS_A), $figures, ['B6' => $mes, 'B7' => 2099, 'A9' => 'Versión 1.0', ...$nombre])));
+		$file->touch($mtime);
+
+		return $file;
+	}
+
+	/** The planilla folder read the way the job reads it. */
+	private function scan(): void {
+		$this->planillasFor('admin')->scan();
 	}
 
 	private function at(int $time): ITimeFactory {
@@ -926,6 +983,123 @@ class GoalsTest extends IntegrationTestCase {
 		$this->provision(EstablishmentConfig::KEY_DEIS, '');
 		$this->rebuild();
 		self::assertSame(0, (int)$this->db()->executeQuery('SELECT count(*) FROM *PREFIX*estadistica_resumen')->fetchOne());
+	}
+
+	/**
+	 * docs/adr/0010: for each serie and month a planilla covers, the planilla
+	 * is 900001's local series, and every other month reads DEIS. January's
+	 * writes 02010420 col08 = 6 and leaves 03500366 blank, so January counts
+	 * 6 where DEIS has 2 + 1 + 1: the blank cell is sin informar, not DEIS's
+	 * 1. November's writes 02010420 col08 = 1 where DEIS's row is blank, so
+	 * «datos al» and the card reach November: 6 + 3 + 1 = 10 de 12. Each
+	 * month says where it came from, and the nacional stays DEIS's.
+	 */
+	public function testAPlanillaMonthIsTheLocalSeriesAndEveryOtherMonthReadsDeis(): void {
+		$this->planilla('enero.xlsm', 'ENERO', ['02010420' => [8 => 6]], self::SAVED);
+		$this->planilla('noviembre.xlsm', 'NOVIEMBRE', ['02010420' => [8 => 1]], self::SAVED + 86400);
+		$this->scan();
+		$this->rebuild();
+
+		$i = array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['I'];
+		self::assertSame(['2099-11', 10.0, 12.0, 83.33, false, null], self::card($i));
+		self::assertSame(['2099-11', 'planilla del establecimiento', '2099-12-02'], [$i['datos_al'], $i['origen'], $i['fecha_corte']]);
+		$meses = array_column(self::historico($i)[2099]['meses'], null, 'mes');
+		self::assertSame([
+			'2099-01' => [6.0, 9.0, 66.67, 'planilla del establecimiento', '2099-12-01'],
+			'2099-02' => [6.0, 12.0, 50.0, 'datos públicos DEIS', '2099-12'],
+			'2099-03' => [9.0, 12.0, 75.0, 'datos públicos DEIS', '2099-12'],
+			'2099-11' => [10.0, 12.0, 83.33, 'planilla del establecimiento', '2099-12-02'],
+		], array_map(
+			static fn (array $mes): array => [$mes['numerador'], $mes['denominador'], $mes['porcentaje'], $mes['origen'], $mes['fecha_corte']],
+			array_intersect_key($meses, array_flip(['2099-01', '2099-02', '2099-03', '2099-11'])),
+		));
+
+		$country = $this->evaluate()['I']['meses'];
+		self::assertSame([48.28, 56.25], [$country[0]['nacional'], $country[11]['nacional']], 'January 14 ÷ 29 and December 18 ÷ 32, DEIS\'s alone');
+	}
+
+	/**
+	 * docs/adr/0010 through POST consultas: the local series reads January's
+	 * planilla, 6 in 02010420 col08 and nothing in 03500366 col10, where DEIS
+	 * has 2 and 1. The nacional counts DEIS's rows alone, and another
+	 * establishment's local series is its own DEIS rows: 900002's 10.
+	 */
+	public function testAConsultasLocalSeriesReadsThePlanillaAndItsNacionalDeis(): void {
+		$this->planilla('enero.xlsm', 'ENERO', ['02010420' => [8 => 6]], self::SAVED);
+		$this->scan();
+		$ask = fn (string $codigo, string $columna, ?string $establecimiento = null): array => $this->api()->consultas([
+			'fuente' => 'rem-a',
+			'periodo' => ['desde' => '2099-01', 'hasta' => '2099-01'],
+			'filtros' => ['codigos' => [$codigo], 'columnas' => [$columna]],
+			'comparar' => ['nacional' => true],
+		], $establecimiento)->getData()['series'];
+
+		$col08 = $ask('02010420', 'col08');
+		self::assertSame([6.0, 12.0], [$col08['local'][0]['valor'], $col08['nacional'][0]['valor']], 'the planilla\'s 6; the country\'s 2 + 10, DEIS\'s');
+		$col10 = $ask('03500366', 'col10');
+		self::assertSame([[], 1.0], [$col10['local'], $col10['nacional'][0]['valor']], 'a blank planilla cell is sin informar while DEIS has 1');
+		self::assertSame(10.0, $ask('02010420', 'col08', '900002')['local'][0]['valor'], 'another establishment reads DEIS');
+	}
+
+	/**
+	 * docs/adr/0010 through POST consultas: a planilla read before migration
+	 * 13 names no establishment, so it counts nowhere until the next scan
+	 * judges it again. Meanwhile January's local series is DEIS's 2 alone,
+	 * never DEIS's 2 plus the planilla's 6.
+	 */
+	public function testAPlanillaReadBeforeMigration13CountsFromTheNextScan(): void {
+		$this->planilla('enero.xlsm', 'ENERO', ['02010420' => [8 => 6]], self::SAVED);
+		$this->scan();
+		$this->db()->executeStatement('UPDATE *PREFIX*estadistica_planilla SET estab = NULL');
+		(new Version000013Date20261109120000($this->db()))->postSchemaChange($this->createStub(IOutput::class), static fn () => null, []);
+		$local = fn (): array => array_column($this->api()->consultas([
+			'fuente' => 'rem-a',
+			'periodo' => ['desde' => '2099-01', 'hasta' => '2099-01'],
+			'filtros' => ['codigos' => ['02010420'], 'columnas' => ['col08']],
+		])->getData()['series']['local'], 'valor');
+
+		self::assertSame([2.0], $local(), 'DEIS\'s alone');
+		$this->scan();
+		self::assertSame([6.0], $local(), 'the planilla, judged again');
+	}
+
+	/**
+	 * docs/adr/0010 and 0009: the newest planilla of a serie and month wins,
+	 * a removed one gives the month back to the one before it, and the last
+	 * one removed gives it back to DEIS. Each scan that reads or removes a
+	 * planilla queues one rebuild; one that finds nothing new, or only a
+	 * refused planilla, queues none.
+	 */
+	public function testTheNewestPlanillaWinsAndEachChangeQueuesOneRebuild(): void {
+		$january = fn (): array => array_intersect_key(
+			self::historico(array_column($this->api()->resumen()->getData()['metas'], null, 'codigo')['I'])[2099]['meses'][0],
+			array_flip(['numerador', 'origen', 'fecha_corte']),
+		);
+		$this->rebuild();
+		$older = $this->planilla('enero.xlsm', 'ENERO', ['02010420' => [8 => 1, 9 => 1]], self::SAVED);
+		$newer = $this->planilla('enero corregida.xlsm', 'ENERO', ['02010420' => [8 => 6]], self::SAVED + 60);
+
+		$this->scan();
+		self::assertSame(1, self::queued(), 'two planillas read in one scan wait as one rebuild');
+		$this->rebuild();
+		self::assertSame(['numerador' => 6.0, 'origen' => 'planilla del establecimiento', 'fecha_corte' => '2099-12-01'], $january());
+
+		$this->planilla('otro cesfam.xlsm', 'ENERO', ['02010420' => [8 => 50]], self::SAVED + 120, ['H3' => 2]);
+		$this->scan();
+		$this->scan();
+		self::assertSame(0, self::queued(), 'a refused planilla, and a scan that finds nothing new, change no figure');
+
+		$newer->delete();
+		$this->scan();
+		self::assertSame(1, self::queued(), 'a removed planilla queues one rebuild');
+		$this->rebuild();
+		self::assertSame(['numerador' => 2.0, 'origen' => 'planilla del establecimiento', 'fecha_corte' => '2099-12-01'], $january());
+
+		$older->delete();
+		$this->scan();
+		self::assertSame(1, self::queued());
+		$this->rebuild();
+		self::assertSame(['numerador' => 4.0, 'origen' => 'datos públicos DEIS', 'fecha_corte' => '2099-12'], $january(), 'January is DEIS\'s again: 2 + 1 + 1');
 	}
 
 	/** @param array<string, mixed> $card @return list<mixed> what a Resumen card shows: mes, N, D, %, cumple and estado */

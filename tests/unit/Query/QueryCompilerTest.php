@@ -56,10 +56,14 @@ final class QueryCompilerTest extends TestCase {
 		return QueryCompiler::compile($spec, $codigos, [])['params'];
 	}
 
-	public function testTheLocalSeriesIsTheNationalOneForOneEstablishment(): void {
+	/**
+	 * The national statement, for one establishment, over its rows as the
+	 * planillas overlay them (docs/adr/0010; the figures are GoalsTest's).
+	 */
+	public function testTheLocalSeriesIsTheNationalOneForOneEstablishmentOverItsPlanillas(): void {
 		self::assertSame(
 			[
-				'sql' => self::SELECT . ' AND r.estab = ?' . self::GROUPED,
+				'sql' => str_replace('*PREFIX*estadistica_rem r ', QueryCompiler::local() . ' r ', self::SELECT) . ' AND r.estab = ?' . self::GROUPED,
 				'params' => ['A', 2025, 2026, 202510, 202609, '["02010420","03500366"]', self::ESTAB],
 			],
 			QueryCompiler::compile(self::spec(), self::CODES, ['estab' => self::ESTAB]),

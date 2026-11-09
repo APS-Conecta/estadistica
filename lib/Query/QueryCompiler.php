@@ -8,6 +8,7 @@ namespace OCA\Estadistica\Query;
 
 use LogicException;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Rem\RemReader;
 
 /**
  * A QuerySpec, as the SQL PostgreSQL runs (docs/adr/0006).
@@ -20,6 +21,10 @@ use OCA\Estadistica\Exception\RefusedException;
  * - **One statement per series.** The local, national and peer statements
  *   differ only in who is counted: the local establishment (r.estab = ?),
  *   everyone, or the establishments whose register row has the chosen traits.
+ * - **The local series is DEIS overlaid by planillas** (docs/adr/0010): it
+ *   reads local(), where the newest planilla of a serie and month stands in
+ *   for every DEIS row of its establishment. The national and peer series,
+ *   and so their informantes, read DEIS's rows alone.
  * - **Only reported cells count.** The chosen columns are unpivoted (LATERAL
  *   VALUES) and a cell counts only where it was reported. An empty cell is
  *   NULL, never 0 (docs/adr/0004), and an establishment «informante» is one
@@ -33,6 +38,16 @@ use OCA\Estadistica\Exception\RefusedException;
 final class QueryCompiler {
 	/** A series has at most this many groups. One more is fetched, to know it overflowed. */
 	public const MAX_GROUPS = 5000;
+
+	/**
+	 * The planillas that count: the newest leído planilla of each
+	 * establishment, serie and month, by modification time, then file id. One
+	 * read before migration 13 names no establishment and counts nowhere until
+	 * the next scan judges it again. local(), QueryExecutor::planillas and
+	 * Planillas::status all read it.
+	 */
+	public const PLANILLAS = 'SELECT DISTINCT ON (estab, serie, anio, mes) file_id, estab, serie, anio, mes, mtime'
+		. ' FROM *PREFIX*estadistica_planilla WHERE error IS NULL AND estab IS NOT NULL ORDER BY estab, serie, anio, mes, mtime DESC, file_id DESC';
 
 	private const METRIC = [
 		'suma' => 'sum(c.valor)',
@@ -59,7 +74,7 @@ final class QueryCompiler {
 
 		$cells = implode(', ', array_map(static fn (int $col): string => sprintf('(%d, r.col%02d)', $col, $col), $spec->columnas));
 		$sql = 'SELECT ' . implode(', ', $select)
-			. ' FROM *PREFIX*estadistica_rem r'
+			. ' FROM ' . (isset($who['estab']) ? self::local() : '*PREFIX*estadistica_rem') . ' r'
 			. " CROSS JOIN LATERAL (VALUES $cells) AS c(columna, valor)";
 		if (array_intersect($spec->agrupar, QuerySpec::TRAITS) !== []) {
 			$sql .= ' LEFT JOIN *PREFIX*estadistica_establishment e ON e.estab = r.estab';
@@ -94,6 +109,21 @@ final class QueryCompiler {
 		}
 
 		return ['sql' => $sql, 'params' => $params];
+	}
+
+	/**
+	 * Each establishment's rows as its local series reads them, in
+	 * estadistica_rem's columns: a serie and month its planilla covers from
+	 * the newest one (a blank cell is NULL, sin informar, whatever DEIS
+	 * wrote), every other from DEIS. It is filtered from outside like the
+	 * table, and PostgreSQL pushes the filter into both halves.
+	 */
+	public static function local(): string {
+		$columns = 'serie, anio, mes, estab, codigo, ' . implode(', ', array_map(static fn (int $i): string => sprintf('col%02d', $i), range(1, RemReader::COLUMNS)));
+
+		return "(SELECT $columns FROM *PREFIX*estadistica_rem d WHERE NOT EXISTS (SELECT 1 FROM *PREFIX*estadistica_planilla p"
+			. ' WHERE p.error IS NULL AND p.estab = d.estab AND p.serie = d.serie AND p.anio = d.anio AND p.mes = d.mes)'
+			. " UNION ALL SELECT $columns FROM *PREFIX*estadistica_planilla_rem WHERE file_id IN (SELECT file_id FROM (" . self::PLANILLAS . ') n))';
 	}
 
 	/**

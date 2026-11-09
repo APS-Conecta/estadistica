@@ -18,7 +18,7 @@
 					Lo informa quien administra Estadística: no se cuenta en el REM.
 				</p>
 				<p v-else-if="cifra.origen">
-					Origen: {{ cifra.origen }}, con cifras hasta {{ monthName(cifra.fecha_corte) }}.
+					Origen: {{ originText(cifra.origen, cifra.fecha_corte) }}.
 				</p>
 
 				<section v-for="parte in partes" :key="parte.label">
@@ -59,7 +59,7 @@
 
 <script>
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
-import { monthName } from '../query.js'
+import { monthName, originText } from '../query.js'
 
 export default {
 	name: 'ResumenFuente',
@@ -94,6 +94,7 @@ export default {
 
 	methods: {
 		monthName,
+		originText,
 
 		/** What a part adds and takes away, each consulta's códigos in one list. */
 		signs(ruta) {

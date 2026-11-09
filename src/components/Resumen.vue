@@ -61,7 +61,7 @@
 									<button type="button" class="estadistica-cifra" @click="open(meta, card(meta), $event)">{{ figure(meta.denominador) }}</button>
 								</p>
 								<p class="estadistica-resumen__hint">
-									Datos al {{ monthName(meta.datos_al) }}<template v-if="meta.origen"> · {{ meta.origen }}, con cifras hasta {{ monthName(meta.fecha_corte) }}</template>
+									Datos al {{ monthName(meta.datos_al) }}<template v-if="meta.origen"> · {{ originText(meta.origen, meta.fecha_corte) }}</template>
 								</p>
 							</template>
 							<p v-else class="estadistica-resumen__estado">
@@ -97,7 +97,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { ocsGet, ocsMessageFrom, warnError } from '../api.js'
 import { formatValue } from '../charts.js'
 import { defineAsyncComponent } from 'vue'
-import { monthName } from '../query.js'
+import { monthName, originText } from '../query.js'
 import ResumenHistorico from './ResumenHistorico.vue'
 
 // The panel and the app sidebar are their own chunk, fetched on the first click (#43's way).
@@ -134,6 +134,7 @@ export default {
 
 	methods: {
 		monthName,
+		originText,
 
 		/** The card's own month, with the current year's ruta: its histórico's last year. */
 		card(meta) {

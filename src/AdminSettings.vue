@@ -108,8 +108,9 @@
 		<NcSettingsSection name="Planillas del establecimiento"
 			description="El formulario REM del DEIS que su establecimiento llena cada mes (.xlsm o .xlsx),
 				guardado en una carpeta de Archivos. La carpeta se revisa cada hora, y por cada serie y mes
-				cuenta la planilla guardada más reciente. Por ahora la aplicación solo las lee y dice su
-				estado: las cifras que muestra siguen siendo las del DEIS.">
+				cuenta la planilla guardada más reciente: sus cifras reemplazan las del DEIS en la serie del
+				establecimiento, y una celda en blanco queda sin informar. Los meses sin planilla, el país y
+				los pares siguen siendo del DEIS.">
 			<p class="estadistica-admin__hint">
 				{{ planillas.folder === null ? 'Todavía no hay una carpeta de planillas elegida.'
 					: `Carpeta: «${planillas.folder}», en los archivos de ${planillas.owner}.` }}

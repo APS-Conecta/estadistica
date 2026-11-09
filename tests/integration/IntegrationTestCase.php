@@ -20,6 +20,7 @@ use OCA\Estadistica\Service\Planillas;
 use OCA\Estadistica\Service\SavedContent;
 use OCA\Estadistica\Service\YearWindow;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
@@ -88,6 +89,7 @@ abstract class IntegrationTestCase extends TestCase {
 			Server::get(ITempManager::class),
 			Server::get(ITimeFactory::class),
 			Server::get(LoggerInterface::class),
+			Server::get(IJobList::class),
 		);
 	}
 

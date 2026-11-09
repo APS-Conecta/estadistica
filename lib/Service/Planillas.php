@@ -7,12 +7,16 @@ declare(strict_types=1);
 namespace OCA\Estadistica\Service;
 
 use OCA\Estadistica\AppInfo\Application;
+use OCA\Estadistica\BackgroundJob\ResumenJob;
 use OCA\Estadistica\Catalog\Catalog;
 use OCA\Estadistica\Exception\RefusedException;
+use OCA\Estadistica\Query\QueryCompiler;
 use OCA\Estadistica\Rem\PlanillaReader;
 use OCA\Estadistica\Rem\RemReader;
 use OCA\Estadistica\Xlsx\XlsxReader;
+use OCP\AppFramework\Db\TTransactional;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -40,17 +44,23 @@ use Throwable;
  *   file no longer there is forgotten, rows and all. The folder is the single
  *   truth.
  * - **States.** «leido», with its serie and month; «rechazado», with the
- *   Spanish reason; «reemplazado», a leído planilla of a serie and month that
- *   has a newer one (by modification time, then file id). Only «rechazado» is
- *   stored as such: the others are read from the files beside them.
+ *   Spanish reason; «reemplazado», a leído planilla that is not the one that
+ *   counts for its serie and month (QueryCompiler::PLANILLAS). Only
+ *   «rechazado» is stored as such: the others are read from the files beside
+ *   them.
  *
  * A leído planilla's figures are kept in estadistica_planilla_rem, apart from
- * DEIS's, with their file. Nothing reads them yet: every figure shown stays
- * DEIS's until the local series reads them.
+ * DEIS's, with their file, and the newest one of each serie and month is its
+ * establishment's local series (QueryCompiler::local). So reading or
+ * forgetting a leído planilla queues one rebuild of the stored Resumen in the
+ * same transaction (ResumenJob, docs/adr/0009); a refused one changes no
+ * figure and queues none.
  *
  * @psalm-type Status = array{folder: ?string, owner: ?string, error: ?string, files: list<array{name: string, mtime: int, state: string, serie: ?string, anio: ?int, mes: ?int, error: ?string}>}
  */
 class Planillas {
+	use TTransactional;
+
 	public const KEY_OWNER = 'planilla_owner';
 	public const KEY_FOLDER = 'planilla_folder';
 
@@ -67,6 +77,7 @@ class Planillas {
 		private ITempManager $tempManager,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
+		private IJobList $jobs,
 	) {
 	}
 
@@ -111,7 +122,11 @@ class Planillas {
 		$result->closeCursor();
 
 		foreach (array_diff_key($known, $files) as $id => $_) {
-			$this->forget($id);
+			$this->atomic(function () use ($id): void {
+				if ($this->forget($id)) {
+					$this->jobs->add(ResumenJob::class);
+				}
+			}, $this->db);
 		}
 
 		$context = $this->context();
@@ -129,22 +144,16 @@ class Planillas {
 		$path = $folder === null ? null : $this->rootFolder->getUserFolder($owner)->getRelativePath($folder->getPath());
 
 		$result = $this->db->executeQuery(
-			'SELECT name, mtime, serie, anio, mes, error FROM *PREFIX*estadistica_planilla '
-			. 'ORDER BY anio DESC NULLS LAST, mes DESC, serie, mtime DESC, file_id DESC',
+			'SELECT p.name, p.mtime, p.serie, p.anio, p.mes, p.error, n.file_id AS newest FROM *PREFIX*estadistica_planilla p '
+			. 'LEFT JOIN (' . QueryCompiler::PLANILLAS . ') n USING (file_id) '
+			. 'ORDER BY p.anio DESC NULLS LAST, p.mes DESC, p.serie, p.mtime DESC, p.file_id DESC',
 		);
 		$files = [];
-		$newest = [];
 		while (($row = $result->fetch()) !== false) {
-			$state = 'rechazado';
-			if ($row['error'] === null) {
-				$key = $row['serie'] . $row['anio'] . '-' . $row['mes'];
-				$state = isset($newest[$key]) ? 'reemplazado' : 'leido';
-				$newest[$key] = true;
-			}
 			$files[] = [
 				'name' => (string)$row['name'],
 				'mtime' => (int)$row['mtime'],
-				'state' => $state,
+				'state' => $row['error'] !== null ? 'rechazado' : ($row['newest'] !== null ? 'leido' : 'reemplazado'),
 				'serie' => $row['serie'],
 				'anio' => $row['anio'] === null ? null : (int)$row['anio'],
 				'mes' => $row['mes'] === null ? null : (int)$row['mes'],
@@ -261,21 +270,19 @@ class Planillas {
 	 */
 	private function record(File $file, string $context, ?array $planilla, ?string $error): void {
 		$id = $file->getId();
-		$this->db->beginTransaction();
-		try {
-			$this->forget($id);
+		$this->atomic(function () use ($file, $id, $context, $planilla, $error): void {
+			$was = $this->forget($id);
 			$this->db->executeStatement(
-				'INSERT INTO *PREFIX*estadistica_planilla (file_id, name, mtime, context, serie, anio, mes, error, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-				[$id, mb_substr($file->getName(), 0, 255), $file->getMTime(), $context, $planilla['serie'] ?? null, $planilla['anio'] ?? null, $planilla['mes'] ?? null, $error, $this->time->getTime()],
+				'INSERT INTO *PREFIX*estadistica_planilla (file_id, name, mtime, context, serie, anio, mes, estab, error, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+				[$id, mb_substr($file->getName(), 0, 255), $file->getMTime(), $context, $planilla['serie'] ?? null, $planilla['anio'] ?? null, $planilla['mes'] ?? null, $planilla['estab'] ?? null, $error, $this->time->getTime()],
 			);
 			if ($planilla !== null && $planilla['rows'] !== []) {
 				$this->insert($id, $planilla);
 			}
-			$this->db->commit();
-		} catch (Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+			if ($was || $planilla !== null) {
+				$this->jobs->add(ResumenJob::class);
+			}
+		}, $this->db);
 	}
 
 	/**
@@ -305,8 +312,12 @@ class Planillas {
 		);
 	}
 
-	private function forget(int $id): void {
+	/** Forgets a file's verdict and figures; true when it was leído, so a local series changes. */
+	private function forget(int $id): bool {
 		$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_planilla_rem WHERE file_id = ?', [$id]);
+		$leido = $this->db->executeStatement('DELETE FROM *PREFIX*estadistica_planilla WHERE file_id = ? AND error IS NULL', [$id]) > 0;
 		$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_planilla WHERE file_id = ?', [$id]);
+
+		return $leido;
 	}
 }

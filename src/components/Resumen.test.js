@@ -317,6 +317,16 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 		wrapper.unmount()
 	})
 
+	it('says a month a planilla covers came from it, with the day its file was saved (docs/adr/0010)', async () => {
+		const resumen = withSources()
+		Object.assign(resumen.metas[0], { origen: 'planilla del establecimiento', fecha_corte: '2026-11-09' })
+		const wrapper = await shown(ok(resumen), { attachTo: '#resumen' })
+
+		expect(card(wrapper, 'I').text()).toContain('Datos al octubre de 2026 · planilla del establecimiento, guardada el 9 de noviembre de 2026')
+		expect((await opened(wrapper, figures(wrapper, 'I')[0])).text()).toContain('Origen: planilla del establecimiento, guardada el 9 de noviembre de 2026.')
+		wrapper.unmount()
+	})
+
 	it('opens from each figure of the table, for its own month, with that year\'s ruta and origen', async () => {
 		const wrapper = await mounted()
 

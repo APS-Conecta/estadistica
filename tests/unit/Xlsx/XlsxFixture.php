@@ -184,19 +184,31 @@ final class XlsxFixture {
 	}
 
 	/**
-	 * A 2026 REM form as an establishment fills it: the dictionary without its
-	 * código column, so every cell sits one column left of its marker, and
-	 * NOMBRE says who, when and which form (one digit of the code per cell in
-	 * C3:H3, the month by name in B6, the year in B7, the version in A9, the
-	 * serie in B17), as DEIS's form does.
+	 * A 2026 REM form as an establishment fills it (form()), in DEIS's 2026 layout.
 	 *
 	 * @param array<string, array<int, int|string>> $figures código → column number → value; any other cell is blank
 	 * @param array<string, int|string|null> $nombre NOMBRE's cells to change («B6» => 'JUNIO'), null to blank one
 	 * @param array<string, string> $extra more zip parts (xl/vbaProject.bin)
 	 */
 	public static function form2026(string $serie, array $figures, array $nombre = [], array $extra = []): string {
+		return self::form($serie, self::LAYOUT_2026[$serie], $figures, $nombre, $extra);
+	}
+
+	/**
+	 * A REM form as an establishment fills it: the dictionary's hojas without
+	 * their código column, so every cell sits one column left of its marker,
+	 * and NOMBRE says who, when and which form (one digit of the code per cell
+	 * in C3:H3, the month by name in B6, the year in B7, the version in A9,
+	 * the serie in B17), as DEIS's form does.
+	 *
+	 * @param array<string, array<int, array<string, string>>> $layout the dictionary's hojas: the código in column A, a «COLnn» marker where each figure goes
+	 * @param array<string, array<int, int|string>> $figures código → column number → value; any other cell is blank
+	 * @param array<string, int|string|null> $nombre NOMBRE's cells to change («B6» => 'JUNIO'), null to blank one
+	 * @param array<string, string> $extra more zip parts (xl/vbaProject.bin)
+	 */
+	public static function form(string $serie, array $layout, array $figures, array $nombre = [], array $extra = []): string {
 		$sheets = ['NOMBRE' => self::nombre($serie, $nombre)];
-		foreach (self::LAYOUT_2026[$serie] as $hoja => $rows) {
+		foreach ($layout as $hoja => $rows) {
 			foreach ($rows as $row => $cells) {
 				$codigo = $cells['A'] ?? '';
 				unset($cells['A']);
