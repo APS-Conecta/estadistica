@@ -484,7 +484,8 @@ class ApiController extends OCSController {
 	 * that is over and whose December is published, and for Meta II that
 	 * year's meta comprometida. motivo says why there is no porcentaje
 	 * («esperando ruta oficial», «falta el denominador oficial de <año>», «no
-	 * hay cierre comparable de <año>»), or why Meta II applies its stricter
+	 * hay cierre comparable de <año>», «no hay cierre comparable» when the
+	 * ventana holds no complete year), or why Meta II applies its stricter
 	 * branch. A manual meta's is its fixed minimum, with no base. Null when
 	 * the seed writes no rule. referencia cites the metas' resolución
 	 * and OOTT.
