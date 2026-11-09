@@ -73,6 +73,8 @@ work.*
   planillas cover (ADR-0010). A planilla's figures, its cached formula values included, are taken as saved,
   like the report the establishment sends its Servicio de Salud. Who may write there is the folder's
   Nextcloud sharing, which the establishment controls; the admin section lists every file and its state.
-- **The nota's words are the model's.** The validator checks every number, in digits or in words. A wrong
-  claim with no number in it, or one carried by «un», «una» or «uno», which are also articles, is not caught. The label says a model wrote it, and every
-  figure on the cards below it is the stored one.
+- **The nota's words are the model's.** The validator checks every number written in digits and drops a nota
+  that writes a word from the closed set of number words. A wrong claim with no number in it is not caught,
+  and neither is a number word outside that set, e.g. «un», «una», «uno» (also articles), «cero», «medio»,
+  «cuarto», «miles», «docena». The label says a model wrote it, and every figure on the cards below it is the
+  stored one.
