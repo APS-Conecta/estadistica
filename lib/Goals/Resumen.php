@@ -136,10 +136,10 @@ class Resumen {
 			$meta = $history[$current]['indicadores'][$i];
 			$base = self::base($historico, $fuente, $this->window->currentYear());
 			// Only Meta II's rule reads the base year's meta comprometida.
-			$previa = $base === null || $estab === null || ($indicador['meta_minima']['brecha_si_cumplio'] ?? null) === null
+			$previous = $base === null || $estab === null || ($indicador['meta_minima']['brecha_si_cumplio'] ?? null) === null
 				? null
 				: $this->goals->commitments($base['anio'], $estab)[$indicador['codigo']]['meta'] ?? null;
-			$cards[] = self::card($meta, $current, $history[$current]['fecha_corte_local'], $historico, $fuente, self::minimum($indicador['meta_minima'], $meta, $base, $previa));
+			$cards[] = self::card($meta, $current, $history[$current]['fecha_corte_local'], $historico, $fuente, self::minimum($indicador['meta_minima'], $meta, $base, $previous));
 		}
 
 		return self::response($anio, $metas['nombre'], $metas['referencia'], $local->isConfigured() ? $local->deisCode : null, $cards);
@@ -200,7 +200,7 @@ class Resumen {
 	 * A meta's meta mínima (Res. Exenta 732): the lowest meta comprometida
 	 * its seed's rule allows, from $base's cierre. A base at or above the
 	 * meta nacional is kept. Else it closes the rule's brecha of the gap:
-	 * brecha_si_cumplio when the base reached $previa, brecha when not, and
+	 * brecha_si_cumplio when the base reached $previous, brecha when not, and
 	 * when none is typed brecha too, saying why; never under its piso. A fija
 	 * minimum needs a base only to keep it (VII); a manual meta has no cierre,
 	 * so only its fija (VIII). Computed exactly in ten-thousandths of a point,
@@ -208,18 +208,18 @@ class Resumen {
 	 * percents, then half up to one decimal. No figure, no minimum: the
 	 * motivo says why. Null when the seed writes no rule.
 	 *
-	 * @param ?Regla $regla
+	 * @param ?Regla $rule
 	 * @param Meta $meta the current year's, as its card reads it
 	 * @param ?Historico $base the meta's base year (base()); null when the ventana holds none
-	 * @param ?float $previa the base year's meta comprometida for this meta
+	 * @param ?float $previous the base year's meta comprometida for this meta
 	 * @return ?Minima
 	 */
-	public static function minimum(?array $regla, array $meta, ?array $base, ?float $previa): ?array {
-		if ($regla === null) {
+	public static function minimum(?array $rule, array $meta, ?array $base, ?float $previous): ?array {
+		if ($rule === null) {
 			return null;
 		}
-		if ($meta['manual'] && $regla['fija'] !== null) {
-			return ['porcentaje' => (float)$regla['fija'], 'base' => null, 'motivo' => null];
+		if ($meta['manual'] && $rule['fija'] !== null) {
+			return ['porcentaje' => (float)$rule['fija'], 'base' => null, 'motivo' => null];
 		}
 		$none = static fn (?int $anio, string $motivo): array => ['porcentaje' => null, 'base' => $anio, 'motivo' => $motivo];
 		if (self::waiting($meta)) {
@@ -236,15 +236,15 @@ class Resumen {
 
 		$cierre = (int)round($base['cierre'] * 100) * 100;
 		$nacional = (int)round($meta['meta_nacional'] * 100) * 100;
-		$brecha = $previa !== null && $base['cierre'] >= $previa ? $regla['brecha_si_cumplio'] ?? $regla['brecha'] : $regla['brecha'];
+		$brecha = $previous !== null && $base['cierre'] >= $previous ? $rule['brecha_si_cumplio'] ?? $rule['brecha'] : $rule['brecha'];
 		$minimum = match (true) {
 			$cierre >= $nacional => $cierre,
-			$regla['fija'] !== null => $regla['fija'] * 10000,
+			$rule['fija'] !== null => $rule['fija'] * 10000,
 			default => $cierre + intdiv(($nacional - $cierre) * (int)$brecha, 100),
 		};
-		$minimum = max($minimum, ($regla['piso'] ?? 0) * 10000);
-		$why = $regla['brecha_si_cumplio'] !== null && $previa === null && $cierre < $nacional
-			? sprintf('sin la meta comprometida %d, se cierra el %d %% de la brecha', $base['anio'], (int)$regla['brecha'])
+		$minimum = max($minimum, ($rule['piso'] ?? 0) * 10000);
+		$why = $rule['brecha_si_cumplio'] !== null && $previous === null && $cierre < $nacional
+			? sprintf('sin la meta comprometida %d, se cierra el %d %% de la brecha', $base['anio'], (int)$rule['brecha'])
 			: null;
 
 		return ['porcentaje' => intdiv($minimum + 500, 1000) / 10.0, 'base' => $base['anio'], 'motivo' => $why];

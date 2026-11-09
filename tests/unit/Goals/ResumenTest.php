@@ -66,12 +66,12 @@ final class ResumenTest extends TestCase {
 	}
 
 	/**
-	 * @param array<string, int> $regla
+	 * @param array<string, int> $rule
 	 * @param array{porcentaje: ?float, base: ?int, motivo: ?string} $expected
 	 */
 	#[DataProvider('rules')]
-	public function testEachMetaMinimaRule(array $regla, float $nacional, float $cierre, ?float $previa, array $expected): void {
-		self::assertSame($expected, self::minimum(['meta_minima' => $regla, 'meta_nacional' => $nacional], self::base(2025, $cierre), $previa));
+	public function testEachMetaMinimaRule(array $rule, float $nacional, float $cierre, ?float $previous, array $expected): void {
+		self::assertSame($expected, self::minimum(['meta_minima' => $rule, 'meta_nacional' => $nacional], self::base(2025, $cierre), $previous));
 	}
 
 	/** Meta VIII is informed by hand, so it has no cierre: its minimum is 100 %, from no base year. */
@@ -102,7 +102,7 @@ final class ResumenTest extends TestCase {
 	 * @param ?array{anio: int, estado: ?string, cierre: ?float, meses: list<mixed>, ruta: array{numerador: null, denominador: null}} $base
 	 * @return ?array{porcentaje: ?float, base: ?int, motivo: ?string}
 	 */
-	private static function minimum(array $changes, ?array $base, ?float $previa): ?array {
+	private static function minimum(array $changes, ?array $base, ?float $previous): ?array {
 		$rem = ['fuente' => 'rem-a', 'periodo' => ['desde' => '2026-01', 'hasta' => '2026-12'], 'sumar' => [['codigos' => ['02010420'], 'columnas' => ['col08']]]];
 		$oficial = array_key_exists('oficial', $changes) ? ['oficial' => $changes['oficial']] : [];
 		unset($changes['oficial']);
@@ -111,7 +111,7 @@ final class ResumenTest extends TestCase {
 		$indicador = GoalSeed::parse(['anio' => 2026, 'version' => 1, 'nombre' => 'Metas de prueba', 'referencia' => 'Una prueba', 'diccionarios' => ['rem-a' => 'SA_26_V1.0'], 'indicadores' => [$meta]], 2026)['indicadores'][0];
 		$counted = GoalEvaluator::indicator($indicador, ['meta' => null, 'denominador' => null, 'cumplimiento' => null], [], ['local' => null, 'nacional' => null, 'pares' => null], true, 2026, 12, 202612, 202612);
 
-		return Resumen::minimum($indicador['meta_minima'], $counted, $base, $previa);
+		return Resumen::minimum($indicador['meta_minima'], $counted, $base, $previous);
 	}
 
 	/** @return array{anio: int, estado: ?string, cierre: ?float, meses: list<mixed>, ruta: array{numerador: null, denominador: null}} a year of the histórico as Resumen::year serves it */
