@@ -37,6 +37,9 @@ use OCP\AppFramework\Db\DoesNotExistException;
 class Sources {
 	public const ORIGIN_DEIS = 'datos públicos DEIS';
 
+	/** A month's origen where the establishment's planilla covers it (docs/adr/0010, Resumen::origin). */
+	public const ORIGIN_PLANILLA = 'planilla del establecimiento';
+
 	/** Fuente id → the REM serie it is. */
 	public const REM = ['rem-a' => 'A', 'rem-p' => 'P'];
 
