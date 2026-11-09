@@ -659,7 +659,7 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame(['rem-a', 'REM Serie A', '2099-01', '2099-12', []], [$numerador['fuente'], $numerador['nombre'], $numerador['desde'], $numerador['hasta'], $numerador['restar']], 'named as GET fuentes names it');
 		foreach (array_column($this->goals()->get(2099)['indicadores'], 'ruta', 'codigo')['I'] as $part => $stored) {
 			$shown = $i[2099]['ruta'][$part];
-			self::assertSame([$stored['periodo']['desde'], $stored['periodo']['hasta']], [$shown['desde'], $shown['hasta']], "the $part's periodo is the stored ruta's");
+			self::assertSame([$stored['fuente'], $stored['periodo']['desde'], $stored['periodo']['hasta']], [$shown['fuente'], $shown['desde'], $shown['hasta']], "the $part's fuente and periodo are the stored ruta's");
 			foreach (['sumar', 'restar'] as $sign) {
 				$labelled = array_map(fn (array $term): array => $this->api()->consultas(['fuente' => $stored['fuente'], 'periodo' => $stored['periodo'], 'filtros' => $term])->getData()['etiquetas']['codigos'], $stored[$sign] ?? []);
 				self::assertSame($labelled, $shown[$sign], "the $part's $sign is the stored ruta's, labelled as the same consulta");
