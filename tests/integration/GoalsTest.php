@@ -14,6 +14,7 @@ use OCA\Estadistica\Controller\ApiController;
 use OCA\Estadistica\Db\IngestState;
 use OCA\Estadistica\Db\IngestStateMapper;
 use OCA\Estadistica\Domain\Establishment;
+use OCA\Estadistica\Exception\RefusedException;
 use OCA\Estadistica\Goals\GoalEvaluator;
 use OCA\Estadistica\Goals\Goals;
 use OCA\Estadistica\Goals\Resumen;
@@ -366,6 +367,11 @@ class GoalsTest extends IntegrationTestCase {
 
 	private function window(?ITimeFactory $clock = null): YearWindow {
 		return new YearWindow(Server::get(IAppConfig::class), $clock ?? $this->clock);
+	}
+
+	/** The PIV's writer on this test's clock, queueing its rebuilds in $jobs. */
+	private function piv(?IJobList $jobs = null): PivImporter {
+		return new PivImporter($this->db(), Server::get(EstablishmentConfig::class), $this->window(), $this->clock, $jobs ?? Server::get(IJobList::class));
 	}
 
 	private function goals(?ITimeFactory $clock = null): Goals {
@@ -932,27 +938,33 @@ class GoalsTest extends IntegrationTestCase {
 
 	/**
 	 * docs/adr/0009, computed once per change: a committed REM load, an admin
-	 * write of the commitments or of the typed population (the PIV, the
-	 * denominador of the metas that count people) and a new metas seed each
-	 * queue one rebuild in the background work. FONASA's file, a refused
-	 * write and a reading queue none.
+	 * write of the commitments, the population (FONASA's file, or the one an
+	 * admin types: the PIV, the denominador of the metas that count people)
+	 * and a new metas seed each queue one rebuild in the background work. A
+	 * refused file or write and a reading queue none.
 	 */
 	public function testEachChangeQueuesOneRebuildAndNothingElseDoes(): void {
 		self::assertSame(1, self::queued(), 'the REM loads and the seed of setUp wait as one rebuild');
 		$this->rebuild();
 
-		$this->fonasa('31-12-2098');
+		try {
+			$this->piv()->import(ZipFixture::file(PivFixture::csv([PivFixture::row('31-12-2098', 900001, 'A', '20 a 29 años', 'Mujeres', 100) . ',11111111-1'], PivFixture::HEADER . ',"RUT"')));
+			self::fail('a FONASA file with a RUT was loaded');
+		} catch (RefusedException $e) {
+			self::assertStringContainsString('Sobra: RUT.', $e->getMessage());
+		}
 		$this->admin()->goals(2099, [['codigo' => 'IX', 'meta' => 50]]);
 		$this->admin()->piv(2098, [['edad' => 25, 'sexo' => 'M', 'inscritos' => 1]]);
 		$this->api()->resumen();
 		$this->api()->resumen('900002');
-		self::assertSame(0, self::queued(), 'FONASA\'s file, a refused write and a reading are not changes the Resumen waits for');
+		self::assertSame(0, self::queued(), 'a refused file or write and a reading are not changes the Resumen waits for');
 
 		$seed = self::seed();
 		$seed['version'] = 2;
 		foreach ([
 			'a REM load' => fn () => Server::get(RemImporter::class)->import(new LocalRange(ZipFixture::zip(['SerieA2097.csv' => ZipFixture::header() . ZipFixture::row(2097, 3, '900001', '02010420', [11 => '4'])])), 2097, 'A', IngestState::ORIGIN_FILE),
 			'an admin write' => fn () => $this->admin()->goals(2099, [['codigo' => 'I', 'meta' => 50]]),
+			'a FONASA load' => fn () => $this->fonasa('31-12-2098'),
 			'a typed population' => fn () => $this->admin()->piv(2098, [['edad' => 20, 'sexo' => 'M', 'inscritos' => 120]]),
 			'a new metas seed' => fn () => $this->goals()->store($seed),
 		] as $change => $make) {
@@ -963,10 +975,41 @@ class GoalsTest extends IntegrationTestCase {
 	}
 
 	/**
+	 * docs/adr/0009: the population and its rebuild commit together, so a
+	 * write that fails after queueing leaves the PIV as it was and nothing
+	 * queued.
+	 */
+	public function testAPopulationWriteRolledBackQueuesNoRebuild(): void {
+		$this->rebuild();
+		$failure = new \RuntimeException('the write fails after queueing its rebuild');
+		$jobs = $this->createMock(IJobList::class);
+		$jobs->method('add')->willReturnCallback(static function (string $job) use ($failure): never {
+			Server::get(IJobList::class)->add($job);
+			throw $failure;
+		});
+		$before = $this->piv()->status();
+
+		foreach ([
+			'a FONASA load' => fn () => $this->piv($jobs)->import(ZipFixture::file(PivFixture::csv([PivFixture::row('31-12-2098', 900001, 'A', '20 a 29 años', 'Mujeres', 100)]))),
+			'a typed population' => fn () => $this->piv($jobs)->enter(2098, [['edad' => 20, 'sexo' => 'M', 'inscritos' => 120]]),
+		] as $write => $make) {
+			$thrown = null;
+			try {
+				$make();
+			} catch (\RuntimeException $e) {
+				$thrown = $e;
+			}
+			self::assertSame($failure, $thrown, "$write queues its rebuild inside its transaction");
+			self::assertSame($before, $this->piv()->status(), "$write is rolled back");
+			self::assertSame(0, self::queued(), "$write rolled back queues none");
+		}
+	}
+
+	/**
 	 * docs/adr/0009: once stored, every reader sees the same Resumen until a
 	 * change rebuilds it. FONASA's file gives Meta T its 350 mujeres, but the
-	 * answer stays the stored one; the next rebuild, after the commitment,
-	 * reads both.
+	 * answer stays the stored one until the queued rebuild runs; that rebuild,
+	 * after the commitment, reads both.
 	 */
 	public function testTheStoredResumenStaysUntilAChangeRebuildsIt(): void {
 		$this->rebuild();
@@ -974,7 +1017,7 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame([null, null, null, null, null, null], self::card(array_column($stored['metas'], null, 'codigo')['T']), 'no corte yet, so no denominador');
 
 		$this->fonasa('31-12-2098');
-		self::assertSame($stored, $this->api()->resumen()->getData(), 'FONASA\'s file alone does not move the stored Resumen');
+		self::assertSame($stored, $this->api()->resumen()->getData(), 'FONASA\'s file queues a rebuild and the stored Resumen keeps serving');
 		$this->commit([['codigo' => 'I', 'meta' => 50]]);
 		self::assertSame($stored, $this->api()->resumen()->getData(), 'the rebuild runs in the background work, not in the request');
 
@@ -1318,7 +1361,7 @@ class GoalsTest extends IntegrationTestCase {
 			Server::get(DeisRepository::class),
 			Server::get(Catalog::class),
 			Server::get(Register::class),
-			new PivImporter($this->db(), Server::get(EstablishmentConfig::class), $this->window(), $this->clock, Server::get(IJobList::class)),
+			$this->piv(),
 			$this->goals(),
 			$this->planillasFor('admin'),
 			$this->resumen(),

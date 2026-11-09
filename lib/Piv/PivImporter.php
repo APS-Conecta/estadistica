@@ -29,9 +29,11 @@ use Throwable;
  *   admin section for the corte of 31 December of a year. They win over
  *   FONASA's for that establishment's own series only; the country and the
  *   peer groups stay FONASA's published counts (owner, Slice 8). A file
- *   loaded later does not touch them. Typing them queues a rebuild of the
- *   stored Resumen in the same transaction (ResumenJob, docs/adr/0009); a
- *   FONASA file does not.
+ *   loaded later does not touch them.
+ *
+ * Each write queues a rebuild of the stored Resumen in its own transaction
+ * (ResumenJob, docs/adr/0009): a refused file or a write rolled back queues
+ * none.
  *
  * @psalm-import-type Row from PivReader
  * @psalm-type Corte = array{corte: string, rows: int, establishments: int, inscritos: int, loadedAt: int}
@@ -76,6 +78,7 @@ class PivImporter {
 				$this->db->executeStatement('DELETE FROM *PREFIX*estadistica_piv WHERE corte = ? AND manual = 0', [$corte]);
 			}
 			$this->insert($read['rows'], 0);
+			$this->jobs->add(ResumenJob::class);
 			$this->db->commit();
 		} catch (Throwable $e) {
 			$this->db->rollBack();

@@ -13,9 +13,9 @@ use OCP\BackgroundJob\QueuedJob;
 /**
  * Rebuilds the stored Resumen once (docs/adr/0009, «computed once per
  * change, then read»). Queued where a change the Resumen reads commits: a
- * REM load (RemImporter), the commitments (Goals::commit), the typed
- * population (PivImporter::enter), a metas seed (Goals::store) and a planilla
- * read or forgotten (Planillas). Nextcloud keeps one queued copy of a job, so changes that
+ * REM load (RemImporter), the commitments (Goals::commit), the population,
+ * FONASA's file or typed (PivImporter::import, PivImporter::enter), a metas
+ * seed (Goals::store) and a planilla read or forgotten (Planillas). Nextcloud keeps one queued copy of a job, so changes that
  * arrive before it runs share one rebuild, and a change during a run queues
  * the next.
  */
