@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
+  contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.
+
 ## [0.3.0] - 2026-11-10
 
 The Resumen (spec #41): Estadística opens on the establishment's Metas Sanitarias of the newest resolución de metas — 2027's, Res. Exenta 732 — counted from official figures only, over every comparable year, with its own planilla as the local series wherever one exists.
