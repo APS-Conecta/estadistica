@@ -74,6 +74,27 @@ final class ApiContractTest extends TestCase {
 
 	private const RUTA = ['fuente', 'nombre', 'desde', 'hasta', 'sumar', 'restar'];
 
+	/**
+	 * The operations the suite AI may call (gestion-aio#75), by operation id,
+	 * and the x-aps-ai marking each carries: the reads, and the writes that
+	 * save a pregunta or a tablero.
+	 */
+	private const AI = [
+		'api-consultas' => 'read',
+		'api-crear-pregunta' => 'write',
+		'api-crear-tablero' => 'write',
+		'api-editar-pregunta' => 'write',
+		'api-editar-tablero' => 'write',
+		'api-fuente' => 'read',
+		'api-fuentes' => 'read',
+		'api-indicadores' => 'read',
+		'api-pregunta' => 'read',
+		'api-preguntas' => 'read',
+		'api-resumen' => 'read',
+		'api-tablero' => 'read',
+		'api-tableros' => 'read',
+	];
+
 	private const PATH = '/ocs/v2.php/apps/estadistica/api/v1/fuentes';
 
 	private const CONSULTAS = '/ocs/v2.php/apps/estadistica/api/v1/consultas';
@@ -349,6 +370,29 @@ final class ApiContractTest extends TestCase {
 	public function testTheResumenQueryIsTheControllersParameters(): void {
 		self::assertSame(['establecimiento'], self::query(self::RESUMEN_PATH));
 		self::assertSame(self::parameters('resumen'), self::query(self::RESUMEN_PATH));
+	}
+
+	/**
+	 * The suite's connector builds a tool only for an operation marked x-aps-ai
+	 * (gestion-aio#93): the markings sit exactly on the allowed operations, and
+	 * never on a delete or an admin route (the extractor's words for a route
+	 * without #[NoAdminRequired]).
+	 */
+	public function testTheAiMarkingsSitExactlyOnTheAllowedOperations(): void {
+		$marked = [];
+		foreach (self::spec()['paths'] as $path => $operations) {
+			foreach ($operations as $verb => $operation) {
+				if (!isset($operation['x-aps-ai'])) {
+					continue;
+				}
+				self::assertNotSame('delete', $verb, "DELETE $path is marked: no delete is the AI's");
+				self::assertStringNotContainsString('requires admin access', $operation['description'] ?? '', "$path is an admin route and marked");
+				$marked[$operation['operationId']] = $operation['x-aps-ai'];
+			}
+		}
+		ksort($marked);
+
+		self::assertSame(self::AI, $marked, 'mark the operation with #[AiOperation] and regenerate the spec');
 	}
 
 	/** @return list<string> the query parameters a GET route's spec names, in order */
