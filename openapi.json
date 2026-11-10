@@ -207,7 +207,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             }
         },
         "/ocs/v2.php/apps/estadistica/api/v1/fuentes/{id}": {
@@ -462,7 +463,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             }
         },
         "/ocs/v2.php/apps/estadistica/api/v1/consultas": {
@@ -879,7 +881,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             }
         },
         "/ocs/v2.php/apps/estadistica/api/v1/preguntas": {
@@ -1012,7 +1015,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             },
             "post": {
                 "operationId": "api-crear-pregunta",
@@ -1210,7 +1214,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "write"
             }
         },
         "/ocs/v2.php/apps/estadistica/api/v1/preguntas/{id}": {
@@ -1378,7 +1383,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             },
             "put": {
                 "operationId": "api-editar-pregunta",
@@ -1653,7 +1659,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "write"
             },
             "delete": {
                 "operationId": "api-eliminar-pregunta",
@@ -1957,7 +1964,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             },
             "post": {
                 "operationId": "api-crear-tablero",
@@ -2173,7 +2181,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "write"
             }
         },
         "/ocs/v2.php/apps/estadistica/api/v1/tableros/{id}": {
@@ -2351,7 +2360,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             },
             "put": {
                 "operationId": "api-editar-tablero",
@@ -2643,7 +2653,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "write"
             },
             "delete": {
                 "operationId": "api-eliminar-tablero",
@@ -3327,7 +3338,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             }
         },
         "/ocs/v2.php/apps/estadistica/api/v1/resumen": {
@@ -3970,7 +3982,8 @@
                             }
                         }
                     }
-                }
+                },
+                "x-aps-ai": "read"
             }
         }
     },

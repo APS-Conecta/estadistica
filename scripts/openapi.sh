@@ -37,10 +37,22 @@ run sh -c 'php tools/openapi/vendor/bin/generate-spec . openapi.json'
 # The extractor reads a version out of composer.json, and this app deliberately
 # has none (epidemiologia's lesson): the version comes from info.xml, so
 # regenerating re-applies it. MetadataTest fails if the two ever disagree.
+# Nor does it pass an extension through, so each method's #[AiOperation] is
+# applied here as its operation's x-aps-ai, the marking the suite's connector
+# reads (gestion-aio#93). Nextcloud's autoloader loads ApiController's parent.
 run sh -c 'php -r "
+	require \"/var/www/html/lib/composer/autoload.php\";
+	require \"lib/Controller/AiOperation.php\";
+	require \"lib/Controller/ApiController.php\";
 	\$version = (string)simplexml_load_file(\"appinfo/info.xml\")->version;
 	\$spec = json_decode(file_get_contents(\"openapi.json\"), true);
 	\$spec[\"info\"][\"version\"] = \$version;
+	foreach ((new ReflectionClass(OCA\Estadistica\Controller\ApiController::class))->getMethods() as \$method) {
+		foreach (\$method->getAttributes(OCA\Estadistica\Controller\AiOperation::class) as \$ai) {
+			\$route = \$method->getAttributes(OCP\AppFramework\Http\Attribute\ApiRoute::class)[0]->getArguments();
+			\$spec[\"paths\"][\"/ocs/v2.php/apps/estadistica\" . \$route[\"url\"]][strtolower(\$route[\"verb\"])][\"x-aps-ai\"] = \$ai->newInstance()->access;
+		}
+	}
 	file_put_contents(\"openapi.json\", json_encode(\$spec, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) . PHP_EOL);
 "'
 
