@@ -85,6 +85,8 @@ The Resumen (spec #41): Estadística opens on the establishment's Metas Sanitari
   establishment's last month into the months after it, up to the fuente's fecha de corte. Those months now have
   no figure, the metas view names the establishment's own last month, and `GET indicadores` gains
   `fecha_corte_local` per serie. The nacional, the pares and the fuente's fecha de corte are unchanged.
+- **Dependency advisories** (#75): every critical and high npm advisory is patched: dompurify, follow-redirects
+  and source-map-js in the served bundle; shell-quote, undici, vite and launch-editor in the build tools.
 
 **Upgrade notes.**
 
