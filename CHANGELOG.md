@@ -62,6 +62,10 @@ The Resumen (spec #41): Estadística opens on the establishment's Metas Sanitari
   «el doble», «la mitad»); and while the Resumen it was asked for is still the stored one. It shows at the top of
   the Resumen as plain text, labelled «Escrita por un modelo de IA a partir de las cifras», and
   `docs/threat-model.md` records how it is bounded.
+- **The operations the suite AI may call** (#77): each OCS operation the suite AI may call carries an
+  `x-aps-ai` extension in `openapi.json`, `read` or `write`. Reads are the fuentes, consultas, indicadores, the
+  Resumen and the user's preguntas and tableros; writes create or update the user's preguntas and tableros. No
+  delete and no admin route is marked.
 
 ### Changed
 
