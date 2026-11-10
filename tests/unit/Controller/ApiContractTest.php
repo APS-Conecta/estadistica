@@ -374,9 +374,9 @@ final class ApiContractTest extends TestCase {
 
 	/**
 	 * The suite's connector builds a tool only for an operation marked x-aps-ai
-	 * (gestion-aio#93): the markings sit exactly on the allowed operations, and
-	 * never on a delete or an admin route (the extractor's words for a route
-	 * without #[NoAdminRequired]).
+	 * (gestion-aio#93): the markings sit exactly on the listed operations, and
+	 * never on a delete. The exact list, with MetadataTest's #[NoAdminRequired]
+	 * rule, is what keeps admin routes unmarked.
 	 */
 	public function testTheAiMarkingsSitExactlyOnTheAllowedOperations(): void {
 		$marked = [];
@@ -386,7 +386,6 @@ final class ApiContractTest extends TestCase {
 					continue;
 				}
 				self::assertNotSame('delete', $verb, "DELETE $path is marked: no delete is the AI's");
-				self::assertStringNotContainsString('requires admin access', $operation['description'] ?? '', "$path is an admin route and marked");
 				$marked[$operation['operationId']] = $operation['x-aps-ai'];
 			}
 		}
