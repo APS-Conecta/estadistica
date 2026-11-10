@@ -202,7 +202,7 @@ class ApiController extends OCSController {
 	}
 
 	/**
-	 * One pregunta.
+	 * One pregunta, as GET preguntas serves it.
 	 *
 	 * @param int $id the pregunta's id, as the list served it
 	 * @return DataResponse<Http::STATUS_OK, array{id: int, titulo: string, consulta: array<string, mixed>, tipo: string, autor: string, autor_nombre: string, actualizada: int, editable: bool}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
@@ -307,7 +307,7 @@ class ApiController extends OCSController {
 	}
 
 	/**
-	 * One tablero.
+	 * One tablero, as GET tableros serves it.
 	 *
 	 * @param int $id the tablero's id, as the list served it
 	 * @return DataResponse<Http::STATUS_OK, array{id: int, titulo: string, tarjetas: list<array{pregunta: int, ancho: int}>, autor: string, autor_nombre: string, actualizado: int, editable: bool}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
@@ -400,13 +400,14 @@ class ApiController extends OCSController {
 	 * nationally computable: REM, or FONASA's inscritos when a corte serves the
 	 * year and the meta's ages are whole bands. poblacion.falta_oficial marks a
 	 * meta whose ages cut a band: no denominador until its denominador
-	 * comprometido, which serves the local % only (docs/adr/0007).
+	 * comprometido, which serves the local % only (docs/adr/0007). Percentages
+	 * are percentages: 90 is 90 %.
+	 *
 	 * A Serie A month adds up to that month; a Serie P month is the
 	 * latest corte up to it (June, December); a month past the data has no
 	 * figure. A manual meta (VIII) is its typed cumplimiento. numerador and
 	 * denominador are the meta's routes as its seed file writes them, with the
-	 * REM dictionaries they cite (docs/adr/0008). Percentages are percentages:
-	 * 90 is 90 %.
+	 * REM dictionaries they cite (docs/adr/0008).
 	 *
 	 * The local series is this install's establishment (app config, suite
 	 * ADR-0009). fecha_corte_local is its own last month with a written
