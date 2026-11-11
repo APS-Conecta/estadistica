@@ -239,7 +239,10 @@ export default {
 	font-variant-numeric: tabular-nums;
 }
 
+/* Nextcloud's core CSS keeps a table on one line; this caption is a sentence,
+   and wraps to the table so the answer fits Consultar's column (#88). */
 .estadistica-answer__table caption {
+	white-space: normal;
 	caption-side: bottom;
 	text-align: start;
 	padding-top: 4px;

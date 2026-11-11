@@ -16,6 +16,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 - Estadística opens in Nextcloud's app layout: its five views sit in the side navigation, which folds behind its
   toggle on a phone, and an administrator finds «Ajustes de Estadística» at its foot (#84).
+- Consultar puts its four steps beside the answer, which stays in view as they scroll and follows them on a narrow
+  screen. «Buscar una prestación» finds one in the catálogo by its código or part of its name, and choosing it picks
+  its hoja and sección (#88).
 - The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
   contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.
 
