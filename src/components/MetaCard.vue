@@ -3,8 +3,8 @@
 	its figure (the % and «N de D») with a meter against its target, its
 	status as an icon and a word, and the gap to the target, or why it has no
 	percentage, with the numerador already counted. Its meta mínima is a
-	reference from its base year's cierre (#51). The figure, and each figure
-	of the histórico, opens its source panel; the title opens the histórico.
+	reference from its base year's cierre (#51). The title opens its detail on
+	Evolución, and the figure on Origen (#86).
 -->
 <template>
 	<article class="estadistica-meta" :aria-labelledby="`resumen-${meta.codigo}-titulo`">
@@ -12,22 +12,14 @@
 			Meta {{ meta.codigo }} {{ anio }}
 		</p>
 		<h3 :id="`resumen-${meta.codigo}-titulo`" class="estadistica-meta__titulo">
-			<button v-if="meta.historico.length"
-				type="button"
-				class="estadistica-meta__abrir"
-				:aria-expanded="String(expanded)"
-				:aria-controls="`resumen-${meta.codigo}-historico`"
-				@click="expanded = !expanded">
+			<button type="button" class="estadistica-meta__abrir" @click="$emit('open', 'evolucion', $event)">
 				{{ meta.nombre }}
 			</button>
-			<template v-else>
-				{{ meta.nombre }}
-			</template>
 		</h3>
 
 		<template v-if="judged">
 			<p>
-				<button type="button" class="estadistica-cifra estadistica-meta__cifra" @click="$emit('open', cifra, $event)">
+				<button type="button" class="estadistica-cifra estadistica-meta__cifra" @click="$emit('open', 'origen', $event)">
 					<span class="estadistica-meta__porcentaje">{{ percent(meta.porcentaje) }}</span> <span v-if="!meta.manual" class="estadistica-meta__cuenta">{{ figure(meta.numerador) }} de {{ figure(meta.denominador) }}</span>
 				</button>
 			</p>
@@ -58,11 +50,6 @@
 				</p>
 			</template>
 		</template>
-
-		<ResumenHistorico v-if="expanded"
-			:id="`resumen-${meta.codigo}-historico`"
-			:meta="meta"
-			@open="(month, event) => $emit('open', month, event)" />
 	</article>
 </template>
 
@@ -71,13 +58,12 @@ import { formatValue } from '../charts.js'
 import { monthName } from '../query.js'
 import { statusOf, targetNameOf, targetOf } from '../status.js'
 import GoalMeter from './GoalMeter.vue'
-import ResumenHistorico from './ResumenHistorico.vue'
 import StatusBadge from './StatusBadge.vue'
 
 export default {
 	name: 'MetaCard',
 
-	components: { GoalMeter, ResumenHistorico, StatusBadge },
+	components: { GoalMeter, StatusBadge },
 
 	props: {
 		/** One of GET resumen's metas. */
@@ -87,10 +73,6 @@ export default {
 	},
 
 	emits: ['open'],
-
-	data() {
-		return { expanded: false }
-	},
 
 	computed: {
 		status() {
@@ -106,17 +88,13 @@ export default {
 		targetName() {
 			return targetNameOf(this.meta)
 		},
-		/** The card's own month for its source panel, with the current year's ruta: its histórico's last year. */
-		cifra() {
-			return { mes: this.meta.mes, origen: this.meta.origen, fecha_corte: this.meta.fecha_corte, ruta: this.meta.historico.at(-1)?.ruta ?? null }
-		},
 		/** The current year's last month with a numerador counted, for a meta with no percentage. */
 		counted() {
 			return this.meta.historico.at(-1)?.meses.filter((mes) => mes.numerador !== null).at(-1) ?? null
 		},
 		/** When the numerador was counted: «a febrero de 2026», a Serie P one at its corte: «al corte de junio de 2026». */
 		countedAt() {
-			return `${this.cifra.ruta?.numerador?.fuente === 'rem-p' ? 'al corte de' : 'a'} ${monthName(this.counted.mes)}`
+			return `${this.meta.historico.at(-1)?.ruta?.numerador?.fuente === 'rem-p' ? 'al corte de' : 'a'} ${monthName(this.counted.mes)}`
 		},
 		why() {
 			if (this.judged) {

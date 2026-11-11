@@ -3,15 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import axios from '@nextcloud/axios'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
-import { draw, formatValue } from '../charts.js'
 import { mdiAlertCircleOutline, mdiCheck, mdiClockOutline, mdiClose, mdiMinusCircleOutline } from '../icons.js'
 import Resumen from './Resumen.vue'
 
-// jsdom has no canvas: only Chart.js's own drawing is replaced (Visualization.test.js).
-vi.mock('../charts.js', async (importOriginal) => ({
-	...(await importOriginal()),
-	draw: vi.fn(() => ({ destroy: vi.fn() })),
-}))
 vi.mock('@nextcloud/axios', () => ({ default: { get: vi.fn() } }))
 vi.mock('@nextcloud/router', () => ({ generateOcsUrl: (url) => `/ocs/v2.php${url}` }))
 
@@ -70,12 +64,11 @@ const figure = (wrapper, codigo) => card(wrapper, codigo).find('.estadistica-met
 const tiles = (wrapper) => wrapper.find('[role="group"]').findAll('button')
 const tile = (wrapper, label) => tiles(wrapper).find((button) => button.text().endsWith(label))
 
-/** Opens a card's histórico from its title. */
-const expand = (wrapper, codigo) => card(wrapper, codigo).find('h3 button').trigger('click')
+/** The card's title, which opens its detail on Evolución. */
+const title = (wrapper, codigo) => card(wrapper, codigo).find('h3 button')
 
 beforeEach(() => {
 	axios.get.mockReset()
-	draw.mockClear()
 })
 
 describe('Resumen — the newest metas, one card each (docs/adr/0009, #85)', () => {
@@ -315,76 +308,6 @@ const withHistorico = () => {
 	return resumen
 }
 
-describe('Resumen — each card\'s histórico, opened from its title (docs/adr/0009)', () => {
-	it('opens from the title, then draws one line per year with figures, the current year emphasised, and the meta as a line', async () => {
-		const wrapper = await shown(ok(withHistorico()))
-
-		const title = card(wrapper, 'I').find('h3 button')
-		expect(title.text()).toBe('Recuperación del desarrollo psicomotor')
-		expect(title.attributes('aria-expanded')).toBe('false')
-		expect(draw).not.toHaveBeenCalled()
-		await expand(wrapper, 'I')
-		await flushPromises()
-		expect(title.attributes('aria-expanded')).toBe('true')
-		expect(wrapper.find(`[id="${title.attributes('aria-controls')}"]`).find('table').exists()).toBe(true)
-		expect(draw).toHaveBeenCalledTimes(1)
-		const { data } = draw.mock.calls[0][1]
-		expect(data.labels).toEqual(['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'])
-		expect(data.datasets.map((dataset) => dataset.label)).toEqual(['2025', '2026 (más reciente)', 'Meta comprometida (50 %)'])
-		const [past, current, metaLine] = data.datasets
-		expect(current.borderWidth).toBeGreaterThan(past.borderWidth)
-		expect(metaLine.data).toEqual(Array(12).fill(50))
-		wrapper.unmount()
-	})
-
-	it('leaves sin informar as a gap in the chart and says so in the table, never 0', async () => {
-		const wrapper = await shown(ok(withHistorico()))
-		await expand(wrapper, 'I')
-		await flushPromises()
-
-		const current = draw.mock.calls[0][1].data.datasets[1]
-		expect(current.data.slice(0, 4)).toEqual([25, null, 50, 58.33])
-		expect(current.data.slice(10)).toEqual([null, null])
-		const february = card(wrapper, 'I').findAll('tbody tr')[1].findAll('td').map((cell) => cell.text())
-		expect(february).toEqual(['20 % (2 de 10)', 'sin informar'])
-		wrapper.unmount()
-	})
-
-	it('puts every figure the chart draws in the table under it, with each year\'s cierre', async () => {
-		const wrapper = await shown(ok(withHistorico()))
-		await expand(wrapper, 'I')
-		await flushPromises()
-
-		const table = card(wrapper, 'I').find('table')
-		expect(table.findAll('thead th').map((cell) => cell.text())).toEqual(['Mes', '2025', '2026 (más reciente)'])
-		const { datasets } = draw.mock.calls[0][1].data
-		const drawn = withHistorico().metas[0].historico.slice(1)
-		const rows = table.findAll('tbody tr')
-		expect(rows).toHaveLength(12)
-		rows.forEach((row, month) => {
-			row.findAll('td').forEach((cell, line) => {
-				const value = datasets[line].data[month]
-				const empty = month < drawn[line].meses.length ? 'sin informar' : '—'
-				expect(cell.text().startsWith(value === null ? empty : `${formatValue(value)} %`)).toBe(true)
-			})
-		})
-		expect(table.findAll('tfoot td').map((cell) => cell.text())).toEqual(['120 %', '—'])
-		expect(card(wrapper, 'I').text()).toContain('2024: sin datos comparables.')
-		wrapper.unmount()
-	})
-
-	it('draws nothing for a meta with no histórico, whose title opens nothing', async () => {
-		const wrapper = await shown()
-
-		for (const codigo of ['V', 'IV.A', 'VIII']) {
-			expect(card(wrapper, codigo).find('h3 button').exists(), `Meta ${codigo}`).toBe(false)
-		}
-		expect(draw).not.toHaveBeenCalled()
-		expect(wrapper.find('canvas').exists()).toBe(false)
-		wrapper.unmount()
-	})
-})
-
 /** A código as that year's diccionario labels it (QueryExecutor's Etiqueta). */
 const etiqueta = (codigo, prestacion, fields) => ({
 	codigo, hoja: 'A03', seccion: 'SECCIÓN C: EVALUACIÓN DEL DESARROLLO PSICOMOTOR', prestacion,
@@ -423,45 +346,54 @@ const withSources = () => {
 	return resumen
 }
 
-describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
+describe('Resumen — a meta\'s detail beside the cards: Evolución and Origen (#86)', () => {
 	beforeEach(() => {
 		// NcContent's root, where the app sidebar sits beside the content.
 		document.body.innerHTML = '<div id="content-vue"><div id="resumen"></div></div>'
 	})
 
-	const mounted = () => shown(ok(withSources()), { attachTo: '#resumen' })
+	const mounted = (resumen = withSources()) => shown(ok(resumen), { attachTo: '#resumen' })
 
 	const panel = (wrapper) => wrapper.findComponent(NcAppSidebar)
+
+	/** The panel's selected tab, by its name, and the content it shows. */
+	const selected = (wrapper) => panel(wrapper).find('[role="tab"][aria-selected="true"]').text()
+	const showing = (wrapper) => panel(wrapper).findAll('[role="tabpanel"]').find((tab) => tab.attributes('aria-hidden') !== 'true')
 
 	const opened = async (wrapper, button) => {
 		button.element.focus()
 		await button.trigger('click')
 		// The panel is its own chunk, fetched on the first click.
 		await vi.waitFor(() => expect(panel(wrapper).exists()).toBe(true))
+		await flushPromises()
 		return panel(wrapper)
 	}
 
-	it('opens from a card\'s figure, in the app sidebar, for that figure\'s month', async () => {
+	it('opens on Evolución from a card\'s title, in the app sidebar beside the content, with the figure and the status', async () => {
 		const wrapper = await mounted()
 
-		const sidebar = await opened(wrapper, figure(wrapper, 'I'))
+		const sidebar = await opened(wrapper, title(wrapper, 'I'))
 		expect(sidebar.element.parentElement.id).toBe('content-vue')
 		expect(sidebar.props('name')).toBe('Meta I 2026')
-		expect(sidebar.text()).toContain('Cifra de octubre de 2026')
-		expect((await opened(wrapper, figure(wrapper, 'V'))).text()).toContain('Cifra de junio de 2026')
-		expect((await opened(wrapper, figure(wrapper, 'VIII'))).text()).toContain('Lo informa quien administra Estadística: no se cuenta en el REM.')
+		expect(selected(wrapper)).toBe('Evolución')
+		const text = showing(wrapper).text().replace(/\s+/g, ' ')
+		expect(text).toContain('58,3 % 7 de 12')
+		expect(text).toContain('Cumple')
+		expect(showing(wrapper).find('svg[role="img"]').attributes('aria-label')).toBe('Meta I por mes y año; sus valores están en la tabla.')
 		wrapper.unmount()
 	})
 
-	it('shows the stored ruta: hoja, sección, códigos and columnas as that year\'s diccionario labels them, the periodo, what is added and taken away, the origen with its date and the referencia', async () => {
+	it('opens on Origen from a card\'s figure: the newest year\'s ruta as its diccionario labels it, the origen with its date and the referencia', async () => {
 		const wrapper = await mounted()
 
-		const text = (await opened(wrapper, figure(wrapper, 'I'))).text()
+		await opened(wrapper, figure(wrapper, 'I'))
+		expect(selected(wrapper)).toBe('Origen')
+		const text = showing(wrapper).text()
 		expect(text).toContain('Origen: datos públicos DEIS, con cifras hasta noviembre de 2026.')
 		expect(text).toContain('REM Serie A, de enero de 2026 a diciembre de 2026.')
 		expect(text).toContain('REM Serie A, de octubre de 2025 a septiembre de 2026.')
-		expect(text).toContain('MINSAL, Orientaciones Técnicas Metas Sanitarias 2026, Anexo 3.')
-		const codigos = panel(wrapper).findAll('.estadistica-fuente__codigo').map((codigo) => codigo.text())
+		expect(text).toContain('Referencia: MINSAL, Orientaciones Técnicas Metas Sanitarias 2026, Anexo 3.')
+		const codigos = showing(wrapper).findAll('.estadistica-route__codigo').map((codigo) => codigo.text())
 		expect(codigos).toHaveLength(5)
 		expect(codigos[0]).toContain('02010420 Recuperados')
 		expect(codigos[0]).toContain('Hoja A03, SECCIÓN C: EVALUACIÓN DEL DESARROLLO PSICOMOTOR')
@@ -471,77 +403,120 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 		expect(codigos[3]).toContain('col10: 18 a 23 meses')
 		expect(codigos[3]).not.toContain('col08')
 		expect(codigos[4]).toContain('Hoja A05, SECCIÓN B: EGRESOS (etiqueta de 2027)')
-		const signs = panel(wrapper).findAll('.estadistica-fuente__signo').map((sign) => sign.text())
-		expect(signs).toEqual(['Suma:', 'Suma:', 'Resta:'])
+		expect(showing(wrapper).findAll('p').map((line) => line.text()).filter((line) => line.endsWith(':'))).toEqual(['Suma:', 'Suma:', 'Resta:'])
+
+		await opened(wrapper, figure(wrapper, 'V'))
+		expect(showing(wrapper).text()).toContain('REM Serie P, de enero de 2026 a diciembre de 2026.')
+		expect(showing(wrapper).text(), 'a denominador not counted in the REM').toContain('Población inscrita validada (FONASA).')
+		await opened(wrapper, figure(wrapper, 'VIII'))
+		expect(showing(wrapper).text()).toContain('Lo informa quien administra Estadística: no se cuenta en el REM.')
 		wrapper.unmount()
 	})
 
-	it('says a month a planilla covers came from it, with the day its file was saved (docs/adr/0010)', async () => {
+	it('says a figure a planilla covers came from it, with the day its file was saved (docs/adr/0010)', async () => {
 		const resumen = withSources()
 		Object.assign(resumen.metas[0], { origen: 'planilla del establecimiento', fecha_corte: '2026-11-09' })
-		const wrapper = await shown(ok(resumen), { attachTo: '#resumen' })
+		const wrapper = await mounted(resumen)
 
-		expect((await opened(wrapper, figure(wrapper, 'I'))).text()).toContain('Origen: planilla del establecimiento, guardada el 9 de noviembre de 2026.')
+		await opened(wrapper, figure(wrapper, 'I'))
+		expect(showing(wrapper).text()).toContain('Origen: planilla del establecimiento, guardada el 9 de noviembre de 2026.')
 		wrapper.unmount()
 	})
 
-	it('opens from each figure of the table, for its own month, with that year\'s ruta and origen', async () => {
+	it('charts one line per comparable year and the target as a labelled threshold, and says why a year does not compare', async () => {
 		const wrapper = await mounted()
-		await expand(wrapper, 'I')
 
-		const cells = card(wrapper, 'I').findAll('tbody td')
-		expect(cells.filter((cell) => cell.find('button').exists())).toHaveLength(12 + 9)
-		expect(cells.find((cell) => cell.text() === 'sin informar').find('button').exists()).toBe(false)
-		const march2025 = card(wrapper, 'I').findAll('tbody tr')[2].findAll('td')[0]
-		const text = (await opened(wrapper, march2025.find('button'))).text()
-		expect(text).toContain('Cifra de marzo de 2025')
-		expect(text).toContain('Origen: datos públicos DEIS, con cifras hasta diciembre de 2025.')
-		expect(text).toContain('REM Serie A, de octubre de 2024 a septiembre de 2025.')
-		expect(text).toContain('02010420 RECUPERADOS')
+		await opened(wrapper, title(wrapper, 'I'))
+		const chart = showing(wrapper).find('figure')
+		expect(chart.findAll('li').map((key) => key.text())).toEqual(['2025', '2026 (más reciente)', 'Meta comprometida (50 %)'])
+		expect(chart.findAll('svg[role="img"] text').map((label) => label.text())).toContain('Meta comprometida 50 %')
+		expect(showing(wrapper).text()).toContain('2024: sin datos comparables.')
 		wrapper.unmount()
 	})
 
-	it('opens from a year\'s cierre, for its December with that year\'s ruta', async () => {
+	it('is reached by keyboard: focus reads the last month above the plot, and the arrow keys move and announce one month at a time', async () => {
 		const wrapper = await mounted()
-		await expand(wrapper, 'I')
+		await opened(wrapper, title(wrapper, 'I'))
 
-		const [cierre2025, cierre2026] = card(wrapper, 'I').findAll('tfoot td')
-		expect(cierre2026.find('button').exists(), 'a year not over has no cierre').toBe(false)
-		const text = (await opened(wrapper, cierre2025.find('button'))).text()
-		expect(text).toContain('Cifra de diciembre de 2025')
-		expect(text).toContain('Origen: datos públicos DEIS, con cifras hasta diciembre de 2025.')
-		expect(text).toContain('02010420 RECUPERADOS')
+		const plot = showing(wrapper).find('svg[role="img"]')
+		const readout = showing(wrapper).find('[aria-live="polite"]')
+		const said = () => readout.text().replace(/\s+/g, ' ')
+		expect(plot.attributes('tabindex')).toBe('0')
+		await plot.trigger('focus')
+		expect(said()).toBe('diciembre: 120 % 2025 · 12 de 10 — 2026 (más reciente) 50 % Meta comprometida')
+		await plot.trigger('keydown', { key: 'ArrowRight' })
+		expect(said(), 'the last month is the last stop').toMatch(/^diciembre:/)
+		for (let i = 0; i < 10; i++) {
+			await plot.trigger('keydown', { key: 'ArrowLeft' })
+		}
+		expect(said(), 'sin informar is a gap, never 0').toBe('febrero: 20 % 2025 · 2 de 10 — 2026 (más reciente) 50 % Meta comprometida')
+		await plot.trigger('keydown', { key: 'ArrowLeft' })
+		await plot.trigger('keydown', { key: 'ArrowLeft' })
+		expect(said()).toBe('enero: 10 % 2025 · 1 de 10 25 % 2026 (más reciente) · 1 de 4 50 % Meta comprometida')
+		await plot.trigger('blur')
+		expect(said()).toBe('Pase el cursor sobre el gráfico, o enfóquelo y use las flechas, para leer un mes.')
 		wrapper.unmount()
 	})
 
-	it('says when a denominador is not counted in the REM', async () => {
+	it('holds every charted value in its table twin, month by year with each cell\'s «N de D», and each year\'s cierre', async () => {
 		const wrapper = await mounted()
+		await opened(wrapper, title(wrapper, 'I'))
 
-		const text = (await opened(wrapper, figure(wrapper, 'V'))).text()
-		expect(text).toContain('REM Serie P, de enero de 2026 a diciembre de 2026.')
-		expect(text).toContain('Población inscrita validada (FONASA).')
-		wrapper.unmount()
-	})
+		const table = showing(wrapper).find('table')
+		expect(table.findAll('thead th').map((cell) => cell.text())).toEqual(['Mes', '2025', '2026'])
+		const rows = table.findAll('tbody tr')
+		expect(rows.map((row) => row.find('th').text())).toEqual(['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'])
+		expect(rows[1].findAll('td').map((cell) => cell.text())).toEqual(['20 % (2 de 10)', 'sin informar'])
+		expect(rows[11].findAll('td').map((cell) => cell.text())).toEqual(['120 % (12 de 10)', '—'])
+		expect(table.findAll('tfoot td').map((cell) => cell.text())).toEqual(['120 %', '—'])
 
-	it('is reached by keyboard, closes with Escape and gives the focus back to the figure, on the card, in the table and at a cierre', async () => {
-		const wrapper = await mounted()
-		await expand(wrapper, 'I')
-
-		const table = card(wrapper, 'I').findAll('tbody tr')[2].findAll('td')[0].find('button')
-		const cierre = card(wrapper, 'I').findAll('tfoot td')[0].find('button')
-		const first = await opened(wrapper, figure(wrapper, 'V'))
-		for (const [button, month] of [[figure(wrapper, 'I'), 'octubre de 2026'], [table, 'marzo de 2025'], [cierre, 'diciembre de 2025']]) {
-			expect(button.element.tagName).toBe('BUTTON')
-			expect((await opened(wrapper, button)).text()).toContain(`Cifra de ${month}`)
-			expect(first.exists(), 'each figure opens a panel of its own').toBe(false)
-			expect(panel(wrapper).element.contains(document.activeElement), 'the focus moves into the panel').toBe(true)
-			await panel(wrapper).find('aside').trigger('keydown', { key: 'Escape' })
-			await flushPromises()
-
-			expect(panel(wrapper).exists(), `Escape closes the ${month} panel`).toBe(false)
-			expect(document.activeElement, `the focus is back on the ${month} figure`).toBe(button.element)
+		// Every month the chart reads, from the last to the first: each line's value is its year's cell.
+		const plot = showing(wrapper).find('svg[role="img"]')
+		await plot.trigger('focus')
+		for (let month = 11; month >= 0; month--) {
+			const charted = showing(wrapper).findAll('[aria-live="polite"] span strong').map((value) => value.text()).slice(0, 2)
+			const cells = rows[month].findAll('td').map((cell) => cell.text())
+			charted.forEach((value, line) => {
+				expect(value === '—' ? ['sin informar', '—'] : [value], `${rows[month].find('th').text()}, line ${line}`).toContain(value === '—' ? cells[line] : cells[line].split(' (')[0])
+			})
+			await plot.trigger('keydown', { key: 'ArrowLeft' })
 		}
 		wrapper.unmount()
 	})
-})
 
+	it('closes with Escape or its close button and gives the focus back to the title or the figure that opened it, each opening a panel of its own', async () => {
+		const wrapper = await mounted()
+
+		const first = await opened(wrapper, figure(wrapper, 'V'))
+		for (const [button, close] of [[title(wrapper, 'I'), 'Escape'], [figure(wrapper, 'I'), 'button'], [title(wrapper, 'IV.A'), 'button']]) {
+			expect(button.element.tagName).toBe('BUTTON')
+			await opened(wrapper, button)
+			expect(first.exists(), 'each opening opens a panel of its own').toBe(false)
+			expect(panel(wrapper).element.contains(document.activeElement), 'the focus moves into the panel').toBe(true)
+			if (close === 'Escape') {
+				await panel(wrapper).find('aside').trigger('keydown', { key: 'Escape' })
+			} else {
+				await panel(wrapper).find('.app-sidebar__close').trigger('click')
+			}
+			await flushPromises()
+
+			expect(panel(wrapper).exists(), `${close} closes the panel`).toBe(false)
+			expect(document.activeElement, `the focus is back on «${button.text()}»`).toBe(button.element)
+		}
+		wrapper.unmount()
+	})
+
+	it('opens from the title of every card, a meta with no histórico on «Todavía no hay cifras», its Origen saying the ruta waits', async () => {
+		const wrapper = await mounted()
+
+		expect(wrapper.findAll('article h3 button')).toHaveLength(7)
+		await opened(wrapper, title(wrapper, 'IV.A'))
+		expect(showing(wrapper).text()).toContain('Todavía no hay cifras')
+		expect(showing(wrapper).text()).toContain('Esperando ruta oficial')
+		expect(showing(wrapper).find('svg[role="img"]').exists()).toBe(false)
+		await panel(wrapper).find('[role="tab"]:not([aria-selected="true"])').trigger('click')
+		expect(selected(wrapper)).toBe('Origen')
+		expect(showing(wrapper).text()).toContain('La ruta REM de esta meta se mostrará aquí cuando MINSAL la confirme. Estadística no la deduce.')
+		wrapper.unmount()
+	})
+})
