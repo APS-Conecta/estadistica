@@ -174,7 +174,7 @@ class ApiController extends OCSController {
 	#[AiOperation('read')]
 	public function consultas(array $consulta, ?string $establecimiento = null): DataResponse {
 		try {
-			$local = $establecimiento === null ? $this->establishment->get() : Establishment::of($establecimiento);
+			$local = $this->local($establecimiento);
 
 			return new DataResponse($this->executor->answer(QuerySpec::from($consulta, $this->window->currentYear()), $local));
 		} catch (RefusedException $e) {
@@ -394,7 +394,7 @@ class ApiController extends OCSController {
 
 	/**
 	 * The Metas Sanitarias of a year, month by month (a12). For each meta:
-	 * this install's establishment's numerador, denominador and %, and the
+	 * the establishment's numerador, denominador and %, and the
 	 * gaps to its meta comprometida and to the meta nacional (in points); beside
 	 * them, the country's % and the peer group's, wherever the denominator is
 	 * nationally computable: REM, or FONASA's inscritos when a corte serves the
@@ -409,9 +409,10 @@ class ApiController extends OCSController {
 	 * denominador are the meta's routes as its seed file writes them, with the
 	 * REM dictionaries they cite (docs/adr/0008).
 	 *
-	 * The local series is this install's establishment (app config, suite
-	 * ADR-0009). fecha_corte_local is its own last month with a written
-	 * number in each serie (YYYY-MM by fuente id; null without an
+	 * The local series is this install's establishment (app config), unless
+	 * the request names another DEIS code (suite ADR-0009), whose metas read
+	 * only its own commitments. fecha_corte_local is its own last month with
+	 * a written number in each serie (YYYY-MM by fuente id; null without an
 	 * establishment): a Serie A month past it has no local figure, while the
 	 * country's and the peers' end at the fuente's fecha de corte. The peers are the register's establishments that share the
 	 * chosen traits with it; aviso says why there are none when some were
@@ -422,10 +423,11 @@ class ApiController extends OCSController {
 	 *
 	 * @param ?int $anio the metas' year; the newest with metas up to the current year when omitted
 	 * @param string $pares what the peers share with this establishment, comma-separated: tipo, dependencia, nivel, servicio, region or comuna; empty for no peers
+	 * @param ?string $establecimiento the six-digit DEIS code of the local series; this install's when omitted
 	 * @return DataResponse<Http::STATUS_OK, array{anios: list<int>, anio: int, nombre: string, referencia: string, nota: ?string, diccionarios: array<string, string>, version: int, establecimiento: ?string, pares: ?array<string, string>, aviso: ?string, fuentes: list<array{id: string, nombre: string, origen: string, fecha_corte: ?string, filas: int, estado: string, anios: list<array{anio: int, fecha_corte: ?string, filas: int, estado: string, sin_descripcion: int, etiquetas_de: ?int}>}>, fecha_corte_local: ?array<string, ?string>, indicadores: list<array{codigo: string, nombre: string, indicador: string, meta_nacional: float, meta_comprometida: ?float, peso: ?float, nota: ?string, numerador: ?array<string, mixed>, denominador: ?array<string, mixed>, manual: bool, cumplimiento: ?float, denominador_comprometido: ?float, poblacion: ?array{comprometida: bool, corte: ?string, factor: ?float, falta_oficial: bool}, meses: list<array{mes: string, numerador: ?float, denominador: ?float, porcentaje: ?float, brecha_comprometida: ?float, brecha_nacional: ?float, nacional: ?float, pares: ?float}>}>}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_UNPROCESSABLE_ENTITY, array{message: string}, array{}>|DataResponse<Http::STATUS_NOT_FOUND, list<empty>, array{}>
 	 *
 	 * 200: The year's metas, month by month
-	 * 400: The year cannot hold metas, or a peer trait is not one — {message: the Spanish sentence}
+	 * 400: The year cannot hold metas, or a peer trait or the DEIS code is not one — {message: the Spanish sentence}
 	 * 404: No metas are loaded for that year
 	 * 422: Understood and refused, as a consulta past its time — {message: the Spanish sentence}
 	 */
@@ -433,7 +435,7 @@ class ApiController extends OCSController {
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/indicadores')]
 	#[AiOperation('read')]
-	public function indicadores(?int $anio = null, string $pares = 'tipo'): DataResponse {
+	public function indicadores(?int $anio = null, string $pares = 'tipo', ?string $establecimiento = null): DataResponse {
 		$current = $this->window->currentYear();
 		$traits = array_values(array_unique(array_filter(array_map('trim', explode(',', $pares)), static fn (string $trait): bool => $trait !== '')));
 		// 400, not 422: the request itself is unintelligible (fuente()'s rule).
@@ -443,9 +445,14 @@ class ApiController extends OCSController {
 		if (array_diff($traits, QuerySpec::TRAITS) !== []) {
 			return new DataResponse(['message' => sprintf('Los pares se eligen por %s.', implode(', ', QuerySpec::TRAITS))], Http::STATUS_BAD_REQUEST);
 		}
+		try {
+			$local = $this->local($establecimiento);
+		} catch (RefusedException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		}
 
 		try {
-			return new DataResponse($this->goals->evaluate($anio, $this->establishment->get(), $traits));
+			return new DataResponse($this->goals->evaluate($anio, $local, $traits));
 		} catch (DoesNotExistException) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		} catch (RefusedException $e) {
@@ -534,7 +541,7 @@ class ApiController extends OCSController {
 	#[AiOperation('read')]
 	public function resumen(?string $establecimiento = null): DataResponse {
 		try {
-			$local = $establecimiento === null ? $this->establishment->get() : Establishment::of($establecimiento);
+			$local = $this->local($establecimiento);
 		} catch (RefusedException $e) {
 			// 400, not 422: the request itself is unintelligible (fuente()'s rule).
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
@@ -547,6 +554,16 @@ class ApiController extends OCSController {
 		} catch (RefusedException $e) {
 			return $this->refuse($e->getMessage());
 		}
+	}
+
+	/**
+	 * The local series' establishment: this install's, unless the request
+	 * names another DEIS code (suite ADR-0009).
+	 *
+	 * @throws RefusedException the code is not one
+	 */
+	private function local(?string $establecimiento): Establishment {
+		return $establecimiento === null ? $this->establishment->get() : Establishment::of($establecimiento);
 	}
 
 	/**

@@ -255,6 +255,25 @@ final class ApiControllerTest extends TestCase {
 		self::assertSame('Los pares se eligen por tipo, dependencia, nivel, servicio, region, comuna.', $trait->getData()['message']);
 	}
 
+	/** #76, suite ADR-0009: a named DEIS code is the metas' local series instead. */
+	public function testTheMetasOfANamedDeisCode(): void {
+		$this->config->expects(self::never())->method('get');
+		$this->goals->expects(self::once())->method('evaluate')
+			->with(2026, self::callback(static fn (Establishment $local): bool => $local->deisCode === '900002'), ['tipo'])
+			->willReturn(['establecimiento' => '900002']);
+
+		self::assertSame(['establecimiento' => '900002'], $this->controller->indicadores(2026, 'tipo', '900002')->getData());
+	}
+
+	public function testTheMetasOfACodeThatIsNotOneAreA400InSpanish(): void {
+		$this->goals->expects(self::never())->method('evaluate');
+
+		$response = $this->controller->indicadores(2026, 'tipo', '9001');
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertSame('«9001» no es un código DEIS de establecimiento: se esperan seis dígitos.', $response->getData()['message']);
+	}
+
 	public function testAYearWithoutMetasIs404AndARefusalIs422(): void {
 		$this->config->method('get')->willReturn(Establishment::none());
 		$this->goals->method('evaluate')->willReturnOnConsecutiveCalls(

@@ -319,7 +319,7 @@ final class ApiContractTest extends TestCase {
 
 	/** The query a consumer sends is exactly the controller's parameters. */
 	public function testTheIndicadoresQueryIsTheControllersParameters(): void {
-		self::assertSame(['anio', 'pares'], self::query(self::INDICADORES));
+		self::assertSame(['anio', 'pares', 'establecimiento'], self::query(self::INDICADORES));
 		self::assertSame(self::parameters('indicadores'), self::query(self::INDICADORES));
 	}
 
