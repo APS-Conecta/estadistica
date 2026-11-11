@@ -105,6 +105,19 @@ describe('Visualization — every series drawn by the app, named, and in its tab
 		wrapper.unmount()
 	})
 
+	it('emphasises nothing when the answer has no establishment of ours, and still tells the country from the peers', () => {
+		const wrapper = shown({ answer: answer({ series: { nacional: ALL.nacional, pares: ALL.pares } }) })
+
+		const chart = wrapper.find('.estadistica-chart')
+		expect(chart.findAll('.estadistica-chart__line--emphasis'), 'no primary without ours').toHaveLength(0)
+		const columns = chart.findAll('[role="img"][tabindex="0"]')
+		expect(columns.map((column) => column.classes('estadistica-chart__line--context')), 'every column in the context tone').toEqual([true, true, true])
+		const hollow = (name) => columns.filter((column) => column.attributes('aria-label').includes(name)).map((column) => column.classes('estadistica-chart__column--hollow'))
+		expect(hollow('Pares'), 'the peers hollow').toEqual([true])
+		expect(hollow('Nacional'), 'the country solid').toEqual([false, false])
+		wrapper.unmount()
+	})
+
 	it('draws a line per series with a dot per value, read by keyboard above the plot', async () => {
 		const wrapper = shown({ answer: answer({ series: ALL }), tipo: 'linea' })
 
