@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `GET indicadores` takes an optional `establecimiento`, the six-digit DEIS code of the local series, as `GET resumen`
+  and `POST consultas` do. Another establishment's metas read only its own commitments.
+
 ### Changed
 
 - The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool

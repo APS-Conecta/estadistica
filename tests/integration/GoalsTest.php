@@ -612,6 +612,28 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame(['2099', '900009'], [(string)$unknown['anio'], $unknown['establecimiento']]);
 	}
 
+	/**
+	 * #76: GET indicadores for another DEIS code. 900002's Meta I is its own
+	 * January, 10 de 20 = 50 %, and its local series ends at its own last
+	 * months: January in REM-A, June in REM-P. Its peers share its Servicio
+	 * Dos, which 900001 does not, so they are 900002 alone. 900001's typed
+	 * meta comprometida and denominador comprometido stay 900001's: 900002
+	 * has none, so its Meta C has no denominador.
+	 */
+	public function testTheMetasOfAnotherEstablishment(): void {
+		$this->commit([['codigo' => 'I', 'meta' => 40], ['codigo' => 'C', 'meta' => 30, 'denominador' => 8]]);
+
+		$other = $this->api()->indicadores(2099, 'servicio', '900002')->getData();
+
+		self::assertSame(['900002', ['servicio' => 'Servicio de Salud Dos'], ['rem-a' => '2099-01', 'rem-p' => '2099-06']],
+			[$other['establecimiento'], $other['pares'], $other['fecha_corte_local']]);
+		$metas = array_column($other['indicadores'], null, 'codigo');
+		$january = $metas['I']['meses'][0];
+		self::assertSame([null, 10.0, 20.0, 50.0, null, 50.0], [$metas['I']['meta_comprometida'], $january['numerador'],
+			$january['denominador'], $january['porcentaje'], $january['brecha_comprometida'], $january['pares']]);
+		self::assertSame([null, null, null], [$metas['C']['meta_comprometida'], $metas['C']['denominador_comprometido'], $metas['C']['meses'][0]['denominador']]);
+	}
+
 	/** Without an establishment there is no local series and nothing to commit. */
 	public function testAnInstallWithNoEstablishment(): void {
 		$metas = array_column($this->evaluator()->evaluate(2099, Establishment::none(), ['tipo'])['indicadores'], null, 'codigo');
