@@ -8,12 +8,13 @@ Estadística guarda las cifras REM de todos los establecimientos del país, etiq
 
 **Guarda solo conteos agregados que publican el DEIS y FONASA, o que el establecimiento escribe en su propia planilla REM, y no toca datos de pacientes.** No llena ninguna planilla REM, no la valida y no lee las series BS, BM ni D. Nada en ella decide cuál es el establecimiento «propio»: es configuración de la instancia ([ADR-0009 de la suite](https://github.com/APS-Conecta/instalador/blob/main/docs/adr/0009-the-establishment-is-instance-configuration.md)).
 
-Tiene cuatro vistas, más una sección de administración:
+Tiene cinco vistas, más una sección de administración:
 
+- **Resumen**: la vista que abre primero, con las metas de la resolución de metas más reciente para el establecimiento.
+- **Metas Sanitarias**: las Metas I a VIII del año, una tarjeta por meta, mes a mes.
 - **Consultar**: una consulta armada en cuatro pasos (Datos, Filtrar, Resumir, Visualizar) sobre las series REM A y P de todos los establecimientos y meses de la ventana de años, con el centro junto al país y a un grupo de pares.
 - **Preguntas**: consultas guardadas, visibles para todo el personal.
 - **Tableros**: preguntas guardadas dispuestas como tarjetas; cada tarjeta hace su propia consulta.
-- **Metas Sanitarias**: las Metas I a VIII del año, una tarjeta por meta, mes a mes.
 - **Administración → Estadística**: la ventana de años, el estado de cada carga, la carpeta de planillas del establecimiento y el estado de cada una, la población de FONASA, los compromisos de las metas de cada año y una puerta para los archivos que la aplicación no puede descargar. Un administrador puede delegarla a cualquier grupo.
 
 ## Documentación

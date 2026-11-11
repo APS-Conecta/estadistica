@@ -100,7 +100,7 @@ describe('App', () => {
 		const card = wrapper.findComponent({ name: 'NcNoteCard' })
 		expect(card.exists()).toBe(true)
 		expect(card.props('type')).toBe('error')
-		expect(card.text()).toContain('No se pudo cargar esta sección.')
+		expect(card.text()).toContain('No se pudo cargar esta vista.')
 		expect(wrapper.findComponent({ name: 'EstadisticaDashboard' }).exists()).toBe(false)
 	})
 })

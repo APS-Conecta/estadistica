@@ -81,7 +81,7 @@ import { mdiBookmarkOutline, mdiBullseyeArrow, mdiChartBox, mdiCogOutline, mdiMa
 const TabLoadFailed = {
 	name: 'TabLoadFailed',
 	inheritAttrs: false,
-	render: () => h(NcNoteCard, { type: 'error' }, () => 'No se pudo cargar esta sección. Recargue la página; si persiste, avise al administrador.'),
+	render: () => h(NcNoteCard, { type: 'error' }, () => 'No se pudo cargar esta vista. Recargue la página; si persiste, avise al administrador.'),
 }
 
 // Each tab is its own chunk (js/estadistica-<view>.js), fetched the first time
