@@ -75,7 +75,7 @@ Las pruebas y compuertas:
 - `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
 - `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
 - `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, en Chromium (Playwright para Python en el host). Tampoco la ejecuta CI.
-- `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada pestaña (no se confirman; CI y el flujo de release ejecutan lo mismo).
+- `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada sección (no se confirman; CI y el flujo de release ejecutan lo mismo).
 
 La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío; el flujo de release (`.github/workflows/release.yml`) compila y empaqueta en cada PR.
 

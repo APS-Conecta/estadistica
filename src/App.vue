@@ -1,20 +1,37 @@
 <template>
 	<NcContent app-name="estadistica">
-		<NcAppContent>
-			<!-- Tabs, not NcAppNavigation (owner, Slice 7): the sidebar and its
-			     items weighed 176 KB of a 700 KB bundle for three links.
-			     ponytail: the view lives in the page, so a reload returns to
-			     the Resumen and a tablero cannot be linked; hash links
-			     (#/tableros/<id>) are the upgrade when one must be sent. -->
-			<nav class="estadistica-app__tabs" aria-label="Estadística">
-				<NcButton v-for="item in VIEWS"
+		<!-- ponytail: the view lives in the page, so a reload returns to the Resumen
+		     and a tablero cannot be linked; hash links (#/tableros/<id>) are the
+		     upgrade when one must be sent. -->
+		<NcAppNavigation aria-label="Estadística">
+			<template #list>
+				<NcAppNavigationItem v-for="item in VIEWS"
 					:key="item.id"
-					:variant="view === item.id ? 'primary' : 'tertiary'"
-					:aria-current="view === item.id ? 'page' : undefined"
-					@click="view = item.id">
-					{{ item.nombre }}
-				</NcButton>
-			</nav>
+					:name="item.nombre"
+					:active="view === item.id"
+					@click.prevent="view = item.id">
+					<template #icon>
+						<NcIconSvgWrapper :path="item.icon" />
+					</template>
+				</NcAppNavigationItem>
+			</template>
+			<!-- The admin section's page, offered to an administrator only (#84); a
+			     delegate (docs/adr/0003) reaches it from Nextcloud's own settings. -->
+			<template v-if="settingsUrl" #footer>
+				<NcAppNavigationList>
+					<NcAppNavigationItem name="Ajustes de Estadística" :href="settingsUrl">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiCogOutline" />
+						</template>
+					</NcAppNavigationItem>
+				</NcAppNavigationList>
+			</template>
+		</NcAppNavigation>
+
+		<NcAppContent :page-heading="current.nombre">
+			<header class="estadistica-heading">
+				<h2>{{ current.nombre }}</h2>
+			</header>
 
 			<div class="estadistica-app">
 				<!-- The mount-failure card (farmacia L2-22): data() that cannot read
@@ -45,13 +62,19 @@
 </template>
 
 <script>
+import { getCurrentUser } from '@nextcloud/auth'
 import { loadState } from '@nextcloud/initial-state'
+import { generateUrl } from '@nextcloud/router'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
-import NcButton from '@nextcloud/vue/components/NcButton'
+import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
+import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
+import NcAppNavigationList from '@nextcloud/vue/components/NcAppNavigationList'
 import NcContent from '@nextcloud/vue/components/NcContent'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { defineAsyncComponent, h } from 'vue'
 import { safeError } from './api.js'
+import { mdiBookmarkOutline, mdiBullseyeArrow, mdiChartBox, mdiCogOutline, mdiMagnify, mdiViewGridOutline } from './icons.js'
 
 // A tab whose chunk cannot be fetched shows this in its place, not an empty page.
 // inheritAttrs: false — the loader's error and the tab's props stay off the card.
@@ -71,22 +94,31 @@ const SanitaryGoals = lazyTab(() => import(/* webpackChunkName: "metas" */ './co
 const QueryBuilder = lazyTab(() => import(/* webpackChunkName: "consultar" */ './components/QueryBuilder.vue'))
 const SavedQuestions = lazyTab(() => import(/* webpackChunkName: "preguntas" */ './components/Questions.vue'))
 
-/** The page's views; the first opens with the page (docs/adr/0009). */
+/** The page's views, in the navigation's order; the first opens with the page (docs/adr/0009). */
 const VIEWS = [
-	{ id: 'resumen', nombre: 'Resumen' },
-	{ id: 'consultar', nombre: 'Consultar' },
-	{ id: 'preguntas', nombre: 'Preguntas' },
-	{ id: 'tableros', nombre: 'Tableros' },
-	{ id: 'metas', nombre: 'Metas Sanitarias' },
+	{ id: 'resumen', nombre: 'Resumen', icon: mdiChartBox },
+	{ id: 'metas', nombre: 'Metas Sanitarias', icon: mdiBullseyeArrow },
+	{ id: 'consultar', nombre: 'Consultar', icon: mdiMagnify },
+	{ id: 'preguntas', nombre: 'Preguntas', icon: mdiBookmarkOutline },
+	{ id: 'tableros', nombre: 'Tableros', icon: mdiViewGridOutline },
 ]
 
 export default {
 	name: 'App',
 
-	components: { EstadisticaDashboard, EstadisticaResumen, NcAppContent, NcButton, NcContent, NcNoteCard, QueryBuilder, SanitaryGoals, SavedQuestions },
+	components: {
+		EstadisticaDashboard, EstadisticaResumen, NcAppContent, NcAppNavigation, NcAppNavigationItem, NcAppNavigationList,
+		NcContent, NcIconSvgWrapper, NcNoteCard, QueryBuilder, SanitaryGoals, SavedQuestions,
+	},
 
 	data() {
-		const shared = { VIEWS, view: VIEWS[0].id, builderOpened: false }
+		const shared = {
+			VIEWS,
+			mdiCogOutline,
+			view: VIEWS[0].id,
+			builderOpened: false,
+			settingsUrl: getCurrentUser()?.isAdmin ? generateUrl('/settings/admin/estadistica') : null,
+		}
 		try {
 			return {
 				...shared,
@@ -99,6 +131,12 @@ export default {
 		}
 	},
 
+	computed: {
+		current() {
+			return VIEWS.find((item) => item.id === this.view)
+		},
+	},
+
 	watch: {
 		view(id) {
 			this.builderOpened ||= id === 'consultar'
@@ -108,11 +146,18 @@ export default {
 </script>
 
 <style scoped>
-.estadistica-app__tabs {
+/* NcAppNavigation's toggle sits in the content's top corner, open or folded:
+   the section's title starts beside it, never under it. */
+.estadistica-heading {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 16px 24px 0;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+	margin-top: var(--app-navigation-padding);
+	padding-inline: calc(var(--default-clickable-area) + var(--default-grid-baseline) * 3) 24px;
+}
+
+.estadistica-heading h2 {
+	margin: 0;
 }
 
 .estadistica-app {
@@ -136,5 +181,41 @@ export default {
 .estadistica-field input {
 	width: min(100%, 360px);
 	margin: 0;
+}
+
+/* Every section's data table (#83): the header row stays in view while the
+   content scrolls, the caption says what the table holds, and the figures
+   line up. Header cells carry scope="col" or scope="row" in the markup. */
+.estadistica-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.estadistica-table caption {
+	caption-side: bottom;
+	padding: calc(var(--default-grid-baseline) * 2) 0;
+	color: var(--color-text-maxcontrast);
+	text-align: start;
+}
+
+.estadistica-table th,
+.estadistica-table td {
+	padding: calc(var(--default-grid-baseline) * 1.5) calc(var(--default-grid-baseline) * 2.5);
+	border-bottom: 1px solid var(--color-border);
+	text-align: end;
+	font-variant-numeric: tabular-nums;
+}
+
+.estadistica-table th:first-child,
+.estadistica-table td:first-child {
+	text-align: start;
+}
+
+.estadistica-table thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background-color: var(--color-main-background);
+	color: var(--color-text-maxcontrast);
 }
 </style>
