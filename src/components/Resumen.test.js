@@ -431,6 +431,24 @@ describe('Resumen — a meta\'s detail beside the cards: Evolución and Origen (
 		expect(chart.findAll('li').map((key) => key.text())).toEqual(['2025', '2026 (más reciente)', 'Meta comprometida (50 %)'])
 		expect(chart.findAll('svg[role="img"] text').map((label) => label.text())).toContain('Meta comprometida 50 %')
 		expect(showing(wrapper).text()).toContain('2024: sin datos comparables.')
+
+		// What is drawn: 2024 draws no line, and 2026's February, sin informar, is a gap, never a 0 (docs/adr/0009).
+		const lines = chart.find('svg[role="img"]').findAll('g').filter((group) => !group.classes('estadistica-chart__grid'))
+		expect(lines.map((line) => line.classes()), '2025 and 2026, in legend order').toEqual([['estadistica-chart__line--context'], ['estadistica-chart__line--emphasis']])
+		const [context, newest] = lines
+		expect(context.findAll('path')).toHaveLength(1)
+		// Each month's x, read off 2025's twelve dots, so the test holds at any width.
+		const months = context.findAll('circle').map((dot) => Number(dot.attributes('cx')))
+		expect(months).toHaveLength(12)
+		const paths = newest.findAll('path')
+		expect(paths, 'January alone is a dot, March to October one line').toHaveLength(1)
+		const vertices = paths[0].attributes('d').match(/[ML][^ML]+/g).map((step) => [step[0], ...step.slice(1).trim().split(' ').map(Number)])
+		expect(vertices.map(([command]) => command).join('')).toBe('MLLLLLLL')
+		vertices.forEach(([, x], k) => expect(x, `vertex ${k} at month ${k + 3}`).toBeCloseTo(months[k + 2], 1))
+		const dots = newest.findAll('circle').map((dot) => [Number(dot.attributes('cx')), Number(dot.attributes('cy'))])
+		expect(dots.map(([x]) => x), 'no dot at February, November or December').toEqual(months.filter((_, i) => ![1, 10, 11].includes(i)))
+		const [january] = dots
+		expect(vertices.some(([, x, y]) => Math.abs(x - january[0]) < 0.1 && Math.abs(y - january[1]) < 0.1), 'January is on no path').toBe(false)
 		wrapper.unmount()
 	})
 
