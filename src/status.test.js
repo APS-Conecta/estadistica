@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countByFilter, statusOf, targetNameOf, targetOf } from './status.js'
+import { countByFilter, indicadorStatus, lastPercentOf, statusOf, targetNameOf, targetOf } from './status.js'
 
 /** One of GET resumen's metas, only the fields a status and its target read; cumple as the engine serves it. */
 const meta = (fields) => ({ manual: false, meta_nacional: 90, meta_comprometida: null, estado: null, porcentaje: null, cumple: null, ...fields })
@@ -40,6 +40,43 @@ describe('statusOf — a meta of GET resumen', () => {
 	it('judges a manual meta by its cumplimiento informado, which GET resumen serves as its porcentaje', () => {
 		expect(statusOf(meta({ manual: true, meta_nacional: 100, porcentaje: 100, cumple: true })).kind).toBe('success')
 		expect(statusOf(meta({ manual: true, meta_nacional: 100, porcentaje: 80, cumple: false })).kind).toBe('error')
+	})
+})
+
+/** One of GET indicadores' indicadores, only the fields its status reads. */
+const indicador = (fields) => ({ manual: false, meta_nacional: 90, meta_comprometida: null, cumplimiento: null, poblacion: null, meses: [], ...fields })
+const meses = (...porcentajes) => porcentajes.map((porcentaje) => ({ porcentaje }))
+
+describe('indicadorStatus — a meta of GET indicadores, in the Resumen\'s words', () => {
+	it('judges its newest month with a percentage against the meta comprometida, else the meta nacional', () => {
+		const year = indicador({ meses: meses(95, 75, null) })
+		expect(lastPercentOf(year)).toBe(75)
+		expect(indicadorStatus(year)).toEqual({ kind: 'error', filter: 'no-cumple', label: 'No cumple' })
+		expect(indicadorStatus({ ...year, meta_comprometida: 70 })).toEqual({ kind: 'success', filter: 'cumple', label: 'Cumple' })
+		expect(indicadorStatus(indicador({ meses: meses(90) })).kind, 'reaching the meta cumple').toBe('success')
+	})
+
+	it('says a meta whose ages cut a FONASA band lacks its denominador oficial, as the engine does', () => {
+		const poblacion = { comprometida: false, corte: null, factor: null, falta_oficial: true }
+		expect(indicadorStatus(indicador({ poblacion, meses: meses(null) }))).toEqual({ kind: 'warning', filter: 'denominador', label: 'Falta el denominador oficial' })
+	})
+
+	it('says a meta whose ruta is not yet oficial waits for it, whatever its months carry, as the engine does', () => {
+		const waiting = { kind: 'waiting', filter: 'ruta', label: 'Esperando ruta oficial' }
+		const poblacion = { comprometida: false, corte: null, factor: null, falta_oficial: true }
+		expect(indicadorStatus(indicador({ numerador: { oficial: false }, denominador: {}, meses: meses(95) }))).toEqual(waiting)
+		expect(indicadorStatus(indicador({ numerador: {}, denominador: { oficial: false }, poblacion, meses: meses(95) }))).toEqual(waiting)
+		expect(indicadorStatus(indicador({ numerador: {}, denominador: {}, meses: meses(95) })).kind, 'a ruta with no oficial key is oficial').toBe('success')
+	})
+
+	it('never turns a year with no figure into one, and judges a manual meta by its cumplimiento informado', () => {
+		const sinInformar = { kind: 'pending', filter: 'sin', label: 'Sin informar' }
+		expect(lastPercentOf(indicador({ meses: meses(null) }))).toBeNull()
+		expect(indicadorStatus(indicador({ meses: meses(null) }))).toEqual(sinInformar)
+		expect(indicadorStatus(indicador({ meses: meses(0) })).kind, 'a written 0 is a figure').toBe('error')
+		const manual = indicador({ manual: true, meta_nacional: 100, cumplimiento: 100 })
+		expect([lastPercentOf(manual), indicadorStatus(manual).kind]).toEqual([100, 'success'])
+		expect(indicadorStatus(indicador({ manual: true }))).toEqual(sinInformar)
 	})
 })
 
