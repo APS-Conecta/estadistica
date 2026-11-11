@@ -61,6 +61,14 @@ describe('indicadorStatus — a meta of GET indicadores, in the Resumen\'s words
 		expect(indicadorStatus(indicador({ poblacion, meses: meses(null) }))).toEqual({ kind: 'warning', filter: 'denominador', label: 'Falta el denominador oficial' })
 	})
 
+	it('says a meta whose ruta is not yet oficial waits for it, whatever its months carry, as the engine does', () => {
+		const waiting = { kind: 'waiting', filter: 'ruta', label: 'Esperando ruta oficial' }
+		const poblacion = { comprometida: false, corte: null, factor: null, falta_oficial: true }
+		expect(indicadorStatus(indicador({ numerador: { oficial: false }, denominador: {}, meses: meses(95) }))).toEqual(waiting)
+		expect(indicadorStatus(indicador({ numerador: {}, denominador: { oficial: false }, poblacion, meses: meses(95) }))).toEqual(waiting)
+		expect(indicadorStatus(indicador({ numerador: {}, denominador: {}, meses: meses(95) })).kind, 'a ruta with no oficial key is oficial').toBe('success')
+	})
+
 	it('never turns a year with no figure into one, and judges a manual meta by its cumplimiento informado', () => {
 		const sinInformar = { kind: 'pending', filter: 'sin', label: 'Sin informar' }
 		expect(lastPercentOf(indicador({ meses: meses(null) }))).toBeNull()

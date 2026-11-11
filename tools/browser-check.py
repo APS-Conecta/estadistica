@@ -465,7 +465,7 @@ def metas_rows(page, where):
     row.click()
     if row.get_attribute("aria-expanded") != "true" or not page.locator(f"#{row.get_attribute('aria-controls')}").is_visible():
         failures.append(f"{where}: a meta's row did not open its panel")
-    page.screenshot(path=str(SHOTS / f"{where}-metas.png"), full_page=True)
+    page.screenshot(path=str(SHOTS / f"{where}-metas-abierta.png"), full_page=True)
     return failures
 
 

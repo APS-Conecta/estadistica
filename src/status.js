@@ -63,13 +63,18 @@ export const lastPercentOf = (indicador) => indicador.manual
 
 /**
  * A GET indicadores meta's status, in statusOf's words: its last figure
- * against its target (CONTEXT.md, cumple), and the engine's rule for a meta
- * whose ages cut a FONASA band (Resumen::missing).
+ * against its target (CONTEXT.md, cumple), after the engine's rules for a
+ * meta whose ruta is not yet oficial, a seed "oficial": false with absent
+ * meaning oficial (Resumen::waiting), and for one whose ages cut a FONASA
+ * band (Resumen::missing).
  *
  * @param {object} indicador one of GET indicadores' indicadores
  * @return {{kind: string, filter: string, label: string}}
  */
 export function indicadorStatus(indicador) {
+	if (indicador.numerador?.oficial === false || indicador.denominador?.oficial === false) {
+		return statusOf({ estado: 'esperando ruta oficial' })
+	}
 	const porcentaje = lastPercentOf(indicador)
 	return statusOf({
 		estado: indicador.poblacion?.falta_oficial ? 'falta el denominador oficial' : null,
