@@ -120,6 +120,18 @@ describe('Visualization — every series drawn by the app, named, and in its tab
 		wrapper.unmount()
 	})
 
+	it('draws every panel on one scale, up to the highest value of any panel', () => {
+		const local = [point(['2026-01', '02010420'], 8), point(['2026-01', '02010421'], 2)]
+		const wrapper = shown({ answer: answer({ series: { local } }), spec: { agrupar: ['mes', 'codigo'], metrica: 'suma' } })
+
+		const [top, bottom] = wrapper.findAll('.estadistica-chart')
+			.map((chart) => chart.findAll('.estadistica-chart__grid text[text-anchor="end"]').map((tick) => tick.text()))
+		expect(bottom, 'both panels share one scale').toEqual(top)
+		expect(top.at(-1), 'the nice ceiling of the highest value, not 100').toBe('8')
+		expect(bottom, 'not the bottom panel\'s own scale, up to its 2').not.toEqual(['0', '0,5', '1', '1,5', '2'])
+		wrapper.unmount()
+	})
+
 	it('names a lone series in its legend too, and holds every value in the table twin with who reported it', () => {
 		const lone = shown({ answer: answer({ series: { nacional: ALL.nacional } }) })
 		expect(lone.findAll('.estadistica-chart__legend li').map((key) => key.text())).toEqual(['Nacional'])
