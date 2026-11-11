@@ -24,7 +24,7 @@ export const FILTERS = [
 	{ id: 'sin', label: 'Sin informar', kind: 'pending' },
 ]
 
-/** The target a meta is judged against (CONTEXT.md, cumple): its meta comprometida when typed, else the meta nacional. */
+/** The target the meter and the gap show (CONTEXT.md, cumple): its meta comprometida when typed, else the meta nacional. */
 export const targetOf = (meta) => meta.meta_comprometida ?? meta.meta_nacional
 
 /** «meta comprometida» or «meta nacional». */
@@ -34,8 +34,9 @@ const SIN_INFORMAR = { kind: 'pending', filter: 'sin', label: 'Sin informar' }
 
 /**
  * A meta's status. The engine's estado wins, as it says why there is no
- * percentage; a meta with neither is sin informar, never a figure. A
- * manual meta's porcentaje is its cumplimiento informado.
+ * percentage; a meta with neither is sin informar, never a figure. Else
+ * the engine's cumple decides, the verdict the Nota reads too. A manual
+ * meta's porcentaje is its cumplimiento informado.
  *
  * @param {object} meta one of GET resumen's metas
  * @return {{kind: string, filter: string, label: string}}
@@ -50,7 +51,7 @@ export function statusOf(meta) {
 	if (meta.porcentaje === null) {
 		return SIN_INFORMAR
 	}
-	return meta.porcentaje >= targetOf(meta)
+	return meta.cumple
 		? { kind: 'success', filter: 'cumple', label: 'Cumple' }
 		: { kind: 'error', filter: 'no-cumple', label: 'No cumple' }
 }
