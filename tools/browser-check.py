@@ -21,7 +21,9 @@ card's buttons, each count tile filters the cards and says how many it
 shows, the note on metas waiting for their rutas opens the previous year's
 Metas Sanitarias, it renders in the light and the dark theme with each
 status in Nextcloud's own colours (#85), and the cards fit a phone's width.
-The metas view still answers its own year's figures.
+The metas view still answers its own year's figures, and lists its metas as
+rows whose badges take the light and the dark theme's colours and which each
+open to their month table (#87).
 
 And a meta's detail (#86), in Chromium and Firefox, light and dark: a card's
 title opens it on Evolución, whose chart draws at its container's width with
@@ -124,7 +126,7 @@ VIEWS = [
     # Its steps, or «Todavía no hay cifras REM» on an instance that has loaded none.
     ("Consultar", "consultar", ".estadistica-builder :is(.estadistica-builder__steps, .empty-content)"),
     ("Preguntas", "preguntas", f".estadistica-questions__item strong:text-is('Navegador {RUN}')"),
-    ("Tableros", "tableros", f".estadistica-dashboards__list button:has-text('Tablero navegador {RUN}')"),
+    ("Tableros", "tableros", ".estadistica-dashboards__picker"),
 ]
 SETTINGS = "Ajustes de Estadística"
 
@@ -316,12 +318,46 @@ def steps_beside_the_answer(page, where, beside):
 
 
 def open_the_tablero(page, title):
-    """Tableros → the tablero → its one card's table, as a person clicks through."""
+    """Tableros → the tablero, chosen in the picker → its one card's table, as a person clicks through."""
     navigation_entry(page, "Tableros").click()
-    page.get_by_role("button", name=title, exact=True).click()
+    page.locator(".estadistica-dashboards__picker input[role='combobox']").click()
+    # By its text: NcSelect splits a long label into two parts, which its accessible name spaces apart.
+    page.get_by_role("option").filter(has_text=title).click()
     rows = page.locator(".estadistica-card .estadistica-answer__table tbody tr")
     rows.first.wait_for(timeout=30_000)
     return rows
+
+
+def arrange_the_card(page, pregunta):
+    """The card's actions menu: its width radio shows the card's three columns and «2 columnas» saves two;
+    «Eliminar el tablero» asks in a dialog first, and «Cancelar» keeps the tablero."""
+    failures = []
+    page.get_by_role("button", name=f"Acciones de la tarjeta «{pregunta}»").click()
+    page.get_by_role("menuitemradio", name="3 columnas").hover()  # waits until the menu sits in place
+    if page.get_by_role("menuitemradio", name="3 columnas").get_attribute("aria-checked") != "true":
+        failures.append("the card's menu does not mark the card's 3 columns")
+    for name in ("Subir", "Bajar", "Quitar"):
+        if page.get_by_role("menuitem", name=name, exact=True).count() != 1:
+            failures.append(f"the card's menu offers no «{name}»")
+    page.screenshot(path=str(SHOTS / "tablero-acciones.png"))
+    page.get_by_role("menuitemradio", name="2 columnas").click()
+    try:
+        page.locator(".estadistica-dashboards__cell--span-2").wait_for(timeout=30_000)
+    except PlaywrightTimeout:
+        failures.append("«2 columnas» did not lay the card out two columns wide")
+
+    # A click outside the menu closes it, as it does for a person.
+    page.get_by_role("button", name="Eliminar el tablero", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Eliminar el tablero")
+    try:
+        dialog.get_by_text("Sus preguntas no se eliminan.").wait_for(timeout=30_000)
+        page.wait_for_function("(d) => getComputedStyle(d).opacity === '1'", arg=dialog.element_handle())  # faded in
+        page.screenshot(path=str(SHOTS / "tablero-eliminar.png"))
+        dialog.get_by_role("button", name="Cancelar").click()
+        dialog.wait_for(state="hidden", timeout=30_000)
+    except PlaywrightTimeout:
+        failures.append("«Eliminar el tablero» did not ask in a dialog that «Cancelar» closes")
+    return failures
 
 
 def card_figures(rows):
@@ -458,8 +494,24 @@ def resumen_waiting_note(page, answer):
     return []
 
 
+def metas_rows(page, where):
+    """Metas Sanitarias as rows (#87): each badge in the theme's pair, and a row opens the panel it controls."""
+    navigation_entry(page, "Metas Sanitarias").click()
+    row = page.locator(".estadistica-goals__row").first
+    try:
+        row.wait_for(timeout=30_000)
+    except PlaywrightTimeout:
+        return [f"{where}: Metas Sanitarias shows no meta row"]
+    failures = resumen_theme(page, f"{where} Metas Sanitarias")
+    row.click()
+    if row.get_attribute("aria-expanded") != "true" or not page.locator(f"#{row.get_attribute('aria-controls')}").is_visible():
+        failures.append(f"{where}: a meta's row did not open its panel")
+    page.screenshot(path=str(SHOTS / f"{where}-metas-abierta.png"), full_page=True)
+    return failures
+
+
 def dark_resumen(browser, name):
-    """The Resumen in the dark theme, which Nextcloud's default theme follows from the system."""
+    """The Resumen and Metas Sanitarias in the dark theme, which Nextcloud's default theme follows from the system."""
     page = browser.new_context(viewport={"width": 1400, "height": 900}, color_scheme="dark").new_page()
     errors = console_errors(page)
     log_in(page, ADMIN, ADMIN_PASSWORD)
@@ -469,6 +521,7 @@ def dark_resumen(browser, name):
     card = page.locator(".estadistica-meta").first.evaluate("(card) => getComputedStyle(card).backgroundColor")
     if sum(int(part) for part in card[card.index("(") + 1:card.index(")")].split(",")[:3]) > 3 * 128:
         failures.append(f"{name}: in the dark theme a Resumen card is still light ({card})")
+    failures += metas_rows(page, f"{name}-oscuro")
     return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
 
 
@@ -642,6 +695,7 @@ def main():
             failures += resumen_filters(page)
             failures += resumen_theme(page, "light")
             failures += resumen_waiting_note(page, resumen_answer)
+            failures += metas_rows(page, "chromium")
 
             rows = open_the_tablero(page, f"Tablero navegador {RUN}")
             shown = card_figures(rows)
@@ -650,8 +704,7 @@ def main():
                 failures.append(f"a15: the card shows {shown}, the API answers {expected}")
             if page.locator(".estadistica-card canvas").count() != 1:
                 failures.append("the card drew no chart above its table")
-            if page.get_by_role("button", name="Subir").count() == 0:
-                failures.append("the creator sees no controls on their own tablero")
+            failures += arrange_the_card(page, f"Navegador {RUN}")
             failures += walk_the_navigation(page, fetched, "chromium")
 
             # #88: a consulta from the search to the answer, then the layout at the narrowest desktop.
@@ -669,7 +722,7 @@ def main():
             rows = open_the_tablero(reader, f"Tablero navegador {RUN}")
             if card_figures(rows) != expected:
                 failures.append(f"a8: the second user's card shows {card_figures(rows)}, the API answers {expected}")
-            if reader.get_by_role("button", name="Subir").count() != 0:
+            if reader.get_by_role("button", name=f"Acciones de la tarjeta «Navegador {RUN}»").count() != 0:
                 failures.append("a8: the second user sees controls to change someone else's tablero")
             if navigation_entry(reader, SETTINGS).count() != 0:
                 failures.append(f"the second user, no admin, is offered «{SETTINGS}»")
@@ -762,7 +815,7 @@ def main():
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
     print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
-    print("ok    the Resumen's status badges take the light and the dark theme's own colours, in Chromium and Firefox")
+    print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")

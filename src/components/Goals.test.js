@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import axios from '@nextcloud/axios'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import Goals from './Goals.vue'
 
 vi.mock('@nextcloud/axios', () => ({ default: { get: vi.fn() } }))
@@ -63,12 +64,33 @@ function answer(changes = {}) {
 
 async function shown(response = ok(answer()), establishment = { configured: true }) {
 	axios.get.mockReturnValueOnce(response)
-	const wrapper = mount(Goals, { props: { establishment } })
+	const wrapper = mount(Goals, { props: { establishment }, attachTo: document.body })
 	await flushPromises()
 	return wrapper
 }
 
-const card = (wrapper, index) => wrapper.findAll('.estadistica-goals__meta')[index]
+const row = (wrapper, index) => wrapper.findAll('.estadistica-goals__meta')[index]
+
+/** A meta's row, opened as a person clicks it: its panel shows the meta's text and month table. */
+async function opened(wrapper, index) {
+	const button = row(wrapper, index).find('button')
+	if (button.attributes('aria-expanded') === 'false') {
+		await button.trigger('click')
+	}
+	return wrapper.find(`#${button.attributes('aria-controls')}`)
+}
+
+/** Types a year into the Año select and picks it, as a person does: its dropdown lists the years in document.body. */
+async function chooseYear(wrapper, year) {
+	const select = wrapper.findAllComponents(NcSelect).find((found) => found.props('inputLabel') === 'Año')
+	await select.find('input').trigger('focus')
+	await select.find('input').setValue(year)
+	await flushPromises()
+	;[...document.body.querySelectorAll('.vs__dropdown-option')].find((option) => option.textContent.trim() === year).click()
+	await flushPromises()
+}
+
+const yearInput = (wrapper) => wrapper.findAllComponents(NcSelect).find((found) => found.props('inputLabel') === 'Año').find('input')
 
 const cells = (row) => row.findAll('th, td').map((cell) => cell.text())
 
@@ -89,13 +111,48 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		wrapper.unmount()
 	})
 
+	it('lists one row per meta: code, name, target and weight, its last figure and its status in words', async () => {
+		const wrapper = await shown()
+		const [first, second, manual] = wrapper.findAll('.estadistica-goals__meta').map((found) => found.find('h3 button').text())
+
+		expect(first).toContain('Recuperación del desarrollo psicomotor')
+		expect(first).toContain('Meta comprometida 70 % · peso 12,5 %')
+		expect(first).toContain('75 %')
+		expect(first).toContain('Cumple')
+		expect(second).toContain('Meta nacional 80 % · peso 12,5 %')
+		expect(second).toContain('—')
+		expect(second).toContain('Sin informar')
+		expect(manual).toContain('100 %')
+		expect(manual).toContain('Cumple')
+		expect(row(wrapper, 0).find('.estadistica-sparkline').attributes('aria-hidden')).toBe('true')
+		wrapper.unmount()
+	})
+
+	it('opens one row at a time to its panel, which the row says it controls', async () => {
+		const wrapper = await shown()
+		const button = row(wrapper, 0).find('button')
+		const panel = () => wrapper.find(`#${button.attributes('aria-controls')}`)
+
+		expect(button.attributes('aria-expanded')).toBe('false')
+		expect(panel().isVisible()).toBe(false)
+		await button.trigger('click')
+		expect(button.attributes('aria-expanded')).toBe('true')
+		expect(panel().isVisible()).toBe(true)
+		expect(panel().text()).toContain('Porcentaje de recuperados.')
+
+		await opened(wrapper, 1)
+		expect(button.attributes('aria-expanded')).toBe('false')
+		expect(panel().isVisible()).toBe(false)
+		wrapper.unmount()
+	})
+
 	it('shows each month: the local figures and gaps in points, beside the country and the peers', async () => {
 		const wrapper = await shown()
-		const rows = card(wrapper, 0).findAll('tbody tr')
+		const panel = await opened(wrapper, 0)
+		const rows = panel.findAll('tbody tr')
 
-		expect(card(wrapper, 0).find('h3').text()).toBe('Meta I: Recuperación del desarrollo psicomotor')
-		expect(card(wrapper, 0).text()).toContain('Meta nacional: 90 %. Meta comprometida: 70 %. Peso: 12,5 %.')
-		expect(cells(card(wrapper, 0).find('thead tr'))).toEqual(['Mes', 'Numerador', 'Denominador', 'Su establecimiento', 'Frente a la meta comprometida', 'Frente a la meta nacional', 'Nacional', 'Pares'])
+		expect(panel.text()).toContain('Meta nacional: 90 %. Meta comprometida: 70 %. Peso: 12,5 %.')
+		expect(cells(panel.find('thead tr'))).toEqual(['Mes', 'Numerador', 'Denominador', 'Su establecimiento', 'Frente a la meta comprometida', 'Frente a la meta nacional', 'Nacional', 'Pares'])
 		expect(cells(rows[0])).toEqual(['enero de 2026', '3', '8', '37,5 %', '−32,5 puntos', '−52,5 puntos', '15 %', '20 %'])
 		expect(cells(rows[1])).toEqual(['febrero de 2026', '6', '8', '75 %', '+5 puntos', '−15 puntos', '45 %', '50 %'])
 		wrapper.unmount()
@@ -103,10 +160,11 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 
 	it('says where a people denominator comes from, and a month with no figure is a dash', async () => {
 		const wrapper = await shown()
+		const panel = await opened(wrapper, 1)
 
-		expect(card(wrapper, 1).text()).toContain('Sin meta comprometida.')
-		expect(card(wrapper, 1).text()).toContain('Denominador: población inscrita validada por FONASA al 31-12-2024, más un 3 % porque el año no tiene su propio corte.')
-		expect(cells(card(wrapper, 1).findAll('tbody tr')[1])).toEqual(['febrero de 2026', '—', '1.287,5', '—', '—', '—', '—', '—'])
+		expect(panel.text()).toContain('Sin meta comprometida.')
+		expect(panel.text()).toContain('Denominador: población inscrita validada por FONASA al 31-12-2024, más un 3 % porque el año no tiene su propio corte.')
+		expect(cells(panel.findAll('tbody tr')[1])).toEqual(['febrero de 2026', '—', '1.287,5', '—', '—', '—', '—', '—'])
 		wrapper.unmount()
 	})
 
@@ -114,9 +172,11 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		const missing = answer()
 		missing.indicadores[1].poblacion = { comprometida: false, corte: null, factor: null, falta_oficial: true }
 		const wrapper = await shown(ok(missing))
+		const panel = await opened(wrapper, 1)
 
-		expect(card(wrapper, 1).text()).toContain('Sin porcentaje: falta el denominador oficial de 2026.')
-		expect(card(wrapper, 1).text()).not.toContain('No hay población inscrita de FONASA')
+		expect(row(wrapper, 1).find('h3 button').text()).toContain('Falta el denominador oficial')
+		expect(panel.text()).toContain('Sin porcentaje: falta el denominador oficial de 2026.')
+		expect(panel.text()).not.toContain('No hay población inscrita de FONASA')
 		wrapper.unmount()
 	})
 
@@ -126,9 +186,10 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		committed.indicadores[1].denominador_comprometido = 1200
 		const wrapper = await shown(ok(committed))
 
-		expect(card(wrapper, 1).text()).toContain('Denominador: 1.200 personas, comprometidas por el establecimiento.')
-		expect(card(wrapper, 2).text()).toContain('Cumplimiento informado: 100 %.')
-		expect(card(wrapper, 2).find('table').exists()).toBe(false)
+		expect((await opened(wrapper, 1)).text()).toContain('Denominador: 1.200 personas, comprometidas por el establecimiento.')
+		const manual = await opened(wrapper, 2)
+		expect(manual.text()).toContain('Cumplimiento informado: 100 %.')
+		expect(manual.find('table').exists()).toBe(false)
 		wrapper.unmount()
 	})
 
@@ -145,10 +206,9 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		const wrapper = await shown()
 		axios.get.mockReturnValueOnce(ok(answer({ anio: 2027, pares: null })))
 
-		await wrapper.find('select').setValue('2027')
-		await flushPromises()
+		await chooseYear(wrapper, '2027')
 		expect(axios.get).toHaveBeenLastCalledWith(INDICADORES, { params: { pares: 'tipo', anio: 2027 } })
-		expect(cells(card(wrapper, 0).find('thead tr'))).not.toContain('Pares')
+		expect(cells((await opened(wrapper, 0)).find('thead tr'))).not.toContain('Pares')
 
 		axios.get.mockReturnValueOnce(ok(answer()))
 		const servicio = wrapper.findAll('input[type="checkbox"]').find((input) => input.element.value === 'servicio')
@@ -164,13 +224,13 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		axios.get.mockReturnValueOnce(new Promise((resolve) => { answered = resolve }))
 
 		await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
-		expect(wrapper.find('select').element.disabled).toBe(true)
+		expect(yearInput(wrapper).element.disabled).toBe(true)
 		expect(wrapper.findAll('input[type="checkbox"]').every((input) => input.element.disabled)).toBe(true)
 
 		answered({ data: { ocs: { data: answer({ nombre: 'Con otros pares' }) } } })
 		await flushPromises()
 		expect(wrapper.find('h2').text()).toBe('Con otros pares')
-		expect(wrapper.find('select').element.disabled).toBe(false)
+		expect(yearInput(wrapper).element.disabled).toBe(false)
 		wrapper.unmount()
 	})
 
@@ -179,7 +239,7 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 
 		expect(axios.get).toHaveBeenCalledWith(INDICADORES, { params: { pares: '' } })
 		expect(wrapper.find('fieldset').exists()).toBe(false)
-		expect(cells(card(wrapper, 0).find('thead tr'))).toEqual(['Mes', 'Nacional'])
+		expect(cells((await opened(wrapper, 0)).find('thead tr'))).toEqual(['Mes', 'Nacional'])
 		expect(wrapper.text()).toContain('REM Serie A (datos públicos DEIS): cifras hasta febrero de 2026.')
 		wrapper.unmount()
 	})
