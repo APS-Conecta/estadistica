@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import axios from '@nextcloud/axios'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
 import { draw, formatValue } from '../charts.js'
+import { mdiAlertCircleOutline, mdiCheck, mdiClockOutline, mdiClose, mdiMinusCircleOutline } from '../icons.js'
 import Resumen from './Resumen.vue'
 
 // jsdom has no canvas: only Chart.js's own drawing is replaced (Visualization.test.js).
@@ -28,7 +29,7 @@ const meta = (codigo, fields) => ({
 	origen: null, fecha_corte: null, meta_minima: null, ...fields,
 })
 
-/** GET resumen for 900001: cumple against a commitment, misses the nacional, a Serie P figure older than its month, both statuses, sin informar and Meta VIII. */
+/** GET resumen for 900001: cumple against a commitment, misses the nacional, a Serie P figure older than its month, both estados (II has counted its numerador), sin informar and Meta VIII. */
 const answer = () => ({
 	anio: 2026,
 	nombre: 'Metas Sanitarias 2026',
@@ -41,7 +42,7 @@ const answer = () => ({
 		}),
 		meta('V', { meta_nacional: 45, mes: '2026-06', datos_al: '2026-06', numerador: 1287, denominador: 3500.5, porcentaje: 36.77, cumple: false, origen: 'datos públicos DEIS', fecha_corte: '2026-11' }),
 		meta('VII', { meta_nacional: 55, mes: '2026-11', datos_al: '2026-06', numerador: 30, denominador: 60, porcentaje: 50, cumple: false }),
-		meta('II', { estado: 'falta el denominador oficial de 2026' }),
+		meta('II', { estado: 'falta el denominador oficial de 2026', historico: [year(2026, [[40, null, null], [140, null, null], [null, null, null]])] }),
 		meta('IV.A', { estado: 'esperando ruta oficial' }),
 		meta('VI'),
 		meta('VIII', { manual: true, meta_nacional: 100, porcentaje: 100, cumple: true }),
@@ -56,59 +57,162 @@ async function shown(response = ok(answer()), options = {}) {
 	return wrapper
 }
 
-const card = (wrapper, codigo) => wrapper.findAll('article').find((article) => article.find('h3').text().startsWith(`Meta ${codigo} `))
+/** A card by its meta: «Meta I 2026» starts it. */
+const card = (wrapper, codigo) => wrapper.findAll('article').find((article) => article.text().startsWith(`Meta ${codigo} `))
+
+/** The cards shown, by their meta. */
+const heads = (wrapper) => wrapper.findAll('article').map((article) => article.text().split(' 2026')[0])
+
+/** The card's figure: its % and «N de D», or its cumplimiento informado. */
+const figure = (wrapper, codigo) => card(wrapper, codigo).find('.estadistica-meta__cifra')
+
+/** The filter tiles, and one by its label. */
+const tiles = (wrapper) => wrapper.find('[role="group"]').findAll('button')
+const tile = (wrapper, label) => tiles(wrapper).find((button) => button.text().endsWith(label))
+
+/** Opens a card's histórico from its title. */
+const expand = (wrapper, codigo) => card(wrapper, codigo).find('h3 button').trigger('click')
 
 beforeEach(() => {
 	axios.get.mockReset()
 	draw.mockClear()
 })
 
-describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
-	it('reads GET resumen alone and names each card by its meta and the metas year', async () => {
+describe('Resumen — the newest metas, one card each (docs/adr/0009, #85)', () => {
+	it('reads GET resumen alone and names each card by its title, under its meta and the metas year', async () => {
 		const wrapper = await shown()
 
 		expect(axios.get).toHaveBeenCalledTimes(1)
 		expect(axios.get).toHaveBeenCalledWith(RESUMEN, { params: {} })
 		expect(wrapper.find('h2').text()).toBe('Metas Sanitarias 2026')
-		expect(wrapper.findAll('article h3').map((title) => title.text())).toEqual(['Meta I 2026', 'Meta V 2026', 'Meta VII 2026', 'Meta II 2026', 'Meta IV.A 2026', 'Meta VI 2026', 'Meta VIII 2026'])
+		const articles = wrapper.findAll('article')
+		expect(articles.map((article) => article.text().split(' 2026')[0])).toEqual(['Meta I', 'Meta V', 'Meta VII', 'Meta II', 'Meta IV.A', 'Meta VI', 'Meta VIII'])
+		expect(articles.map((article) => wrapper.find(`[id="${article.attributes('aria-labelledby')}"]`).text())).toEqual([
+			'Recuperación del desarrollo psicomotor', 'La meta V', 'La meta VII', 'La meta II', 'La meta IV.A', 'La meta VI', 'La meta VIII',
+		])
+		expect(articles.every((article) => article.attributes('tabindex') === undefined), 'a card is reached by its buttons').toBe(true)
 		wrapper.unmount()
 	})
 
-	it('shows the percentage, «N de D», «datos al» and whether it cumple, in words', async () => {
+	it('says once for the page up to which month each REM series has data, Serie P as its corte, and no card dates itself', async () => {
+		const wrapper = await shown(ok(withSources()))
+
+		expect(wrapper.text()).toContain('REM Serie A: datos al octubre de 2026 · REM Serie P: corte de junio de 2026')
+		expect(wrapper.text().match(/datos al|corte de/gi)).toHaveLength(2)
+		wrapper.unmount()
+	})
+
+	it('says the metas have no figures yet when no REM series has data, as the 2027 metas while they wait for their rutas', async () => {
+		const wrapper = await shown(ok({ ...answer(), anio: 2027, nombre: 'Metas Sanitarias 2027', metas: [meta('I', { estado: 'esperando ruta oficial' }), meta('VIII', { manual: true, meta_nacional: 100 })] }))
+
+		expect(wrapper.find('h2 + p').text()).toBe('Metas Sanitarias 2027: sin cifras todavía')
+		wrapper.unmount()
+	})
+
+	it('counts the metas of each status exactly, with a tile only for a status some meta holds', async () => {
 		const wrapper = await shown()
 
-		const first = card(wrapper, 'I').text()
-		expect(first).toContain('Recuperación del desarrollo psicomotor')
-		expect(first).toContain('58,3 %')
-		expect(first).toContain('7 de 12')
-		expect(first).toContain('Datos al octubre de 2026 · datos públicos DEIS, con cifras hasta noviembre de 2026')
-		expect(first).toContain('Cumple la meta comprometida (50 %)')
-		expect(card(wrapper, 'V').text()).toContain('1.287 de 3.500,5')
-		expect(card(wrapper, 'V').text()).toContain('No cumple la meta nacional (45 %)')
+		const group = wrapper.find('[role="group"]')
+		expect(group.attributes('aria-label')).toBe('Filtrar metas por estado')
+		expect(tiles(wrapper).map((tile) => tile.text())).toEqual([
+			'7 Todas las metas', '2 Cumplen', '2 No cumplen', '1 Falta el denominador', '1 Esperando ruta oficial', '1 Sin informar',
+		])
+
+		const data = answer()
+		data.metas = data.metas.filter((one) => one.porcentaje !== null)
+		const judged = await shown(ok(data))
+		expect(tiles(judged).map((tile) => tile.text())).toEqual(['4 Todas las metas', '2 Cumplen', '2 No cumplen'])
 		wrapper.unmount()
+		judged.unmount()
 	})
 
-	it('dates a card by the establishment\'s last month in the meta\'s serie, not by the month of its figure', async () => {
+	it('filters the cards by a tile and says, politely, how many metas it shows', async () => {
 		const wrapper = await shown()
 
-		const serieP = card(wrapper, 'VII').text()
-		expect(serieP).toContain('30 de 60')
-		expect(serieP).toContain('Datos al junio de 2026')
-		expect(serieP).not.toContain('noviembre')
+		const live = wrapper.find('[role="status"]')
+		expect(live.text()).toBe('7 metas.')
+		expect(tiles(wrapper).map((tile) => tile.attributes('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false'])
+
+		await tile(wrapper, 'No cumplen').trigger('click')
+		expect(heads(wrapper)).toEqual(['Meta V', 'Meta VII'])
+		expect(live.text()).toBe('2 metas: no cumplen.')
+		expect(tile(wrapper, 'No cumplen').attributes('aria-pressed')).toBe('true')
+		expect(tile(wrapper, 'Todas las metas').attributes('aria-pressed')).toBe('false')
+
+		await tile(wrapper, 'Esperando ruta oficial').trigger('click')
+		expect(heads(wrapper)).toEqual(['Meta IV.A'])
+		expect(live.text()).toBe('1 meta: esperando ruta oficial.')
+
+		await tile(wrapper, 'Todas las metas').trigger('click')
+		expect(heads(wrapper)).toHaveLength(7)
+		expect(live.text()).toBe('7 metas.')
 		wrapper.unmount()
 	})
 
-	it('says why a meta shows no figure, and a meta sin informar is never 0', async () => {
+	it('says each status as its icon and its word, and the gap to the target in points', async () => {
+		const wrapper = await shown()
+
+		const badge = (codigo) => card(wrapper, codigo).find('.estadistica-estado')
+		for (const [codigo, icon, word] of [
+			['I', mdiCheck, 'Cumple'],
+			['V', mdiClose, 'No cumple'],
+			['II', mdiAlertCircleOutline, 'Falta el denominador oficial'],
+			['IV.A', mdiClockOutline, 'Esperando ruta oficial'],
+			['VI', mdiMinusCircleOutline, 'Sin informar'],
+			['VIII', mdiCheck, 'Cumple'],
+		]) {
+			expect(badge(codigo).text(), `Meta ${codigo}'s word`).toBe(word)
+			expect(badge(codigo).find('path').attributes('d'), `Meta ${codigo}'s icon`).toBe(icon)
+		}
+		expect(card(wrapper, 'I').text()).toContain('+8,3 puntos frente a la meta comprometida (50 %).')
+		expect(card(wrapper, 'V').text()).toContain('−8,2 puntos frente a la meta nacional (45 %).')
+		expect(card(wrapper, 'VIII').text()).toContain('+0 puntos frente a la meta nacional (100 %).')
+		wrapper.unmount()
+	})
+
+	it('shows the percentage and «N de D» as one figure, with a meter against the target', async () => {
+		const wrapper = await shown()
+
+		expect(figure(wrapper, 'I').text().replace(/\s+/g, ' ')).toBe('58,3 % 7 de 12')
+		expect(figure(wrapper, 'V').text().replace(/\s+/g, ' ')).toBe('36,8 % 1.287 de 3.500,5')
+		expect(figure(wrapper, 'VIII').text(), 'a cumplimiento informado has no «N de D»').toBe('100 %')
+		const meter = card(wrapper, 'I').find('[role="meter"]')
+		expect(meter.attributes('aria-label')).toBe('Meta I 2026 frente a su meta comprometida')
+		expect(meter.attributes('aria-valuenow')).toBe('58.33')
+		expect(meter.attributes('aria-valuetext')).toBe('58,3 %; meta comprometida 50 %')
+		wrapper.unmount()
+	})
+
+	it('says why a meta has no percentage, keeps the numerador already counted, and never shows sin informar as a figure', async () => {
 		const wrapper = await shown()
 
 		expect(card(wrapper, 'II').text()).toContain('Sin porcentaje: falta el denominador oficial de 2026.')
+		expect(card(wrapper, 'II').text()).toContain('140 en el numerador, a febrero de 2026')
 		expect(card(wrapper, 'IV.A').text()).toContain('Sin porcentaje: esperando ruta oficial.')
-		expect(card(wrapper, 'VI').text()).toContain('Sin informar')
+		expect(card(wrapper, 'VI').text()).toContain('Nadie informó esta meta en el periodo.')
 		for (const codigo of ['II', 'IV.A', 'VI']) {
-			expect(card(wrapper, codigo).text()).not.toMatch(/\d %|Cumple/)
+			expect(card(wrapper, codigo).text(), `Meta ${codigo}`).not.toMatch(/\d %|Cumple/)
+			expect(card(wrapper, codigo).find('[role="meter"]').exists(), `Meta ${codigo}`).toBe(false)
 		}
-		expect(card(wrapper, 'VIII').text()).toContain('Cumplimiento informado: 100 %')
-		expect(card(wrapper, 'VIII').text()).toContain('Cumple la meta nacional (100 %)')
+		wrapper.unmount()
+
+		const data = answer()
+		Object.assign(data.metas[6], { porcentaje: null, cumple: null })
+		const manual = await shown(ok(data))
+		expect(card(manual, 'VIII').text()).toContain('Todavía no se ha informado su cumplimiento.')
+		expect(card(manual, 'VIII').text()).not.toMatch(/\d %/)
+		manual.unmount()
+	})
+
+	it('keeps a Serie P numerador already counted at its corte', async () => {
+		const data = answer()
+		data.metas[3].historico = [year(2026, [], {
+			meses: [{ mes: '2026-06', numerador: 412, denominador: null, porcentaje: null }],
+			ruta: { numerador: { fuente: 'rem-p', nombre: 'REM Serie P' } },
+		})]
+		const wrapper = await shown(ok(data))
+
+		expect(card(wrapper, 'II').text()).toContain('412 en el numerador, al corte de junio de 2026')
 		wrapper.unmount()
 	})
 
@@ -137,26 +241,22 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009)', () => {
 		wrapper.unmount()
 	})
 
-	it('shows cumple with colour and text, never colour alone', async () => {
+	it('says when the newest metas wait for their rutas, and offers the previous year\'s Metas Sanitarias', async () => {
 		const wrapper = await shown()
 
-		expect(card(wrapper, 'I').classes()).toContain('estadistica-resumen__meta--cumple')
-		expect(card(wrapper, 'V').classes()).toContain('estadistica-resumen__meta--no-cumple')
-		expect(card(wrapper, 'VI').classes()).not.toContain('estadistica-resumen__meta--cumple')
-		expect(card(wrapper, 'VI').classes()).not.toContain('estadistica-resumen__meta--no-cumple')
+		const note = wrapper.findAllComponents({ name: 'NcNoteCard' }).find((card) => card.text().includes('rutas REM'))
+		expect(note.text()).toContain('Las metas tendrán cifras cuando MINSAL confirme sus rutas REM')
+		const offer = note.find('button')
+		expect(offer.text()).toBe('Ver las Metas Sanitarias 2025')
+		await offer.trigger('click')
+		expect(wrapper.emitted('metas')).toEqual([[2025]])
 		wrapper.unmount()
-	})
 
-	it('lets a keyboard reach every card, named by its title and described by its figure or status', async () => {
-		const wrapper = await shown()
-
-		for (const article of wrapper.findAll('article')) {
-			expect(article.attributes('tabindex')).toBe('0')
-			expect(wrapper.find(`[id="${article.attributes('aria-labelledby')}"]`).element.tagName).toBe('H3')
-			expect(wrapper.find(`[id="${article.attributes('aria-describedby')}"]`).text()).not.toBe('')
-		}
-		expect(wrapper.find(`[id="${card(wrapper, 'IV.A').attributes('aria-describedby')}"]`).text()).toContain('esperando ruta oficial')
-		wrapper.unmount()
+		const data = answer()
+		data.metas = data.metas.filter((one) => one.estado !== 'esperando ruta oficial')
+		const none = await shown(ok(data))
+		expect(none.text()).not.toContain('rutas REM')
+		none.unmount()
 	})
 
 	it('says when no metas are loaded, and a failure in the API\'s own words', async () => {
@@ -215,10 +315,18 @@ const withHistorico = () => {
 	return resumen
 }
 
-describe('Resumen — each card\'s histórico (docs/adr/0009)', () => {
-	it('draws one line per year with figures, the current year emphasised, and the meta as a line', async () => {
+describe('Resumen — each card\'s histórico, opened from its title (docs/adr/0009)', () => {
+	it('opens from the title, then draws one line per year with figures, the current year emphasised, and the meta as a line', async () => {
 		const wrapper = await shown(ok(withHistorico()))
 
+		const title = card(wrapper, 'I').find('h3 button')
+		expect(title.text()).toBe('Recuperación del desarrollo psicomotor')
+		expect(title.attributes('aria-expanded')).toBe('false')
+		expect(draw).not.toHaveBeenCalled()
+		await expand(wrapper, 'I')
+		await flushPromises()
+		expect(title.attributes('aria-expanded')).toBe('true')
+		expect(wrapper.find(`[id="${title.attributes('aria-controls')}"]`).find('table').exists()).toBe(true)
 		expect(draw).toHaveBeenCalledTimes(1)
 		const { data } = draw.mock.calls[0][1]
 		expect(data.labels).toEqual(['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'])
@@ -231,6 +339,8 @@ describe('Resumen — each card\'s histórico (docs/adr/0009)', () => {
 
 	it('leaves sin informar as a gap in the chart and says so in the table, never 0', async () => {
 		const wrapper = await shown(ok(withHistorico()))
+		await expand(wrapper, 'I')
+		await flushPromises()
 
 		const current = draw.mock.calls[0][1].data.datasets[1]
 		expect(current.data.slice(0, 4)).toEqual([25, null, 50, 58.33])
@@ -242,6 +352,8 @@ describe('Resumen — each card\'s histórico (docs/adr/0009)', () => {
 
 	it('puts every figure the chart draws in the table under it, with each year\'s cierre', async () => {
 		const wrapper = await shown(ok(withHistorico()))
+		await expand(wrapper, 'I')
+		await flushPromises()
 
 		const table = card(wrapper, 'I').find('table')
 		expect(table.findAll('thead th').map((cell) => cell.text())).toEqual(['Mes', '2025', '2026 (más reciente)'])
@@ -261,9 +373,12 @@ describe('Resumen — each card\'s histórico (docs/adr/0009)', () => {
 		wrapper.unmount()
 	})
 
-	it('draws nothing for a meta with no histórico', async () => {
+	it('draws nothing for a meta with no histórico, whose title opens nothing', async () => {
 		const wrapper = await shown()
 
+		for (const codigo of ['V', 'IV.A', 'VIII']) {
+			expect(card(wrapper, codigo).find('h3 button').exists(), `Meta ${codigo}`).toBe(false)
+		}
 		expect(draw).not.toHaveBeenCalled()
 		expect(wrapper.find('canvas').exists()).toBe(false)
 		wrapper.unmount()
@@ -318,36 +433,30 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 
 	const panel = (wrapper) => wrapper.findComponent(NcAppSidebar)
 
-	/** The card's own figures: its %, N and D, or its cumplimiento informado. */
-	const figures = (wrapper, codigo) => card(wrapper, codigo).find(`[id="resumen-${codigo}-cifra"]`).findAll('button')
-
-	const opened = async (wrapper, figure) => {
-		figure.element.focus()
-		await figure.trigger('click')
+	const opened = async (wrapper, button) => {
+		button.element.focus()
+		await button.trigger('click')
 		// The panel is its own chunk, fetched on the first click.
 		await vi.waitFor(() => expect(panel(wrapper).exists()).toBe(true))
 		return panel(wrapper)
 	}
 
-	it('opens from each figure of a card, in the app sidebar, for that figure\'s month', async () => {
+	it('opens from a card\'s figure, in the app sidebar, for that figure\'s month', async () => {
 		const wrapper = await mounted()
 
-		expect(figures(wrapper, 'I').map((figure) => figure.text())).toEqual(['58,3 %', '7', '12'])
-		for (const figure of figures(wrapper, 'I')) {
-			const sidebar = await opened(wrapper, figure)
-			expect(sidebar.element.parentElement.id).toBe('content-vue')
-			expect(sidebar.props('name')).toBe('Meta I 2026')
-			expect(sidebar.text()).toContain('Cifra de octubre de 2026')
-		}
-		expect((await opened(wrapper, figures(wrapper, 'V')[0])).text()).toContain('Cifra de junio de 2026')
-		expect((await opened(wrapper, figures(wrapper, 'VIII')[0])).text()).toContain('Lo informa quien administra Estadística: no se cuenta en el REM.')
+		const sidebar = await opened(wrapper, figure(wrapper, 'I'))
+		expect(sidebar.element.parentElement.id).toBe('content-vue')
+		expect(sidebar.props('name')).toBe('Meta I 2026')
+		expect(sidebar.text()).toContain('Cifra de octubre de 2026')
+		expect((await opened(wrapper, figure(wrapper, 'V'))).text()).toContain('Cifra de junio de 2026')
+		expect((await opened(wrapper, figure(wrapper, 'VIII'))).text()).toContain('Lo informa quien administra Estadística: no se cuenta en el REM.')
 		wrapper.unmount()
 	})
 
 	it('shows the stored ruta: hoja, sección, códigos and columnas as that year\'s diccionario labels them, the periodo, what is added and taken away, the origen with its date and the referencia', async () => {
 		const wrapper = await mounted()
 
-		const text = (await opened(wrapper, figures(wrapper, 'I')[0])).text()
+		const text = (await opened(wrapper, figure(wrapper, 'I'))).text()
 		expect(text).toContain('Origen: datos públicos DEIS, con cifras hasta noviembre de 2026.')
 		expect(text).toContain('REM Serie A, de enero de 2026 a diciembre de 2026.')
 		expect(text).toContain('REM Serie A, de octubre de 2025 a septiembre de 2026.')
@@ -372,13 +481,13 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 		Object.assign(resumen.metas[0], { origen: 'planilla del establecimiento', fecha_corte: '2026-11-09' })
 		const wrapper = await shown(ok(resumen), { attachTo: '#resumen' })
 
-		expect(card(wrapper, 'I').text()).toContain('Datos al octubre de 2026 · planilla del establecimiento, guardada el 9 de noviembre de 2026')
-		expect((await opened(wrapper, figures(wrapper, 'I')[0])).text()).toContain('Origen: planilla del establecimiento, guardada el 9 de noviembre de 2026.')
+		expect((await opened(wrapper, figure(wrapper, 'I'))).text()).toContain('Origen: planilla del establecimiento, guardada el 9 de noviembre de 2026.')
 		wrapper.unmount()
 	})
 
 	it('opens from each figure of the table, for its own month, with that year\'s ruta and origen', async () => {
 		const wrapper = await mounted()
+		await expand(wrapper, 'I')
 
 		const cells = card(wrapper, 'I').findAll('tbody td')
 		expect(cells.filter((cell) => cell.find('button').exists())).toHaveLength(12 + 9)
@@ -394,6 +503,7 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 
 	it('opens from a year\'s cierre, for its December with that year\'s ruta', async () => {
 		const wrapper = await mounted()
+		await expand(wrapper, 'I')
 
 		const [cierre2025, cierre2026] = card(wrapper, 'I').findAll('tfoot td')
 		expect(cierre2026.find('button').exists(), 'a year not over has no cierre').toBe(false)
@@ -407,7 +517,7 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 	it('says when a denominador is not counted in the REM', async () => {
 		const wrapper = await mounted()
 
-		const text = (await opened(wrapper, figures(wrapper, 'V')[2])).text()
+		const text = (await opened(wrapper, figure(wrapper, 'V'))).text()
 		expect(text).toContain('REM Serie P, de enero de 2026 a diciembre de 2026.')
 		expect(text).toContain('Población inscrita validada (FONASA).')
 		wrapper.unmount()
@@ -415,20 +525,21 @@ describe('Resumen — the source panel of every figure (docs/adr/0009)', () => {
 
 	it('is reached by keyboard, closes with Escape and gives the focus back to the figure, on the card, in the table and at a cierre', async () => {
 		const wrapper = await mounted()
+		await expand(wrapper, 'I')
 
 		const table = card(wrapper, 'I').findAll('tbody tr')[2].findAll('td')[0].find('button')
 		const cierre = card(wrapper, 'I').findAll('tfoot td')[0].find('button')
-		const first = await opened(wrapper, figures(wrapper, 'V')[0])
-		for (const [figure, month] of [[figures(wrapper, 'I')[1], 'octubre de 2026'], [table, 'marzo de 2025'], [cierre, 'diciembre de 2025']]) {
-			expect(figure.element.tagName).toBe('BUTTON')
-			expect((await opened(wrapper, figure)).text()).toContain(`Cifra de ${month}`)
+		const first = await opened(wrapper, figure(wrapper, 'V'))
+		for (const [button, month] of [[figure(wrapper, 'I'), 'octubre de 2026'], [table, 'marzo de 2025'], [cierre, 'diciembre de 2025']]) {
+			expect(button.element.tagName).toBe('BUTTON')
+			expect((await opened(wrapper, button)).text()).toContain(`Cifra de ${month}`)
 			expect(first.exists(), 'each figure opens a panel of its own').toBe(false)
 			expect(panel(wrapper).element.contains(document.activeElement), 'the focus moves into the panel').toBe(true)
 			await panel(wrapper).find('aside').trigger('keydown', { key: 'Escape' })
 			await flushPromises()
 
 			expect(panel(wrapper).exists(), `Escape closes the ${month} panel`).toBe(false)
-			expect(document.activeElement, `the focus is back on the ${month} figure`).toBe(figure.element)
+			expect(document.activeElement, `the focus is back on the ${month} figure`).toBe(button.element)
 		}
 		wrapper.unmount()
 	})

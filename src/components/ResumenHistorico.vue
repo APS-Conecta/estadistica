@@ -79,6 +79,7 @@
 <script>
 import { draw, formatValue, historicoConfig, themeOf, yearName } from '../charts.js'
 import { monthName } from '../query.js'
+import { targetNameOf, targetOf } from '../status.js'
 
 export default {
 	name: 'EstadisticaResumenHistorico',
@@ -107,8 +108,9 @@ export default {
 			return [...new Set(this.lines.flatMap((year) => year.meses.map((mes) => mes.mes.slice(5))))].sort()
 		},
 		metaLine() {
-			const valor = this.meta.meta_comprometida ?? this.meta.meta_nacional
-			return { nombre: `Meta ${this.meta.meta_comprometida === null ? 'nacional' : 'comprometida'} (${this.percent(valor)})`, valor }
+			const valor = targetOf(this.meta)
+			const nombre = targetNameOf(this.meta)
+			return { nombre: `${nombre[0].toUpperCase()}${nombre.slice(1)} (${this.percent(valor)})`, valor }
 		},
 	},
 

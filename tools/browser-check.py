@@ -15,10 +15,13 @@ delegated group, opens the same tablero and sees the same figures with no
 controls to change it.
 
 And the Resumen (docs/adr/0009), the view the app opens on: each card shows
-the figure, or the state, GET resumen answers, its figures are GET
+the figure and the status GET resumen answers, its figures are GET
 indicadores' local series for the card's month, a keyboard reaches every
-card, and the cards fit a phone's width. The metas view still answers its
-own year's figures.
+card's buttons, each count tile filters the cards and says how many it
+shows, the note on metas waiting for their rutas opens the previous year's
+Metas Sanitarias, it renders in the light and the dark theme with each
+status in Nextcloud's own colours (#85), and the cards fit a phone's width.
+The metas view still answers its own year's figures.
 
 And the shell (#84), in Chromium and in Firefox under the CSP Nextcloud
 serves: every view opens from the navigation, marked as the open one,
@@ -108,7 +111,7 @@ SPEC = {
 # The navigation's views, in its order: the chunk each fetches when it first
 # opens, and what it shows once it has its figures.
 VIEWS = [
-    ("Resumen", "resumen", ".estadistica-resumen__meta"),
+    ("Resumen", "resumen", ".estadistica-meta"),
     ("Metas Sanitarias", "metas", ".estadistica-goals h2"),
     # Its steps, or «Todavía no hay cifras REM» on an instance that has loaded none.
     ("Consultar", "consultar", ".estadistica-builder :is(.estadistica-builder__steps, .empty-content)"),
@@ -366,35 +369,45 @@ def api_figures(answer):
 
 
 def resumen_figures(page):
-    """{card title: (percentage, «N de D», state)} as the Resumen's cards show them; None where a card has none."""
-    cards = page.locator(".estadistica-resumen__meta")
+    """{card: (percentage, «N de D», status)} as the Resumen's cards show them; None where a card has none."""
+    cards = page.locator(".estadistica-meta")
     cards.first.wait_for(timeout=30_000)
     figures = {}
     for i in range(cards.count()):
         card = cards.nth(i)
-        shown = card.locator(".estadistica-resumen__porcentaje")
-        state = card.locator(".estadistica-resumen__estado")
-        figures[card.locator("h3").inner_text().strip()] = (
-            (shown.inner_text().strip(), card.locator(".estadistica-resumen__cuenta").inner_text().strip())
-            if shown.count() else (None, None)) + (state.inner_text().strip() if state.count() else None,)
+        shown = [card.locator(part) for part in (".estadistica-meta__porcentaje", ".estadistica-meta__cuenta")]
+        figures[card.locator(".estadistica-meta__codigo").inner_text().strip()] = tuple(
+            part.inner_text().strip() if part.count() else None for part in shown) + (card.locator(".estadistica-estado").inner_text().strip(),)
     return figures
 
 
-def resumen_state(meta):
-    """The line a card shows instead of a figure (Resumen.vue), or None when it shows one."""
+def resumen_status(meta):
+    """The word a card's status says (status.js): the engine's estado first, then the engine's own cumple."""
+    if (meta["estado"] or "").startswith("esperando ruta oficial"):
+        return "Esperando ruta oficial"
     if meta["estado"]:
-        return f"Sin porcentaje: {meta['estado']}."
-    if meta["manual"]:
-        return ("Todavía no se ha informado su cumplimiento." if meta["porcentaje"] is None
-                else f"Cumplimiento informado: {es_cl(meta['porcentaje'])} %")
-    return None if meta["mes"] is not None else "Sin informar"
+        return "Falta el denominador oficial"
+    if meta["porcentaje"] is None:
+        return "Sin informar"
+    return "Cumple" if meta["cumple"] else "No cumple"
 
 
 def resumen_api_figures(answer):
     """The same, from GET resumen, formatted as the cards format them."""
-    return {f"Meta {meta['codigo']} {answer['anio']}": (
-        (f"{es_cl(meta['porcentaje'])} %", f"{es_cl(meta['numerador'])} de {es_cl(meta['denominador'])}")
-        if meta["mes"] is not None else (None, None)) + (resumen_state(meta),) for meta in answer["metas"]}
+    figures = {}
+    for meta in answer["metas"]:
+        judged = meta["estado"] is None and meta["porcentaje"] is not None
+        figures[f"Meta {meta['codigo']} {answer['anio']}"] = (
+            f"{es_cl(meta['porcentaje'])} %" if judged else None,
+            f"{es_cl(meta['numerador'])} de {es_cl(meta['denominador'])}" if judged and not meta["manual"] else None,
+            resumen_status(meta))
+    return figures
+
+
+def resumen_controls(answer):
+    """The cards with a button: a figure, which opens its source panel, or a title, which opens its histórico."""
+    return sorted(f"Meta {meta['codigo']} {answer['anio']}" for meta in answer["metas"]
+                  if (meta["estado"] is None and meta["porcentaje"] is not None) or meta["historico"])
 
 
 def resumen_against_indicadores(resumen, indicadores):
@@ -417,16 +430,73 @@ def resumen_against_indicadores(resumen, indicadores):
 
 
 def keyboard_reaches(page, count):
-    """The card titles a keyboard focuses, tabbing from the top of the page."""
+    """The cards whose buttons a keyboard focuses, tabbing from the top of the page."""
     reached = []
-    for _ in range(80 + count):
+    for _ in range(80 + 2 * count):
         page.keyboard.press("Tab")
-        title = page.evaluate("() => document.activeElement.matches('.estadistica-resumen__meta') ? document.activeElement.querySelector('h3').innerText.trim() : null")
-        if title and title not in reached:
-            reached.append(title)
+        card = page.evaluate("() => document.activeElement.matches('.estadistica-meta button')"
+                             " ? document.activeElement.closest('.estadistica-meta').querySelector('.estadistica-meta__codigo').innerText.trim() : null")
+        if card and card not in reached:
+            reached.append(card)
         if len(reached) == count:
             break
+    # NcContent's skip links, focused by the first Tab, cover the page until the focus leaves them.
+    page.evaluate("() => document.activeElement.blur()")
     return reached
+
+
+def resumen_filters(page):
+    """Each count tile, pressed: the cards it shows and what the live region says, against its count (#85)."""
+    failures = []
+    tiles = page.get_by_role("group", name="Filtrar metas por estado").get_by_role("button")
+    for i in range(tiles.count()):
+        tile = tiles.nth(i)
+        tile.click()
+        count = int(tile.locator(".estadistica-tiles__count").inner_text())
+        said = page.locator(".estadistica-resumen [role=status]").inner_text().strip()
+        shown = page.locator(".estadistica-meta").count()
+        if tile.get_attribute("aria-pressed") != "true" or shown != count or not said.startswith(f"{count} meta"):
+            failures.append(f"the Resumen's tile «{tile.inner_text()}» shows {shown} cards and says {said!r}")
+    tiles.first.click()
+    return failures
+
+
+def resumen_theme(page, theme):
+    """Each status badge in Nextcloud's own pair, in this theme: a background the theme gives, and text unlike it (#85)."""
+    page.locator(".estadistica-estado").first.wait_for(timeout=30_000)
+    painted = page.evaluate("() => [...document.querySelectorAll('.estadistica-estado')].map((badge) => {"
+                            " const style = getComputedStyle(badge); return [badge.innerText.trim(), style.backgroundColor, style.color] })")
+    return [f"{theme} theme: the «{word}» badge has no colour of the theme's ({background} behind {color})"
+            for word, background, color in painted if background in ("rgba(0, 0, 0, 0)", "transparent") or background == color]
+
+
+def resumen_waiting_note(page, answer):
+    """While metas wait for their rutas oficiales, the note opens the previous year's Metas Sanitarias (#85)."""
+    if not any((meta["estado"] or "").startswith("esperando ruta oficial") for meta in answer["metas"]):
+        return []
+    previous = answer["anio"] - 1
+    page.get_by_role("button", name=f"Ver las Metas Sanitarias {previous}").click()
+    try:
+        page.locator(f".estadistica-goals h2:has-text('{previous}')").wait_for(timeout=30_000)
+    except PlaywrightTimeout:
+        return [f"the Resumen's note did not open the Metas Sanitarias {previous}"]
+    navigation_entry(page, "Resumen").click()
+    page.locator(".estadistica-meta").first.wait_for(timeout=30_000)
+    return []
+
+
+def dark_resumen(browser, name):
+    """The Resumen in the dark theme, which Nextcloud's default theme follows from the system."""
+    page = browser.new_context(viewport={"width": 1400, "height": 900}, color_scheme="dark").new_page()
+    errors = console_errors(page)
+    log_in(page, ADMIN, ADMIN_PASSWORD)
+    resumen_figures(page)
+    page.screenshot(path=str(SHOTS / f"{name}-resumen-oscuro.png"), full_page=True)
+    failures = resumen_theme(page, f"{name} dark")
+    card = page.locator(".estadistica-meta").first.evaluate("(card) => getComputedStyle(card).backgroundColor")
+    if sum(int(part) for part in card[card.index("(") + 1:card.index(")")].split(",")[:3]) > 3 * 128:
+        failures.append(f"{name}: in the dark theme a Resumen card is still light ({card})")
+    return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
 
 
 def main():
@@ -497,9 +567,13 @@ def main():
             page.screenshot(path=str(SHOTS / "resumen.png"), full_page=True)
             if shown_resumen != resumen:
                 failures.append(f"the Resumen's cards show {shown_resumen}, the API answers {resumen}")
-            reached = keyboard_reaches(page, len(resumen))
-            if sorted(reached) != sorted(resumen):
-                failures.append(f"a keyboard reaches only these Resumen cards: {reached}")
+            controls = resumen_controls(resumen_answer)
+            reached = keyboard_reaches(page, len(controls))
+            if sorted(reached) != controls:
+                failures.append(f"a keyboard reaches the buttons of only these Resumen cards: {reached}, not {controls}")
+            failures += resumen_filters(page)
+            failures += resumen_theme(page, "light")
+            failures += resumen_waiting_note(page, resumen_answer)
 
             rows = open_the_tablero(page, f"Tablero navegador {RUN}")
             shown = card_figures(rows)
@@ -549,6 +623,7 @@ def main():
             phone.locator(".estadistica-builder__steps").wait_for(timeout=30_000)
             failures += steps_beside_the_answer(phone, "a phone", beside=False)
             failures += [f"console error on a phone: {e}" for e in phone_errors]
+            failures += dark_resumen(browser, "chromium")
 
             # The dark theme: a consulta still runs, with no violation or console error.
             occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
@@ -577,6 +652,7 @@ def main():
             if (asked := ask_in_consultar(page, "firefox")) != expected:
                 failures.append(f"Consultar in Firefox shows {asked}, the API answers {expected}")
             failures += [f"console error in Firefox: {e}" for e in firefox_errors]
+            failures += dark_resumen(firefox, "firefox")
             firefox.close()
     finally:
         if "tablero" in made:
@@ -614,7 +690,8 @@ def main():
         return 1
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
-    print("ok    the Resumen opens first, its cards show GET resumen's figures, which are GET indicadores' local months, a keyboard reaches each one, and it fits a phone")
+    print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
+    print("ok    the Resumen's status badges take the light and the dark theme's own colours, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")

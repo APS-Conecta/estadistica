@@ -132,6 +132,15 @@ describe('Goals — the Metas Sanitarias month by month (a12, a22)', () => {
 		wrapper.unmount()
 	})
 
+	it('asks for the year it opens on, when the Resumen offers one (#85)', async () => {
+		axios.get.mockReturnValueOnce(ok(answer()))
+		const wrapper = mount(Goals, { props: { establishment: { configured: true }, year: 2025 } })
+		await flushPromises()
+
+		expect(axios.get).toHaveBeenCalledWith(INDICADORES, { params: { pares: 'tipo', anio: 2025 } })
+		wrapper.unmount()
+	})
+
 	it('asks again for another year and other peers, and drops the peers column with none', async () => {
 		const wrapper = await shown()
 		axios.get.mockReturnValueOnce(ok(answer({ anio: 2027, pares: null })))

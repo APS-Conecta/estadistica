@@ -16,6 +16,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 - Estadística opens in Nextcloud's app layout: its five views sit in the side navigation, which folds behind its
   toggle on a phone, and an administrator finds «Ajustes de Estadística» at its foot (#84).
+- The Resumen says once how fresh its figures are, and counts the metas of each status in tiles that filter the
+  cards. Each card shows its figure against its target as a meter, its status as an icon and a word in Nextcloud's
+  status colours, and the gap in points or why it has no percentage; its title opens its histórico. The card border
+  colour and the per-card «Datos al…» line are gone (#85).
 - Consultar puts its four steps beside the answer, which stays in view as they scroll and follows them on a narrow
   screen. «Buscar una prestación» finds one in the catálogo by its código or part of its name, and choosing it picks
   its hoja and sección (#88).
