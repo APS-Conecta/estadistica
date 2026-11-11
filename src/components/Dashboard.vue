@@ -2,9 +2,10 @@
 	Tableros (a8): every tablero is everyone's to read (D6). Each card runs its
 	own consulta and shows its own refusal (QuestionCard), so one broken card
 	never blanks the others. Its creator, or whoever administers Estadística,
-	arranges it: cards up and down, one to three columns wide, added from the
-	saved preguntas and taken out (run plan baseline: a CSS grid and up/down
-	buttons, no layout library). Every change is saved when it is made.
+	arranges it from each card's actions menu: up and down, one to three
+	columns wide, taken out; cards are added from the saved preguntas (run plan
+	baseline: a CSS grid, no layout library). Every change is saved when it is
+	made.
 -->
 <template>
 	<div class="estadistica-dashboards">
@@ -18,18 +19,20 @@
 
 		<template v-else>
 			<section class="estadistica-dashboards__list">
-				<h2>Tableros</h2>
 				<p v-if="tableros.length === 0" class="estadistica-dashboards__hint">
 					Todavía no hay tableros. Cree el primero y agréguele preguntas guardadas.
 				</p>
-				<ul v-else>
-					<li v-for="item in tableros" :key="item.id">
-						<NcButton :variant="item.id === openId ? 'primary' : 'tertiary'" @click="open(item.id)">
-							{{ item.titulo }}
-						</NcButton>
-						<span class="estadistica-dashboards__hint">de {{ item.autor_nombre }}</span>
-					</li>
-				</ul>
+				<div v-else class="estadistica-dashboards__bar">
+					<NcSelect class="estadistica-dashboards__picker"
+						:model-value="openId"
+						input-label="Tablero"
+						:options="tableroOptions"
+						:reduce="(option) => option.id"
+						:clearable="false"
+						placeholder="Elija un tablero"
+						@update:model-value="open" />
+					<span v-if="tablero" class="estadistica-dashboards__hint">de {{ tablero.autor_nombre }}</span>
+				</div>
 
 				<form class="estadistica-dashboards__form" @submit.prevent="create">
 					<label class="estadistica-field">
@@ -53,7 +56,7 @@
 				<header class="estadistica-dashboards__head">
 					<h2>{{ tablero.titulo }}</h2>
 					<p class="estadistica-dashboards__hint">
-						Tablero de {{ tablero.autor_nombre }}. Cada tarjeta hace su propia consulta.
+						Cada tarjeta hace su propia consulta.
 					</p>
 					<form v-if="tablero.editable" class="estadistica-dashboards__form" @submit.prevent="rename">
 						<label class="estadistica-field">
@@ -63,10 +66,15 @@
 						<NcButton type="submit" :disabled="title.trim() === '' || title.trim() === tablero.titulo || saving">
 							Cambiar el título
 						</NcButton>
-						<NcButton variant="error" :disabled="saving" @click="remove">
+						<NcButton variant="error" :disabled="saving" @click="confirmingRemove = true">
 							Eliminar el tablero
 						</NcButton>
 					</form>
+					<NcDialog v-if="confirmingRemove"
+						name="Eliminar el tablero"
+						:message="`¿Eliminar el tablero «${tablero.titulo}»? Sus preguntas no se eliminan.`"
+						:buttons="[{ label: 'Cancelar' }, { label: 'Eliminar el tablero', variant: 'error', callback: remove }]"
+						@closing="confirmingRemove = false" />
 				</header>
 
 				<p v-if="cards.length === 0" class="estadistica-dashboards__hint">
@@ -75,36 +83,29 @@
 				<div class="estadistica-dashboards__grid">
 					<div v-for="(card, index) in cards"
 						:key="card.key"
-						class="estadistica-dashboards__cell"
-						:style="{ gridColumn: `span ${card.ancho}` }">
+						:class="['estadistica-dashboards__cell', `estadistica-dashboards__cell--span-${card.ancho}`]">
 						<QuestionCard :pregunta="preguntaOf(card.pregunta)">
 							<template v-if="tablero.editable" #actions>
-								<NcButton variant="tertiary"
-									:aria-label="`Subir la tarjeta «${cardName(card)}»`"
-									:disabled="index === 0 || saving"
-									@click="move(index, -1)">
-									Subir
-								</NcButton>
-								<NcButton variant="tertiary"
-									:aria-label="`Bajar la tarjeta «${cardName(card)}»`"
-									:disabled="index === cards.length - 1 || saving"
-									@click="move(index, 1)">
-									Bajar
-								</NcButton>
-								<select :value="card.ancho"
-									:aria-label="`Ancho de la tarjeta «${cardName(card)}»`"
-									:disabled="saving"
-									@change="resize(index, Number($event.target.value))">
-									<option v-for="ancho in WIDTHS" :key="ancho" :value="ancho">
+								<NcActions :aria-label="`Acciones de la tarjeta «${cardName(card)}»`">
+									<NcActionButton :disabled="index === 0 || saving" close-after-click @click="move(index, -1)">
+										Subir
+									</NcActionButton>
+									<NcActionButton :disabled="index === cards.length - 1 || saving" close-after-click @click="move(index, 1)">
+										Bajar
+									</NcActionButton>
+									<NcActionButton v-for="ancho in WIDTHS"
+										:key="ancho"
+										type="radio"
+										:model-value="String(card.ancho)"
+										:value="String(ancho)"
+										:disabled="saving"
+										@update:model-value="resize(index, ancho)">
 										{{ ancho === 1 ? '1 columna' : `${ancho} columnas` }}
-									</option>
-								</select>
-								<NcButton variant="tertiary"
-									:aria-label="`Quitar la tarjeta «${cardName(card)}»`"
-									:disabled="saving"
-									@click="drop(index)">
-									Quitar
-								</NcButton>
+									</NcActionButton>
+									<NcActionButton :disabled="saving" close-after-click @click="drop(index)">
+										Quitar
+									</NcActionButton>
+								</NcActions>
 							</template>
 						</QuestionCard>
 					</div>
@@ -112,12 +113,12 @@
 
 				<form v-if="tablero.editable" class="estadistica-dashboards__form estadistica-dashboards__add" @submit.prevent="add">
 					<NcSelect v-model="adding"
-						input-label="Agregar una pregunta guardada"
+						input-label="Pregunta guardada"
 						:options="questionOptions"
 						:reduce="(option) => option.id"
 						placeholder="Elija una pregunta" />
 					<NcButton type="submit" :disabled="adding === null || saving">
-						Agregar tarjeta
+						Agregar una pregunta
 					</NcButton>
 				</form>
 			</section>
@@ -126,7 +127,10 @@
 </template>
 
 <script>
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import QuestionCard from './QuestionCard.vue'
@@ -142,7 +146,7 @@ let nextKey = 0
 export default {
 	name: 'EstadisticaDashboard',
 
-	components: { NcButton, NcNoteCard, NcSelect, QuestionCard },
+	components: { NcActionButton, NcActions, NcButton, NcDialog, NcNoteCard, NcSelect, QuestionCard },
 
 	data() {
 		return {
@@ -158,12 +162,16 @@ export default {
 			adding: null,
 			saving: false,
 			saveFailed: '',
+			confirmingRemove: false,
 		}
 	},
 
 	computed: {
 		tablero() {
 			return this.tableros?.find((item) => item.id === this.openId) ?? null
+		},
+		tableroOptions() {
+			return this.tableros.map((item) => ({ id: item.id, label: item.titulo }))
 		},
 		questionOptions() {
 			return this.preguntas.map((pregunta) => ({ id: pregunta.id, label: pregunta.titulo }))
@@ -273,11 +281,9 @@ export default {
 			}
 		},
 
-		/** ponytail: the browser's own confirm; NcDialog when the page needs more than one yes/no. */
+		/** Confirmed in the dialog, which closes at once: a refusal is said on the page. */
 		async remove() {
-			if (!window.confirm(`¿Eliminar el tablero «${this.tablero.titulo}»? Sus preguntas no se eliminan.`)) {
-				return
-			}
+			this.confirmingRemove = false
 			this.saving = true
 			this.saveFailed = ''
 			try {
@@ -308,19 +314,26 @@ export default {
 	margin: 0;
 }
 
-.estadistica-dashboards__list ul {
+.estadistica-dashboards__list {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 4px 16px;
-	margin: 8px 0;
+	flex-direction: column;
+	gap: 16px;
 }
 
-.estadistica-dashboards__list li,
+.estadistica-dashboards__bar,
 .estadistica-dashboards__form {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
+}
+
+.estadistica-dashboards__bar {
+	align-items: end;
+}
+
+.estadistica-dashboards__picker {
+	min-width: 260px;
 }
 
 .estadistica-dashboards__head {
@@ -338,13 +351,22 @@ export default {
 	margin-bottom: 16px;
 }
 
+.estadistica-dashboards__cell--span-2 {
+	grid-column: span 2;
+}
+
+.estadistica-dashboards__cell--span-3 {
+	grid-column: span 3;
+}
+
 @media (max-width: 1024px) {
 	.estadistica-dashboards__grid {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.estadistica-dashboards__cell {
-		grid-column: auto !important;
+	.estadistica-dashboards__cell--span-2,
+	.estadistica-dashboards__cell--span-3 {
+		grid-column: auto;
 	}
 }
 

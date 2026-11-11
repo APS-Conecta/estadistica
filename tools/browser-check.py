@@ -113,7 +113,7 @@ VIEWS = [
     # Its steps, or «Todavía no hay cifras REM» on an instance that has loaded none.
     ("Consultar", "consultar", ".estadistica-builder :is(.estadistica-builder__steps, .empty-content)"),
     ("Preguntas", "preguntas", f".estadistica-questions__item strong:text-is('Navegador {RUN}')"),
-    ("Tableros", "tableros", f".estadistica-dashboards__list button:has-text('Tablero navegador {RUN}')"),
+    ("Tableros", "tableros", ".estadistica-dashboards__picker"),
 ]
 SETTINGS = "Ajustes de Estadística"
 
@@ -305,12 +305,46 @@ def steps_beside_the_answer(page, where, beside):
 
 
 def open_the_tablero(page, title):
-    """Tableros → the tablero → its one card's table, as a person clicks through."""
+    """Tableros → the tablero, chosen in the picker → its one card's table, as a person clicks through."""
     navigation_entry(page, "Tableros").click()
-    page.get_by_role("button", name=title, exact=True).click()
+    page.locator(".estadistica-dashboards__picker input[role='combobox']").click()
+    # By its text: NcSelect splits a long label into two parts, which its accessible name spaces apart.
+    page.get_by_role("option").filter(has_text=title).click()
     rows = page.locator(".estadistica-card .estadistica-answer__table tbody tr")
     rows.first.wait_for(timeout=30_000)
     return rows
+
+
+def arrange_the_card(page, pregunta):
+    """The card's actions menu: its width radio shows the card's three columns and «2 columnas» saves two;
+    «Eliminar el tablero» asks in a dialog first, and «Cancelar» keeps the tablero."""
+    failures = []
+    page.get_by_role("button", name=f"Acciones de la tarjeta «{pregunta}»").click()
+    page.get_by_role("menuitemradio", name="3 columnas").hover()  # waits until the menu sits in place
+    if page.get_by_role("menuitemradio", name="3 columnas").get_attribute("aria-checked") != "true":
+        failures.append("the card's menu does not mark the card's 3 columns")
+    for name in ("Subir", "Bajar", "Quitar"):
+        if page.get_by_role("menuitem", name=name, exact=True).count() != 1:
+            failures.append(f"the card's menu offers no «{name}»")
+    page.screenshot(path=str(SHOTS / "tablero-acciones.png"))
+    page.get_by_role("menuitemradio", name="2 columnas").click()
+    try:
+        page.locator(".estadistica-dashboards__cell--span-2").wait_for(timeout=30_000)
+    except PlaywrightTimeout:
+        failures.append("«2 columnas» did not lay the card out two columns wide")
+
+    # A click outside the menu closes it, as it does for a person.
+    page.get_by_role("button", name="Eliminar el tablero", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Eliminar el tablero")
+    try:
+        dialog.get_by_text("Sus preguntas no se eliminan.").wait_for(timeout=30_000)
+        page.wait_for_function("(d) => getComputedStyle(d).opacity === '1'", arg=dialog.element_handle())  # faded in
+        page.screenshot(path=str(SHOTS / "tablero-eliminar.png"))
+        dialog.get_by_role("button", name="Cancelar").click()
+        dialog.wait_for(state="hidden", timeout=30_000)
+    except PlaywrightTimeout:
+        failures.append("«Eliminar el tablero» did not ask in a dialog that «Cancelar» closes")
+    return failures
 
 
 def card_figures(rows):
@@ -474,8 +508,7 @@ def main():
                 failures.append(f"a15: the card shows {shown}, the API answers {expected}")
             if page.locator(".estadistica-card canvas").count() != 1:
                 failures.append("the card drew no chart above its table")
-            if page.get_by_role("button", name="Subir").count() == 0:
-                failures.append("the creator sees no controls on their own tablero")
+            failures += arrange_the_card(page, f"Navegador {RUN}")
             failures += walk_the_navigation(page, fetched, "chromium")
 
             # #88: a consulta from the search to the answer, then the layout at the narrowest desktop.
@@ -493,7 +526,7 @@ def main():
             rows = open_the_tablero(reader, f"Tablero navegador {RUN}")
             if card_figures(rows) != expected:
                 failures.append(f"a8: the second user's card shows {card_figures(rows)}, the API answers {expected}")
-            if reader.get_by_role("button", name="Subir").count() != 0:
+            if reader.get_by_role("button", name=f"Acciones de la tarjeta «Navegador {RUN}»").count() != 0:
                 failures.append("a8: the second user sees controls to change someone else's tablero")
             if navigation_entry(reader, SETTINGS).count() != 0:
                 failures.append(f"the second user, no admin, is offered «{SETTINGS}»")
