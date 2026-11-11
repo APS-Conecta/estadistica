@@ -20,6 +20,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   cards. Each card shows its figure against its target as a meter, its status as an icon and a word in Nextcloud's
   status colours, and the gap in points or why it has no percentage; its title opens its histórico. The card border
   colour and the per-card «Datos al…» line are gone (#85).
+- Consultar puts its four steps beside the answer, which stays in view as they scroll and follows them on a narrow
+  screen. «Buscar una prestación» finds one in the catálogo by its código or part of its name, and choosing it picks
+  its hoja and sección (#88).
 - The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
   contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.
 

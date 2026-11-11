@@ -30,15 +30,25 @@ Estadística» takes an admin to the admin section and is not offered to the
 second user; and on a phone the navigation folds away. No page logs a
 console error or a CSP violation.
 
+And Consultar (#88), in Chromium, light and dark, and in Firefox: the search
+finds the synthetic prestación by its código, and the consulta shows the
+API's figures. At Nextcloud's narrowest desktop width every control stays in
+its step, with the answer beside the steps; on a phone the answer follows
+them.
+
 It makes everything it needs and removes it all however it ends:
 - a few synthetic REM rows under a código of its own. They sit in 2009, the
   window's floor: outside the default window the REM job neither loads that
   year (which would replace its rows) nor forgets it (which reads the ingest
   state these rows have none of);
+- for Consultar, that código's catálogo: a 2009 diccionario and ingest row,
+  which GET fuentes reads. The REM job would forget that year on its next
+  tick, which a run is too short to reach among Nextcloud's own jobs;
 - for the metas, four rows in 2026 under the 2026 seed's Meta VI códigos,
   for the fabricated establishment only;
 - the establishment code, set to a fabricated one and put back after;
-- a pregunta, a tablero, an app password and a throwaway user.
+- a pregunta, a tablero, an app password and a throwaway user;
+- the admin's dark theme, for one Consultar run.
 
 Screenshots land in tools/.browser-check/ for a person to look at afterwards.
 
@@ -83,6 +93,11 @@ ROWS = [(900001, 1, 4), (900001, 2, 6), (900002, 1, 3), (900002, 2, 5), (900003,
 METAS_YEAR = 2026  # the shipped 2026 seed's Meta VI: A0200002 over A0200001, col06
 # (código, mes, col06): 5 de 8 by February.
 METAS_ROWS = [("A0200002", 1, 3), ("A0200001", 1, 4), ("A0200002", 2, 2), ("A0200001", 2, 4)]
+
+# Its catálogo, as Catalog::tree serves it: one hoja, one sección, one column.
+HOJA, SECCION, PRESTACION = "BC", "SECCIÓN A: NAVEGADOR", f"Prueba del navegador {RUN}"
+# Nextcloud keeps the navigation open from 1024 px: the narrowest desktop.
+NARROWEST_DESKTOP = {"width": 1024, "height": 768}
 
 SPEC = {
     "fuente": "rem-a",
@@ -245,6 +260,50 @@ def walk_the_navigation(page, fetched, browser):
         page.locator("#estadistica-establishment").wait_for(timeout=30_000)
     except PlaywrightTimeout:
         failures.append(f"{browser}: «{SETTINGS}» did not open the admin section (at {page.url})")
+    return failures
+
+
+def ask_in_consultar(page, where):
+    """Consultar end to end (#88): the search finds the prestación by its código, col01 is summed; the answer's figures."""
+    navigation_entry(page, "Consultar").click()
+    page.get_by_label("Buscar una prestación").fill(CODE)
+    # By text, not accessible name: NcSelect draws an option's label in two flex items, and a browser
+    # joins those with a space ("Total ( col01)").
+    page.get_by_role("option").filter(has_text=f"{PRESTACION} ({CODE}) — {HOJA}").click()
+    page.get_by_label("Columnas que se suman").click()
+    page.get_by_role("option").filter(has_text="Total (col01)").click()
+    page.get_by_role("button", name="Consultar", exact=True).click()
+    rows = page.locator(".estadistica-builder__answer .estadistica-answer__table tbody tr")
+    rows.first.wait_for(timeout=30_000)
+    page.screenshot(path=str(SHOTS / f"{where}-consultar.png"), full_page=True)
+    return card_figures(rows)
+
+
+def steps_beside_the_answer(page, where, beside):
+    """Every control inside its step, nothing wider than the view, and the answer beside the steps or under them."""
+    found = page.evaluate("""() => {
+        const box = (el) => el.getBoundingClientRect()
+        const outside = []
+        for (const step of document.querySelectorAll('.estadistica-builder__step')) {
+            for (const control of step.querySelectorAll('.v-select, .checkbox-radio-switch')) {
+                if (box(control).left < box(step).left - 1 || box(control).right > box(step).right + 1) {
+                    outside.push(control.textContent.trim().slice(0, 40))
+                }
+            }
+        }
+        const builder = document.querySelector('.estadistica-builder')
+        const steps = box(document.querySelector('.estadistica-builder__steps'))
+        const answer = box(document.querySelector('.estadistica-builder__answer'))
+        return { outside, wide: builder.scrollWidth > builder.clientWidth, beside: answer.left >= steps.right, under: answer.top >= steps.bottom }
+    }""")
+    page.screenshot(path=str(SHOTS / f"{where}-consultar-ancho.png"), full_page=True)
+    failures = [f"{where}: Consultar's control «{text}» leaves its step" for text in found["outside"]]
+    if found["wide"]:
+        failures.append(f"{where}: Consultar is wider than the view")
+    if beside and not found["beside"]:
+        failures.append(f"{where}: Consultar's answer is not beside its steps")
+    if not beside and not found["under"]:
+        failures.append(f"{where}: Consultar's answer does not follow its steps")
     return failures
 
 
@@ -426,6 +485,11 @@ def main():
              + ", ".join(f"('A', {METAS_YEAR}, {mes}, {LOCAL}, '{codigo}', {valor})" for codigo, mes, valor in METAS_ROWS) + ";")
         made["metas"] = True
 
+        psql(f"INSERT INTO oc_estadistica_ingest (anio, serie, origin, row_count, fecha_corte) VALUES ({YEAR}, 'A', 'deis', {len(ROWS)}, '{YEAR}-02');"
+             f"INSERT INTO oc_estadistica_dictionary (anio, serie, name, sheets, codes, checked_at) VALUES ({YEAR}, 'A', 'DICCIONARIO navegador', '{{\"{HOJA}\": \"REM-{HOJA}\"}}', 1, 0);"
+             f"INSERT INTO oc_estadistica_code (anio, serie, codigo, orden, hoja, seccion, prestacion, columnas) VALUES ({YEAR}, 'A', '{CODE}', 1, '{HOJA}', '{SECCION}', '{PRESTACION}', '{{\"1\": \"Total\"}}');")
+        made["catalogo"] = True
+
         # App config values reach the web workers within seconds, not at once:
         # ask until the local series is the one just configured.
         deadline = time.monotonic() + 30
@@ -487,6 +551,13 @@ def main():
             if page.get_by_role("button", name="Subir").count() == 0:
                 failures.append("the creator sees no controls on their own tablero")
             failures += walk_the_navigation(page, fetched, "chromium")
+
+            # #88: a consulta from the search to the answer, then the layout at the narrowest desktop.
+            log_in(page, ADMIN, ADMIN_PASSWORD)
+            if (asked := ask_in_consultar(page, "chromium")) != expected:
+                failures.append(f"Consultar shows {asked}, the API answers {expected}")
+            page.set_viewport_size(NARROWEST_DESKTOP)
+            failures += steps_beside_the_answer(page, "chromium at 1024 px", beside=True)
             failures += [f"console error for the creator: {e}" for e in errors]
 
             # a8: a second user who administers nothing reads the same tablero.
@@ -514,8 +585,26 @@ def main():
             if not phone.locator(".app-navigation").evaluate("(n) => n.classList.contains('app-navigation--closed')"):
                 failures.append("on a phone the navigation stays open over the Resumen")
             failures += title_clears_the_toggle(phone, "a phone")
+            phone.locator("button.app-navigation-toggle").click()
+            navigation_entry(phone, "Consultar").click()
+            phone.locator(".estadistica-builder__steps").wait_for(timeout=30_000)
+            failures += steps_beside_the_answer(phone, "a phone", beside=False)
             failures += [f"console error on a phone: {e}" for e in phone_errors]
             failures += dark_resumen(browser, "chromium")
+
+            # The dark theme: a consulta still runs, with no violation or console error.
+            occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
+            made["dark"] = True
+            dark = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
+            dark_errors = console_errors(dark)
+            log_in(dark, ADMIN, ADMIN_PASSWORD)
+            if "dark" not in dark.evaluate("() => document.body.dataset.themes ?? ''"):
+                failures.append("the admin's dark theme did not reach the page")
+            if (asked := ask_in_consultar(dark, "chromium-oscuro")) != expected:
+                failures.append(f"Consultar in the dark theme shows {asked}, the API answers {expected}")
+            failures += [f"console error in the dark theme: {e}" for e in dark_errors]
+            occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete")
+            made.pop("dark")
 
             browser.close()
 
@@ -526,6 +615,9 @@ def main():
             fetched = chunks_fetched(page)
             log_in(page, ADMIN, ADMIN_PASSWORD)
             failures += walk_the_navigation(page, fetched, "firefox")
+            log_in(page, ADMIN, ADMIN_PASSWORD)
+            if (asked := ask_in_consultar(page, "firefox")) != expected:
+                failures.append(f"Consultar in Firefox shows {asked}, the API answers {expected}")
             failures += [f"console error in Firefox: {e}" for e in firefox_errors]
             failures += dark_resumen(firefox, "firefox")
             firefox.close()
@@ -543,6 +635,12 @@ def main():
             occ("user:delete", READER, check=False)
         if made.get("rows"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE codigo = '{CODE}';")
+        if made.get("catalogo"):
+            psql(f"DELETE FROM oc_estadistica_code WHERE anio = {YEAR} AND codigo = '{CODE}';"
+                 f"DELETE FROM oc_estadistica_dictionary WHERE anio = {YEAR} AND serie = 'A';"
+                 f"DELETE FROM oc_estadistica_ingest WHERE anio = {YEAR} AND serie = 'A';")
+        if made.get("dark"):
+            occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete", check=False)
         if made.get("metas"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {METAS_YEAR} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
@@ -562,6 +660,7 @@ def main():
     print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
     print("ok    the Resumen's status badges take the light and the dark theme's own colours, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
+    print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
     print("\nAll good.")
     return 0
