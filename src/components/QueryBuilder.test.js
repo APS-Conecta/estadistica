@@ -80,7 +80,7 @@ function serve(fuentes = FUENTES) {
 	})
 }
 
-/** The builder, once the fuentes and the catálogo have arrived. Visualization is stubbed: jsdom has no canvas. */
+/** The builder, once the fuentes and the catálogo have arrived. Visualization is stubbed: Visualization.test.js covers what it draws. */
 async function builder(establishment = { deisCode: '900001', type: '', comunaCut: '', configured: true }) {
 	const wrapper = mount(QueryBuilder, { props: { establishment }, global: { stubs: { Visualization: true } } })
 	await flushPromises()

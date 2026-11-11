@@ -74,7 +74,7 @@ function serve({ tableros = [TABLERO], preguntas = PREGUNTAS } = {}) {
 	})
 }
 
-/** The tableros view with TABLERO chosen in its picker. Visualization is stubbed: jsdom has no canvas. */
+/** The tableros view with TABLERO chosen in its picker. Visualization is stubbed: Visualization.test.js covers what it draws. */
 async function opened(options) {
 	serve(options)
 	const wrapper = mount(Dashboard, { global: { stubs: { Visualization: true } } })
