@@ -21,7 +21,9 @@ card's buttons, each count tile filters the cards and says how many it
 shows, the note on metas waiting for their rutas opens the previous year's
 Metas Sanitarias, it renders in the light and the dark theme with each
 status in Nextcloud's own colours (#85), and the cards fit a phone's width.
-The metas view still answers its own year's figures.
+The metas view still answers its own year's figures, and lists its metas as
+rows whose badges take the light and the dark theme's colours and which each
+open to their month table (#87).
 
 And the shell (#84), in Chromium and in Firefox under the CSP Nextcloud
 serves: every view opens from the navigation, marked as the open one,
@@ -451,8 +453,24 @@ def resumen_waiting_note(page, answer):
     return []
 
 
+def metas_rows(page, where):
+    """Metas Sanitarias as rows (#87): each badge in the theme's pair, and a row opens the panel it controls."""
+    navigation_entry(page, "Metas Sanitarias").click()
+    row = page.locator(".estadistica-goals__row").first
+    try:
+        row.wait_for(timeout=30_000)
+    except PlaywrightTimeout:
+        return [f"{where}: Metas Sanitarias shows no meta row"]
+    failures = resumen_theme(page, f"{where} Metas Sanitarias")
+    row.click()
+    if row.get_attribute("aria-expanded") != "true" or not page.locator(f"#{row.get_attribute('aria-controls')}").is_visible():
+        failures.append(f"{where}: a meta's row did not open its panel")
+    page.screenshot(path=str(SHOTS / f"{where}-metas.png"), full_page=True)
+    return failures
+
+
 def dark_resumen(browser, name):
-    """The Resumen in the dark theme, which Nextcloud's default theme follows from the system."""
+    """The Resumen and Metas Sanitarias in the dark theme, which Nextcloud's default theme follows from the system."""
     page = browser.new_context(viewport={"width": 1400, "height": 900}, color_scheme="dark").new_page()
     errors = console_errors(page)
     log_in(page, ADMIN, ADMIN_PASSWORD)
@@ -462,6 +480,7 @@ def dark_resumen(browser, name):
     card = page.locator(".estadistica-meta").first.evaluate("(card) => getComputedStyle(card).backgroundColor")
     if sum(int(part) for part in card[card.index("(") + 1:card.index(")")].split(",")[:3]) > 3 * 128:
         failures.append(f"{name}: in the dark theme a Resumen card is still light ({card})")
+    failures += metas_rows(page, f"{name}-oscuro")
     return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
 
 
@@ -540,6 +559,7 @@ def main():
             failures += resumen_filters(page)
             failures += resumen_theme(page, "light")
             failures += resumen_waiting_note(page, resumen_answer)
+            failures += metas_rows(page, "chromium")
 
             rows = open_the_tablero(page, f"Tablero navegador {RUN}")
             shown = card_figures(rows)
@@ -658,7 +678,7 @@ def main():
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
     print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
-    print("ok    the Resumen's status badges take the light and the dark theme's own colours, in Chromium and Firefox")
+    print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")

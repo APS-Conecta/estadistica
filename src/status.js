@@ -1,6 +1,6 @@
 /**
- * A meta's status, from the fields GET resumen serves (#83): pure, so every
- * view reads a meta the same way. A status is one word and one icon, never
+ * A meta's status, from the fields GET resumen and GET indicadores serve
+ * (#83): pure, so every view reads a meta the same way. A status is one word and one icon, never
  * colour alone; its kind picks Nextcloud's status pair.
  */
 import { mdiAlertCircleOutline, mdiCheck, mdiClockOutline, mdiClose, mdiMinusCircleOutline } from './icons.js'
@@ -54,6 +54,28 @@ export function statusOf(meta) {
 	return meta.cumple
 		? { kind: 'success', filter: 'cumple', label: 'Cumple' }
 		: { kind: 'error', filter: 'no-cumple', label: 'No cumple' }
+}
+
+/** A GET indicadores meta's last figure: its newest month with a percentage, or a manual meta's cumplimiento informado; null with none. */
+export const lastPercentOf = (indicador) => indicador.manual
+	? indicador.cumplimiento
+	: indicador.meses.filter((mes) => mes.porcentaje !== null).at(-1)?.porcentaje ?? null
+
+/**
+ * A GET indicadores meta's status, in statusOf's words: its last figure
+ * against its target (CONTEXT.md, cumple), and the engine's rule for a meta
+ * whose ages cut a FONASA band (Resumen::missing).
+ *
+ * @param {object} indicador one of GET indicadores' indicadores
+ * @return {{kind: string, filter: string, label: string}}
+ */
+export function indicadorStatus(indicador) {
+	const porcentaje = lastPercentOf(indicador)
+	return statusOf({
+		estado: indicador.poblacion?.falta_oficial ? 'falta el denominador oficial' : null,
+		porcentaje,
+		cumple: porcentaje !== null && porcentaje >= targetOf(indicador),
+	})
 }
 
 /** How many metas each filter keeps, by filter id; a filter that keeps none is absent. */
