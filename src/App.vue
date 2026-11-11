@@ -9,7 +9,7 @@
 					:key="item.id"
 					:name="item.nombre"
 					:active="view === item.id"
-					@click.prevent="view = item.id">
+					@click.prevent="show(item.id)">
 					<template #icon>
 						<NcIconSvgWrapper :path="item.icon" />
 					</template>
@@ -47,14 +47,14 @@
 						cifras nacionales y de pares, pero no las propias.
 					</NcNoteCard>
 
-					<EstadisticaResumen v-if="view === 'resumen'" />
+					<EstadisticaResumen v-if="view === 'resumen'" @metas="(anio) => show('metas', anio)" />
 					<!-- The builder mounts when Consultar first opens and then stays mounted,
 					     so a consulta half-built survives a look at the tableros; the lists
 					     are read afresh each time they open. -->
 					<QueryBuilder v-if="builderOpened" v-show="view === 'consultar'" :establishment="establishment" />
 					<SavedQuestions v-if="view === 'preguntas'" />
 					<EstadisticaDashboard v-if="view === 'tableros'" />
-					<SanitaryGoals v-if="view === 'metas'" :establishment="establishment" />
+					<SanitaryGoals v-if="view === 'metas'" :establishment="establishment" :year="metasYear" />
 				</template>
 			</div>
 		</NcAppContent>
@@ -116,6 +116,8 @@ export default {
 			VIEWS,
 			mdiCogOutline,
 			view: VIEWS[0].id,
+			/** The year Metas Sanitarias opens on when the Resumen offers one; null for its own. */
+			metasYear: null,
 			builderOpened: false,
 			settingsUrl: getCurrentUser()?.isAdmin ? generateUrl('/settings/admin/estadistica') : null,
 		}
@@ -140,6 +142,13 @@ export default {
 	watch: {
 		view(id) {
 			this.builderOpened ||= id === 'consultar'
+		},
+	},
+
+	methods: {
+		show(id, metasYear = null) {
+			this.view = id
+			this.metasYear = metasYear
 		},
 	},
 }

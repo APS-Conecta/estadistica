@@ -34,10 +34,15 @@ const button = (element, text) => element.findAll('button').find((b) => b.text()
 /** The actions menu and the dialog open in the page's body, outside the list. */
 const inPage = (selector, text) => [...document.body.querySelectorAll(selector)].find((element) => element.textContent.trim() === text)
 
+/** Opens a pregunta's actions menu: its popover mounts on a timer after the click, which flushPromises may beat. */
+async function openMenu(wrapper, titulo) {
+	await wrapper.find(`button[aria-label="Acciones de «${titulo}»"]`).trigger('click')
+	await vi.waitFor(() => expect(document.body.querySelector('[role="menuitem"]')).not.toBeNull())
+}
+
 /** «Editar» or «Eliminar» from a pregunta's actions menu, as a person picks it. */
 async function choose(wrapper, titulo, action) {
-	await wrapper.find(`button[aria-label="Acciones de «${titulo}»"]`).trigger('click')
-	await flushPromises()
+	await openMenu(wrapper, titulo)
 	inPage('[role="menuitem"]', action).click()
 	await flushPromises()
 }
@@ -75,8 +80,7 @@ describe('Questions — every pregunta, everyone\'s to read (a8)', () => {
 		const wrapper = await listed()
 
 		expect(button(item(wrapper, 0), 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Controles»')
-		await item(wrapper, 0).find('button[aria-label="Acciones de «Controles»"]').trigger('click')
-		await flushPromises()
+		await openMenu(wrapper, 'Controles')
 		expect([...document.body.querySelectorAll('[role="menuitem"]')].map((action) => action.textContent.trim())).toEqual(['Editar', 'Eliminar'])
 
 		expect(button(item(wrapper, 1), 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Visitas»')

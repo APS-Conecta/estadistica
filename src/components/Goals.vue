@@ -152,13 +152,15 @@ export default {
 	props: {
 		/** The initial state's establishment: whether this install has one. */
 		establishment: { type: Object, required: true },
+		/** The year to open on, as the Resumen offers it; null opens GET indicadores' own. */
+		year: { type: Number, default: null },
 	},
 
 	data() {
 		return {
 			metas: null,
 			anios: [],
-			anio: null,
+			anio: this.year,
 			pares: ['tipo'],
 			loading: false,
 			missing: false,
