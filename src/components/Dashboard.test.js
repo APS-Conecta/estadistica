@@ -8,6 +8,8 @@ import Visualization from './Visualization.vue'
 
 vi.mock('@nextcloud/axios', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
 vi.mock('@nextcloud/router', () => ({ generateOcsUrl: (url) => `/ocs/v2.php${url}` }))
+// jsdom has none; NcActions' popover observes its own size.
+vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 
 const OCS = '/ocs/v2.php/apps/estadistica/api/v1'
 
@@ -72,17 +74,35 @@ function serve({ tableros = [TABLERO], preguntas = PREGUNTAS } = {}) {
 	})
 }
 
-/** The tableros view with TABLERO opened. Visualization is stubbed: jsdom has no canvas. */
+/** The tableros view with TABLERO chosen in its picker. Visualization is stubbed: jsdom has no canvas. */
 async function opened(options) {
 	serve(options)
 	const wrapper = mount(Dashboard, { global: { stubs: { Visualization: true } } })
 	await flushPromises()
-	wrapper.vm.open(9)
+	await wrapper.find('.estadistica-dashboards__bar input[role="combobox"]').trigger('mousedown')
+	const option = await vi.waitFor(() => {
+		const shown = [...document.querySelectorAll('[role="option"]')].find((item) => item.textContent.trim() === 'Metas del año')
+		expect(shown).toBeDefined()
+		return shown
+	})
+	option.click()
 	await flushPromises()
 	return wrapper
 }
 
 const consultas = () => axios.post.mock.calls.filter(([url]) => url === `${OCS}/consultas`)
+
+/** The items of the actions menu of the card at `index`, by name, once the menu a person opens shows. */
+async function cardActions(wrapper, index) {
+	const trigger = wrapper.findAllComponents(QuestionCard)[index].find('button[aria-label^="Acciones de la tarjeta"]')
+	await trigger.trigger('click')
+	const items = await vi.waitFor(() => {
+		const shown = document.getElementById(trigger.attributes('aria-controls'))?.querySelectorAll('[role^="menuitem"]')
+		expect(shown?.length).toBeGreaterThan(0)
+		return shown
+	})
+	return Object.fromEntries([...items].map((item) => [item.textContent.trim(), item]))
+}
 
 beforeEach(() => {
 	axios.get.mockReset()
@@ -111,9 +131,11 @@ describe('Dashboard — each card asks on its own (a8)', () => {
 	it('lays the cards out one to three columns wide, in the saved order', async () => {
 		const wrapper = await opened()
 
-		expect(wrapper.findAll('.estadistica-dashboards__cell').map((cell) => cell.attributes('style'))).toStrictEqual([
-			'grid-column: span 2;', 'grid-column: span 1;', 'grid-column: span 3;',
+		const cells = wrapper.findAll('.estadistica-dashboards__cell')
+		expect(cells.map((cell) => cell.classes().filter((name) => name.includes('--span-')))).toStrictEqual([
+			['estadistica-dashboards__cell--span-2'], ['estadistica-dashboards__cell--span-1'], ['estadistica-dashboards__cell--span-3'],
 		])
+		expect(cells.map((cell) => cell.attributes('style'))).toStrictEqual([undefined, undefined, undefined])
 		wrapper.unmount()
 	})
 
@@ -137,14 +159,12 @@ describe('Dashboard — each card asks on its own (a8)', () => {
 })
 
 describe('Dashboard — its creator or an administrator arranges it', () => {
-	it('saves a card moved down, and asks no card again', async () => {
+	it('saves a card moved down from its actions menu, and asks no card again', async () => {
 		const wrapper = await opened()
 		axios.put.mockReturnValueOnce(ok({ ...TABLERO, actualizado: 2 }))
 
-		const firstCardDownButton = wrapper.findAllComponents(QuestionCard)[0].findAll('button').find((button) => button.text() === 'Bajar')
-		expect(firstCardDownButton.attributes('aria-label')).toBe('Bajar la tarjeta «Pregunta 1»')
-
-		await firstCardDownButton.trigger('click')
+		expect(wrapper.findAllComponents(QuestionCard)[0].find('button[aria-label="Acciones de la tarjeta «Pregunta 1»"]').exists()).toBe(true)
+		;(await cardActions(wrapper, 0)).Bajar.click()
 		await flushPromises()
 
 		expect(axios.put).toHaveBeenCalledWith(`${OCS}/tableros/9`, {
@@ -155,13 +175,28 @@ describe('Dashboard — its creator or an administrator arranges it', () => {
 		wrapper.unmount()
 	})
 
-	it('puts the cards back and says why when the server refuses', async () => {
+	it('saves the last card moved up, and offers no «Subir» on the first', async () => {
 		const wrapper = await opened()
-		axios.put.mockReturnValueOnce(refused('Solo quien creó este tablero, o quien administra Estadística, puede cambiarlo o eliminarlo.', 403))
+		axios.put.mockReturnValueOnce(ok({ ...TABLERO, actualizado: 2 }))
 
-		await wrapper.vm.drop(0)
+		expect((await cardActions(wrapper, 0)).Subir.disabled).toBe(true)
+		;(await cardActions(wrapper, 2)).Subir.click()
 		await flushPromises()
 
+		expect(axios.put).toHaveBeenCalledWith(`${OCS}/tableros/9`, {
+			tarjetas: [{ pregunta: 1, ancho: 2 }, { pregunta: 3, ancho: 3 }, { pregunta: 2, ancho: 1 }],
+		})
+		wrapper.unmount()
+	})
+
+	it('saves a card taken out, puts the cards back and says why when the server refuses', async () => {
+		const wrapper = await opened()
+		axios.put.mockImplementationOnce(() => refused('Solo quien creó este tablero, o quien administra Estadística, puede cambiarlo o eliminarlo.', 403))
+
+		;(await cardActions(wrapper, 0)).Quitar.click()
+		await flushPromises()
+
+		expect(axios.put).toHaveBeenCalledWith(`${OCS}/tableros/9`, { tarjetas: [{ pregunta: 2, ancho: 1 }, { pregunta: 3, ancho: 3 }] })
 		expect(wrapper.findAllComponents(QuestionCard)).toHaveLength(3)
 		expect(wrapper.text()).toContain('Solo quien creó este tablero')
 		wrapper.unmount()
@@ -171,17 +206,22 @@ describe('Dashboard — its creator or an administrator arranges it', () => {
 		const wrapper = await opened()
 		axios.put.mockImplementation((url, body) => ok({ ...TABLERO, tarjetas: body.tarjetas }))
 
-		const selectEl = wrapper.findAll('select')[1]
-		expect(selectEl.attributes('aria-label')).toBe('Ancho de la tarjeta «Pregunta 2»')
+		const actions = await cardActions(wrapper, 1)
+		const widths = ['1 columna', '2 columnas', '3 columnas'].map((name) => actions[name])
+		expect(widths.map((item) => [item.getAttribute('role'), item.getAttribute('aria-checked')])).toStrictEqual([
+			['menuitemradio', 'true'], ['menuitemradio', 'false'], ['menuitemradio', 'false'],
+		])
 
-		await selectEl.setValue('3')
+		widths[2].click()
 		await flushPromises()
 		expect(axios.put).toHaveBeenLastCalledWith(`${OCS}/tableros/9`, {
 			tarjetas: [{ pregunta: 1, ancho: 2 }, { pregunta: 2, ancho: 3 }, { pregunta: 3, ancho: 3 }],
 		})
 
+		const add = wrapper.find('form.estadistica-dashboards__add')
+		expect(add.find('button[type="submit"]').text()).toBe('Agregar una pregunta')
 		wrapper.vm.adding = 3
-		await wrapper.find('form.estadistica-dashboards__add').trigger('submit')
+		await add.trigger('submit')
 		await flushPromises()
 		expect(axios.put.mock.calls.at(-1)[1].tarjetas.at(-1)).toStrictEqual({ pregunta: 3, ancho: 1 })
 		expect(wrapper.findAllComponents(QuestionCard)).toHaveLength(4)
@@ -204,10 +244,11 @@ describe('Dashboard — its creator or an administrator arranges it', () => {
 	it('shows no controls on someone else\'s tablero', async () => {
 		const wrapper = await opened({ tableros: [{ ...TABLERO, editable: false }] })
 
-		expect(wrapper.text()).not.toContain('Subir')
-		expect(wrapper.text()).not.toContain('Agregar tarjeta')
+		expect(wrapper.find('button[aria-label^="Acciones de la tarjeta"]').exists()).toBe(false)
+		expect(wrapper.text()).not.toContain('Agregar una pregunta')
 		expect(wrapper.text()).not.toContain('Eliminar el tablero')
-		expect(wrapper.text()).toContain('Tablero de Ana. Cada tarjeta hace su propia consulta.')
+		expect(wrapper.find('.estadistica-dashboards__bar').text()).toContain('de Ana')
+		expect(wrapper.text()).toContain('Cada tarjeta hace su propia consulta.')
 		wrapper.unmount()
 	})
 })
@@ -230,19 +271,29 @@ describe('Dashboard — a new tablero (a22)', () => {
 		wrapper.unmount()
 	})
 
-	it('deletes a tablero only once the person confirms', async () => {
+	it('deletes a tablero only once the person confirms in a dialog that says its preguntas stay', async () => {
 		const wrapper = await opened()
-		const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
 		axios.delete.mockReturnValueOnce(ok([]))
+		const board = () => wrapper.find('.estadistica-dashboards__board')
+		/** The open dialog's button called `name`, once the dialog shows. */
+		const inDialog = (name) => vi.waitFor(() => {
+			const dialog = document.querySelector('[role="dialog"]')
+			expect(dialog?.textContent).toContain('¿Eliminar el tablero «Metas del año»? Sus preguntas no se eliminan.')
+			return [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === name)
+		})
+		const eliminar = () => board().findAll('button').find((button) => button.text() === 'Eliminar el tablero').trigger('click')
 
-		await wrapper.vm.remove()
+		await eliminar()
+		;(await inDialog('Cancelar')).click()
+		await flushPromises()
 		expect(axios.delete).not.toHaveBeenCalled()
+		expect(board().exists()).toBe(true)
 
-		await wrapper.vm.remove()
+		await eliminar()
+		;(await inDialog('Eliminar el tablero')).click()
 		await flushPromises()
 		expect(axios.delete).toHaveBeenCalledWith(`${OCS}/tableros/9`)
-		expect(wrapper.find('.estadistica-dashboards__board').exists()).toBe(false)
-		confirm.mockRestore()
+		expect(board().exists()).toBe(false)
 		wrapper.unmount()
 	})
 })
