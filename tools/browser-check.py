@@ -14,11 +14,18 @@ It also checks a8 in a browser: a second user, who is no admin and in no
 delegated group, opens the same tablero and sees the same figures with no
 controls to change it.
 
-And the Resumen (docs/adr/0009), the tab the app opens on: each card shows
+And the Resumen (docs/adr/0009), the view the app opens on: each card shows
 the figure, or the state, GET resumen answers, its figures are GET
 indicadores' local series for the card's month, a keyboard reaches every
 card, and the cards fit a phone's width. The metas view still answers its
 own year's figures.
+
+And the shell (#84), in Chromium and in Firefox under the CSP Nextcloud
+serves: every view opens from the navigation, marked as the open one,
+with its title beside the toggle and its own chunk fetched; «Ajustes de
+Estadística» takes an admin to the admin section and is not offered to the
+second user; and on a phone the navigation folds away. No page logs a
+console error or a CSP violation.
 
 It makes everything it needs and removes it all however it ends:
 - a few synthetic REM rows under a código of its own. They sit in 2009, the
@@ -48,6 +55,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("ESTADISTICA_URL", "http://localhost:8092")
@@ -81,6 +89,18 @@ SPEC = {
     "metrica": "promedio_establecimiento",
     "comparar": {"nacional": True},
 }
+
+# The navigation's views, in its order: the chunk each fetches when it first
+# opens, and what it shows once it has its figures.
+VIEWS = [
+    ("Resumen", "resumen", ".estadistica-resumen__meta"),
+    ("Metas Sanitarias", "metas", ".estadistica-goals h2"),
+    # Its steps, or «Todavía no hay cifras REM» on an instance that has loaded none.
+    ("Consultar", "consultar", ".estadistica-builder :is(.estadistica-builder__steps, .empty-content)"),
+    ("Preguntas", "preguntas", f".estadistica-questions__item strong:text-is('Navegador {RUN}')"),
+    ("Tableros", "tableros", f".estadistica-dashboards__list button:has-text('Tablero navegador {RUN}')"),
+]
+SETTINGS = "Ajustes de Estadística"
 
 MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
           "septiembre", "octubre", "noviembre", "diciembre"]
@@ -156,8 +176,12 @@ IGNORED = []
 
 
 def console_errors(page):
-    """Everything logged as an error, with where it came from; stacks, not just messages (territorio's)."""
+    """Everything logged as an error, with where it came from; stacks, not just messages (territorio's).
+    And every CSP violation: the page reports each one through a listener added before its own scripts."""
     found = []
+    page.expose_function("reportViolation", lambda text: found.append(f"CSP violation: {text}"))
+    page.add_init_script("document.addEventListener('securitypolicyviolation', (e) => window.reportViolation("
+                         "`${e.effectiveDirective} blocked ${e.blockedURI} [${e.sourceFile}:${e.lineNumber}]`))")
 
     def console(message):
         text = f"{message.text} [{message.location.get('url', '')}]"
@@ -173,9 +197,57 @@ def console_errors(page):
     return found
 
 
+def chunks_fetched(page):
+    """The names of the app's js/ files the page fetched and got."""
+    fetched = set()
+    page.on("response", lambda r: fetched.add(r.url.split("/js/")[-1].split("?")[0])
+            if "/estadistica/js/" in r.url and r.ok else None)
+    return fetched
+
+
+def navigation_entry(page, name):
+    return page.locator(".app-navigation").get_by_role("link", name=name, exact=True)
+
+
+def title_clears_the_toggle(page, where):
+    """The view's title sits beside NcAppNavigation's toggle, not under it."""
+    toggle = page.locator("button.app-navigation-toggle").bounding_box()
+    title = page.locator(".estadistica-heading h2").bounding_box()
+    overlaps = (toggle["x"] < title["x"] + title["width"] and title["x"] < toggle["x"] + toggle["width"]
+                and toggle["y"] < title["y"] + title["height"] and title["y"] < toggle["y"] + toggle["height"])
+    return [f"{where}: the title sits under the navigation toggle"] if overlaps else []
+
+
+def walk_the_navigation(page, fetched, browser):
+    """Every view from the navigation, as a person clicks through, then «Ajustes de Estadística»."""
+    failures = []
+    for name, chunk, shown in VIEWS:
+        navigation_entry(page, name).click()
+        try:
+            page.locator(shown).first.wait_for(timeout=30_000)
+        except PlaywrightTimeout:
+            failures.append(f"{browser}: {name} opened from the navigation never showed {shown}")
+        page.screenshot(path=str(SHOTS / f"{browser}-{chunk}.png"))
+        if navigation_entry(page, name).get_attribute("aria-current") != "page":
+            failures.append(f"{browser}: the navigation does not mark {name} as the open view")
+        if page.locator(".estadistica-heading h2").inner_text().strip() != name:
+            failures.append(f"{browser}: {name}'s title reads {page.locator('.estadistica-heading h2').inner_text()!r}")
+        if f"estadistica-{chunk}.js" not in fetched:
+            failures.append(f"{browser}: {name} opened without fetching its chunk estadistica-{chunk}.js")
+    failures += title_clears_the_toggle(page, browser)
+
+    navigation_entry(page, SETTINGS).click()
+    try:
+        page.wait_for_url("**/settings/admin/estadistica", timeout=30_000)
+        page.locator("#estadistica-establishment").wait_for(timeout=30_000)
+    except PlaywrightTimeout:
+        failures.append(f"{browser}: «{SETTINGS}» did not open the admin section (at {page.url})")
+    return failures
+
+
 def open_the_tablero(page, title):
     """Tableros → the tablero → its one card's table, as a person clicks through."""
-    page.get_by_role("button", name="Tableros", exact=True).click()
+    navigation_entry(page, "Tableros").click()
     page.get_by_role("button", name=title, exact=True).click()
     rows = page.locator(".estadistica-card .estadistica-answer__table tbody tr")
     rows.first.wait_for(timeout=30_000)
@@ -319,6 +391,7 @@ def main():
             # a15: the creator's card shows the API's figures.
             page = browser.new_page(viewport={"width": 1400, "height": 900})
             errors = console_errors(page)
+            fetched = chunks_fetched(page)
             log_in(page, ADMIN, ADMIN_PASSWORD)
 
             # docs/adr/0009: the app opens on the Resumen, whose cards show GET resumen's figures.
@@ -339,6 +412,7 @@ def main():
                 failures.append("the card drew no chart above its table")
             if page.get_by_role("button", name="Subir").count() == 0:
                 failures.append("the creator sees no controls on their own tablero")
+            failures += walk_the_navigation(page, fetched, "chromium")
             failures += [f"console error for the creator: {e}" for e in errors]
 
             # a8: a second user who administers nothing reads the same tablero.
@@ -350,6 +424,8 @@ def main():
                 failures.append(f"a8: the second user's card shows {card_figures(rows)}, the API answers {expected}")
             if reader.get_by_role("button", name="Subir").count() != 0:
                 failures.append("a8: the second user sees controls to change someone else's tablero")
+            if navigation_entry(reader, SETTINGS).count() != 0:
+                failures.append(f"the second user, no admin, is offered «{SETTINGS}»")
             reader.screenshot(path=str(SHOTS / "tablero-lector.png"), full_page=True)
             failures += [f"console error for the second user: {e}" for e in reader_errors]
 
@@ -361,9 +437,22 @@ def main():
             phone.screenshot(path=str(SHOTS / "resumen-telefono.png"), full_page=True)
             if phone.evaluate("() => { const r = document.querySelector('.estadistica-resumen'); return r.scrollWidth > r.clientWidth }"):
                 failures.append("the Resumen is wider than a 375 px screen")
+            if not phone.locator(".app-navigation").evaluate("(n) => n.classList.contains('app-navigation--closed')"):
+                failures.append("on a phone the navigation stays open over the Resumen")
+            failures += title_clears_the_toggle(phone, "a phone")
             failures += [f"console error on a phone: {e}" for e in phone_errors]
 
             browser.close()
+
+            # The shell again in Firefox, whose CSP enforcement and module loading are its own.
+            firefox = p.firefox.launch()
+            page = firefox.new_page(viewport={"width": 1400, "height": 900})
+            firefox_errors = console_errors(page)
+            fetched = chunks_fetched(page)
+            log_in(page, ADMIN, ADMIN_PASSWORD)
+            failures += walk_the_navigation(page, fetched, "firefox")
+            failures += [f"console error in Firefox: {e}" for e in firefox_errors]
+            firefox.close()
     finally:
         if "tablero" in made:
             ocs("DELETE", f"tableros/{made['tablero']}", token)
@@ -395,6 +484,8 @@ def main():
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
     print("ok    the Resumen opens first, its cards show GET resumen's figures, which are GET indicadores' local months, a keyboard reaches each one, and it fits a phone")
+    print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
+    print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
     print("\nAll good.")
     return 0
 

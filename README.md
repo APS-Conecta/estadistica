@@ -8,12 +8,13 @@ Estadística guarda las cifras REM de todos los establecimientos del país, etiq
 
 **Guarda solo conteos agregados que publican el DEIS y FONASA, o que el establecimiento escribe en su propia planilla REM, y no toca datos de pacientes.** No llena ninguna planilla REM, no la valida y no lee las series BS, BM ni D. Nada en ella decide cuál es el establecimiento «propio»: es configuración de la instancia ([ADR-0009 de la suite](https://github.com/APS-Conecta/instalador/blob/main/docs/adr/0009-the-establishment-is-instance-configuration.md)).
 
-Tiene cuatro vistas, más una sección de administración:
+Tiene cinco vistas, más una sección de administración:
 
+- **Resumen**: la vista que abre primero, con las metas de la resolución de metas más reciente para el establecimiento.
+- **Metas Sanitarias**: las Metas I a VIII del año, una tarjeta por meta, mes a mes.
 - **Consultar**: una consulta armada en cuatro pasos (Datos, Filtrar, Resumir, Visualizar) sobre las series REM A y P de todos los establecimientos y meses de la ventana de años, con el centro junto al país y a un grupo de pares.
 - **Preguntas**: consultas guardadas, visibles para todo el personal.
 - **Tableros**: preguntas guardadas dispuestas como tarjetas; cada tarjeta hace su propia consulta.
-- **Metas Sanitarias**: las Metas I a VIII del año, una tarjeta por meta, mes a mes.
 - **Administración → Estadística**: la ventana de años, el estado de cada carga, la carpeta de planillas del establecimiento y el estado de cada una, la población de FONASA, los compromisos de las metas de cada año y una puerta para los archivos que la aplicación no puede descargar. Un administrador puede delegarla a cualquier grupo.
 
 ## Documentación
@@ -74,8 +75,8 @@ Las pruebas y compuertas:
 - `make aps-drift`: las copias vendorizadas de `aps-common` están al día (`make aps-sync` las refresca).
 - `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
 - `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
-- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, en Chromium (Playwright para Python en el host). Tampoco la ejecuta CI.
-- `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada pestaña (no se confirman; CI y el flujo de release ejecutan lo mismo).
+- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, y un recorrido por la navegación de la aplicación en Chromium y en Firefox (cada vista, «Ajustes de Estadística» solo para un administrador, la navegación plegada en un teléfono) sin violaciones de CSP ni errores de consola. Requiere Playwright para Python en el host, con sus navegadores Chromium y Firefox (`python3 -m playwright install chromium firefox`). Tampoco la ejecuta CI.
+- `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada vista (no se confirman; CI y el flujo de release ejecutan lo mismo).
 
 La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío; el flujo de release (`.github/workflows/release.yml`) compila y empaqueta en cada PR.
 
