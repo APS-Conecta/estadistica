@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import App from './App.vue'
 
-// Each section's module records when it is first evaluated: a static import would
+// Each view's module records when it is first evaluated: a static import would
 // record all five the moment App.vue loads.
 const { loaded, tab, user } = vi.hoisted(() => {
 	const loaded = []
@@ -42,7 +42,7 @@ describe('App', () => {
 		document.body.innerHTML = '<div id="skip-actions"></div>'
 	})
 
-	it('lists the five sections in the navigation, opens on the Resumen, and loads a section\'s code the first time it opens', async () => {
+	it('lists the five views in the navigation, opens on the Resumen, and loads a view\'s code the first time it opens', async () => {
 		const wrapper = mount(App)
 		await flushPromises()
 		expect(entries(wrapper).map((a) => a.text())).toEqual(['Resumen', 'Metas Sanitarias', 'Consultar', 'Preguntas', 'Tableros'])
@@ -85,8 +85,8 @@ describe('App', () => {
 		expect(entry(admin, 'Ajustes de Estadística').attributes('href')).toBe('/index.php/settings/admin/estadistica')
 	})
 
-	it('shows an error card in place of a section whose code cannot load', async () => {
-		// A chunk the server no longer serves, in a fresh App: a section keeps its
+	it('shows an error card in place of a view whose code cannot load', async () => {
+		// A chunk the server no longer serves, in a fresh App: a view keeps its
 		// first load's outcome for the page's life.
 		vi.doMock('./components/Dashboard.vue', () => {
 			throw new Error('no chunk for tableros')

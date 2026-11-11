@@ -147,7 +147,7 @@ export default {
 
 <style scoped>
 /* NcAppNavigation's toggle sits in the content's top corner, open or folded:
-   the section's title starts beside it, never under it. */
+   the view's title starts beside it, never under it. */
 .estadistica-heading {
 	display: flex;
 	align-items: center;
@@ -183,7 +183,7 @@ export default {
 	margin: 0;
 }
 
-/* Every section's data table (#83): the header row stays in view while the
+/* Every view's data table (#83): the header row stays in view while the
    content scrolls, the caption says what the table holds, and the figures
    line up. Header cells carry scope="col" or scope="row" in the markup. */
 .estadistica-table {

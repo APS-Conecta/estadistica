@@ -14,7 +14,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Estadística opens in Nextcloud's app layout: its five sections sit in the side navigation, which folds behind its
+- Estadística opens in Nextcloud's app layout: its five views sit in the side navigation, which folds behind its
   toggle on a phone, and an administrator finds «Ajustes de Estadística» at its foot (#84).
 - The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
   contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.

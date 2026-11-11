@@ -21,7 +21,7 @@ card, and the cards fit a phone's width. The metas view still answers its
 own year's figures.
 
 And the shell (#84), in Chromium and in Firefox under the CSP Nextcloud
-serves: every section opens from the navigation, marked as the open one,
+serves: every view opens from the navigation, marked as the open one,
 with its title beside the toggle and its own chunk fetched; «Ajustes de
 Estadística» takes an admin to the admin section and is not offered to the
 second user; and on a phone the navigation folds away. No page logs a
@@ -90,9 +90,9 @@ SPEC = {
     "comparar": {"nacional": True},
 }
 
-# The navigation's sections, in its order: the chunk each fetches when it first
+# The navigation's views, in its order: the chunk each fetches when it first
 # opens, and what it shows once it has its figures.
-SECTIONS = [
+VIEWS = [
     ("Resumen", "resumen", ".estadistica-resumen__meta"),
     ("Metas Sanitarias", "metas", ".estadistica-goals h2"),
     # Its steps, or «Todavía no hay cifras REM» on an instance that has loaded none.
@@ -210,7 +210,7 @@ def navigation_entry(page, name):
 
 
 def title_clears_the_toggle(page, where):
-    """The section's title sits beside NcAppNavigation's toggle, not under it."""
+    """The view's title sits beside NcAppNavigation's toggle, not under it."""
     toggle = page.locator("button.app-navigation-toggle").bounding_box()
     title = page.locator(".estadistica-heading h2").bounding_box()
     overlaps = (toggle["x"] < title["x"] + title["width"] and title["x"] < toggle["x"] + toggle["width"]
@@ -219,9 +219,9 @@ def title_clears_the_toggle(page, where):
 
 
 def walk_the_navigation(page, fetched, browser):
-    """Every section from the navigation, as a person clicks through, then «Ajustes de Estadística»."""
+    """Every view from the navigation, as a person clicks through, then «Ajustes de Estadística»."""
     failures = []
-    for name, chunk, shown in SECTIONS:
+    for name, chunk, shown in VIEWS:
         navigation_entry(page, name).click()
         try:
             page.locator(shown).first.wait_for(timeout=30_000)
@@ -229,7 +229,7 @@ def walk_the_navigation(page, fetched, browser):
             failures.append(f"{browser}: {name} opened from the navigation never showed {shown}")
         page.screenshot(path=str(SHOTS / f"{browser}-{chunk}.png"))
         if navigation_entry(page, name).get_attribute("aria-current") != "page":
-            failures.append(f"{browser}: the navigation does not mark {name} as the open section")
+            failures.append(f"{browser}: the navigation does not mark {name} as the open view")
         if page.locator(".estadistica-heading h2").inner_text().strip() != name:
             failures.append(f"{browser}: {name}'s title reads {page.locator('.estadistica-heading h2').inner_text()!r}")
         if f"estadistica-{chunk}.js" not in fetched:
@@ -484,7 +484,7 @@ def main():
     print("ok    a15: the tablero card's local and national figures are the API's")
     print("ok    a8: a second user reads the tablero, with no control to change it")
     print("ok    the Resumen opens first, its cards show GET resumen's figures, which are GET indicadores' local months, a keyboard reaches each one, and it fits a phone")
-    print(f"ok    Chromium and Firefox open every section from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
+    print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
     print("\nAll good.")
     return 0
