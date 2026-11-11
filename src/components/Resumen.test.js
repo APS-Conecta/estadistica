@@ -94,11 +94,18 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009, #85)', () 
 		wrapper.unmount()
 	})
 
-	it('says once for the page up to which month each REM series has data, and no card dates itself', async () => {
+	it('says once for the page up to which month each REM series has data, Serie P as its corte, and no card dates itself', async () => {
 		const wrapper = await shown(ok(withSources()))
 
-		expect(wrapper.text()).toContain('REM Serie A: datos al octubre de 2026 · REM Serie P: datos al junio de 2026')
-		expect(wrapper.text().match(/datos al/gi)).toHaveLength(2)
+		expect(wrapper.text()).toContain('REM Serie A: datos al octubre de 2026 · REM Serie P: corte de junio de 2026')
+		expect(wrapper.text().match(/datos al|corte de/gi)).toHaveLength(2)
+		wrapper.unmount()
+	})
+
+	it('says the metas have no figures yet when no REM series has data, as the 2027 metas while they wait for their rutas', async () => {
+		const wrapper = await shown(ok({ ...answer(), anio: 2027, nombre: 'Metas Sanitarias 2027', metas: [meta('I', { estado: 'esperando ruta oficial' }), meta('VIII', { manual: true, meta_nacional: 100 })] }))
+
+		expect(wrapper.find('h2 + p').text()).toBe('Metas Sanitarias 2027: sin cifras todavía')
 		wrapper.unmount()
 	})
 
@@ -195,6 +202,18 @@ describe('Resumen — the newest metas, one card each (docs/adr/0009, #85)', () 
 		expect(card(manual, 'VIII').text()).toContain('Todavía no se ha informado su cumplimiento.')
 		expect(card(manual, 'VIII').text()).not.toMatch(/\d %/)
 		manual.unmount()
+	})
+
+	it('keeps a Serie P numerador already counted at its corte', async () => {
+		const data = answer()
+		data.metas[3].historico = [year(2026, [], {
+			meses: [{ mes: '2026-06', numerador: 412, denominador: null, porcentaje: null }],
+			ruta: { numerador: { fuente: 'rem-p', nombre: 'REM Serie P' } },
+		})]
+		const wrapper = await shown(ok(data))
+
+		expect(card(wrapper, 'II').text()).toContain('412 en el numerador, al corte de junio de 2026')
+		wrapper.unmount()
 	})
 
 	it('shows each meta mínima as a reference from its base year\'s cierre, and why a meta has none (#51)', async () => {

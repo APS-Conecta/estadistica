@@ -26,7 +26,7 @@
 
 		<template v-else>
 			<h2>{{ resumen.nombre }}</h2>
-			<p v-if="freshness" class="estadistica-resumen__hint">
+			<p class="estadistica-resumen__hint">
 				{{ freshness }}
 			</p>
 
@@ -116,16 +116,16 @@ export default {
 			const metas = `${count} ${count === 1 ? 'meta' : 'metas'}`
 			return this.filtro === 'todas' ? `${metas}.` : `${metas}: ${FILTERS.find((filter) => filter.id === this.filtro).label.toLowerCase()}.`
 		},
-		/** Up to which month each REM series the metas count has data, said once: «REM Serie A: datos al octubre de 2026». */
+		/** Up to which month each REM series the metas count has data, said once: «REM Serie A: datos al octubre de 2026», Serie P's as its corte; with none, that there are no figures yet. */
 		freshness() {
 			const series = new Map()
 			for (const meta of this.resumen.metas) {
 				const numerador = meta.historico.at(-1)?.ruta?.numerador
 				if (numerador && meta.datos_al && !series.has(numerador.fuente)) {
-					series.set(numerador.fuente, `${numerador.nombre}: datos al ${monthName(meta.datos_al)}`)
+					series.set(numerador.fuente, `${numerador.nombre}: ${numerador.fuente === 'rem-p' ? 'corte de' : 'datos al'} ${monthName(meta.datos_al)}`)
 				}
 			}
-			return [...series.values()].join(' · ')
+			return series.size ? [...series.values()].join(' · ') : `Metas Sanitarias ${this.resumen.anio}: sin cifras todavía`
 		},
 	},
 

@@ -37,7 +37,7 @@
 				:label="`Meta ${meta.codigo} ${anio} frente a su ${targetName}`" />
 		</template>
 		<p v-else-if="counted" class="estadistica-meta__hint">
-			<strong class="estadistica-meta__contado">{{ figure(counted.numerador) }}</strong> en el numerador, a {{ monthName(counted.mes) }}
+			<strong class="estadistica-meta__contado">{{ figure(counted.numerador) }}</strong> en el numerador, {{ countedAt }}
 		</p>
 
 		<StatusBadge :status="status" />
@@ -114,6 +114,10 @@ export default {
 		counted() {
 			return this.meta.historico.at(-1)?.meses.filter((mes) => mes.numerador !== null).at(-1) ?? null
 		},
+		/** When the numerador was counted: «a febrero de 2026», a Serie P one at its corte: «al corte de junio de 2026». */
+		countedAt() {
+			return `${this.cifra.ruta?.numerador?.fuente === 'rem-p' ? 'al corte de' : 'a'} ${monthName(this.counted.mes)}`
+		},
 		why() {
 			if (this.judged) {
 				const gap = this.meta.porcentaje - this.target
@@ -127,8 +131,6 @@ export default {
 	},
 
 	methods: {
-		monthName,
-
 		figure(value) {
 			return formatValue(value)
 		},
