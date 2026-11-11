@@ -54,7 +54,7 @@ export const CHART_TYPES = [
 /** A pregunta's or a tablero's title, at most (SavedContent::MAX_TITLE). */
 export const MAX_TITLE = 200
 
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+export const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
 	'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 /** 'AAAA-MM' as a person reads it: «agosto de 2026». */

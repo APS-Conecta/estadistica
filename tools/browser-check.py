@@ -25,6 +25,14 @@ The metas view still answers its own year's figures, and lists its metas as
 rows whose badges take the light and the dark theme's colours and which each
 open to their month table (#87).
 
+And a meta's detail (#86), in Chromium and Firefox, light and dark: a card's
+title opens it on Evolución, whose chart draws at its container's width with
+11 px text and the newest year in the theme's primary, and reads a month by
+keyboard; the Origen tab shows the ruta; Escape gives the focus back; the
+card's figure opens it on Origen. The newest metas wait for their rutas
+oficiales, so that page alone gets GET resumen with one meta given a figure
+and two years of histórico (with_a_historico).
+
 And the shell (#84), in Chromium and in Firefox under the CSP Nextcloud
 serves: every view opens from the navigation, marked as the open one,
 with its title beside the toggle and its own chunk fetched; «Ajustes de
@@ -407,9 +415,8 @@ def resumen_api_figures(answer):
 
 
 def resumen_controls(answer):
-    """The cards with a button: a figure, which opens its source panel, or a title, which opens its histórico."""
-    return sorted(f"Meta {meta['codigo']} {answer['anio']}" for meta in answer["metas"]
-                  if (meta["estado"] is None and meta["porcentaje"] is not None) or meta["historico"])
+    """The cards with a button: every one, as each title opens its detail (#86)."""
+    return sorted(f"Meta {meta['codigo']} {answer['anio']}" for meta in answer["metas"])
 
 
 def resumen_against_indicadores(resumen, indicadores):
@@ -516,6 +523,101 @@ def dark_resumen(browser, name):
         failures.append(f"{name}: in the dark theme a Resumen card is still light ({card})")
     failures += metas_rows(page, f"{name}-oscuro")
     return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
+
+
+def with_a_historico(answer):
+    """GET resumen with its first REM meta given a figure for March and two comparable years, for the detail alone."""
+    anio = answer["anio"]
+    meta = next(meta for meta in answer["metas"] if not meta["manual"])
+    months = lambda year, count: [{"mes": f"{year}-{m:02d}", "numerador": m, "denominador": 12, "porcentaje": round(100 * m / 12, 2)}
+                                  for m in range(1, count + 1)]
+    codigo = {"codigo": "A0200002", "hoja": "A02", "seccion": "SECCIÓN A: NAVEGADOR", "prestacion": "Prueba del navegador",
+              "columnas": {"col06": "Total"}, "nota": None}
+    ruta = lambda year: {"numerador": {"fuente": "rem-a", "nombre": "REM Serie A", "desde": f"{year}-01", "hasta": f"{year}-12",
+                                       "sumar": [[codigo]], "restar": []}, "denominador": None}
+    meta.update(estado=None, mes=f"{anio}-03", numerador=3, denominador=12, porcentaje=25.0, cumple=False,
+                origen="datos públicos DEIS", fecha_corte=f"{anio}-04", historico=[
+                    {"anio": anio - 1, "estado": None, "cierre": 100.0, "meses": months(anio - 1, 12), "ruta": ruta(anio - 1)},
+                    {"anio": anio, "estado": None, "cierre": None, "meses": months(anio, 3), "ruta": ruta(anio)}])
+    return answer, meta
+
+
+def slid_in(page):
+    """Waits out NcAppSidebar's slide-in, whose end moves the focus to its header."""
+    page.wait_for_function("() => { const aside = document.querySelector('aside.app-sidebar');"
+                           " return aside !== null && !/slide-right-enter/.test(aside.className) }", timeout=10_000)
+
+
+def resumen_detail(browser, name, scheme):
+    """A meta's detail beside the Resumen (#86), both tabs, in this browser and colour scheme."""
+    where = f"{name} {scheme}"
+    page = browser.new_context(viewport={"width": 1400, "height": 900}, color_scheme=scheme).new_page()
+    errors = console_errors(page)
+    fetched = chunks_fetched(page)
+    shown = {}
+
+    def synthetic(route):
+        response = route.fetch()
+        body = response.json()
+        body["ocs"]["data"], shown["meta"] = with_a_historico(body["ocs"]["data"])
+        route.fulfill(response=response, json=body)
+
+    page.route("**/apps/estadistica/api/v1/resumen*", synthetic)
+    log_in(page, ADMIN, ADMIN_PASSWORD)
+    page.locator(".estadistica-meta").first.wait_for(timeout=30_000)
+    failures = []
+    sidebar = page.locator("aside.app-sidebar")
+    selected = lambda: sidebar.locator("[role=tab][aria-selected=true]").inner_text().strip()
+    title = page.get_by_role("button", name=shown["meta"]["nombre"], exact=True)
+    title.click()
+    plot = sidebar.locator(".estadistica-chart__plot svg")
+    try:
+        plot.wait_for(timeout=30_000)
+        slid_in(page)
+        page.wait_for_function("(svg) => Math.abs(svg.getAttribute('width') - svg.parentElement.getBoundingClientRect().width) <= 1",
+                               arg=plot.element_handle(), timeout=10_000)
+    except PlaywrightTimeout:
+        failures.append(f"{where}: the detail's chart never drew at its container's width")
+    if selected() != "Evolución":
+        failures.append(f"{where}: a card's title opened the detail on {selected()!r}, not Evolución")
+    drawn = plot.evaluate("(svg) => { const probe = document.createElement('span'); probe.style.color = 'var(--color-primary-element)';"
+                          " svg.parentElement.append(probe); const primary = getComputedStyle(probe).color; probe.remove();"
+                          " return { font: getComputedStyle(svg.querySelector('text')).fontSize, primary,"
+                          " newest: getComputedStyle(svg.querySelector('.estadistica-chart__line--emphasis path')).stroke } }")
+    if drawn["font"] != "11px" or drawn["newest"] != drawn["primary"]:
+        failures.append(f"{where}: the chart's text is {drawn['font']} and its newest year {drawn['newest']}, not 11px in the primary {drawn['primary']}")
+    plot.focus()
+    page.keyboard.press("ArrowLeft")
+    said = sidebar.locator(".estadistica-chart__readout").inner_text().strip()
+    if not said.startswith("noviembre:"):
+        failures.append(f"{where}: focus and ArrowLeft on the chart say {said!r}, not noviembre")
+    page.screenshot(path=str(SHOTS / f"{name}-detalle-evolucion-{scheme}.png"))
+
+    sidebar.get_by_role("tab", name="Origen").click()
+    origen = sidebar.locator("[role=tabpanel]:not([aria-hidden=true])").inner_text()
+    if selected() != "Origen" or "A0200002" not in origen or "Referencia:" not in origen:
+        failures.append(f"{where}: the Origen tab shows {origen[:200]!r}")
+    page.screenshot(path=str(SHOTS / f"{name}-detalle-origen-{scheme}.png"))
+
+    figure = title.locator("xpath=ancestor::article").locator(".estadistica-meta__cifra")
+    for opener, tab in ((title, "Evolución"), (figure, "Origen")):
+        if opener is figure:
+            opener.click()
+            sidebar.wait_for(timeout=30_000)
+            slid_in(page)
+            if selected() != tab:
+                failures.append(f"{where}: a card's figure opened the detail on {selected()!r}, not {tab}")
+        page.keyboard.press("Escape")
+        try:
+            sidebar.wait_for(state="detached", timeout=10_000)
+        except PlaywrightTimeout:
+            failures.append(f"{where}: Escape did not close the detail opened on {tab}")
+        if not opener.evaluate("(button) => document.activeElement === button"):
+            failures.append(f"{where}: closing the detail opened on {tab} did not give the focus back to its button")
+    if "estadistica-detalle.js" not in fetched:
+        failures.append(f"{where}: the detail opened without fetching its chunk estadistica-detalle.js")
+    page.context.close()
+    return failures + [f"console error in the {where} detail: {e}" for e in errors]
 
 
 def main():
@@ -644,6 +746,7 @@ def main():
             failures += steps_beside_the_answer(phone, "a phone", beside=False)
             failures += [f"console error on a phone: {e}" for e in phone_errors]
             failures += dark_resumen(browser, "chromium")
+            failures += resumen_detail(browser, "chromium", "light") + resumen_detail(browser, "chromium", "dark")
 
             # The dark theme: a consulta still runs, with no violation or console error.
             occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
@@ -673,6 +776,7 @@ def main():
                 failures.append(f"Consultar in Firefox shows {asked}, the API answers {expected}")
             failures += [f"console error in Firefox: {e}" for e in firefox_errors]
             failures += dark_resumen(firefox, "firefox")
+            failures += resumen_detail(firefox, "firefox", "light") + resumen_detail(firefox, "firefox", "dark")
             firefox.close()
     finally:
         if "tablero" in made:
@@ -712,6 +816,7 @@ def main():
     print("ok    a8: a second user reads the tablero, with no control to change it")
     print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
     print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
+    print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")

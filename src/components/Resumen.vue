@@ -6,8 +6,8 @@
 	model's; a note while the metas wait for their rutas oficiales; and the
 	counts of each status, which filter the cards, with a polite line saying
 	how many are shown. Read from GET resumen alone, so the page shows what
-	the API answers. A card's figure, and each figure of its histórico, opens
-	its source panel for the figure's month; closing it gives the focus back.
+	the API answers. A card's title opens its detail beside the cards on
+	Evolución, and its figure on Origen (#86); closing it gives the focus back.
 -->
 <template>
 	<section class="estadistica-resumen">
@@ -55,15 +55,15 @@
 
 			<ul class="estadistica-resumen__metas">
 				<li v-for="meta in shown" :key="meta.codigo">
-					<MetaCard :meta="meta" :anio="resumen.anio" @open="(cifra, event) => open(meta, cifra, event)" />
+					<MetaCard :meta="meta" :anio="resumen.anio" @open="(tab, event) => open(meta, tab, event)" />
 				</li>
 			</ul>
 
-			<!-- Mounted afresh on each figure, so each opening moves the focus into the panel. -->
-			<ResumenFuente v-if="panel"
+			<!-- Mounted afresh on each opening, so each one moves the focus into the panel. -->
+			<DetailSidebar v-if="panel"
 				:key="panel.opening"
 				:meta="panel.meta"
-				:cifra="panel.cifra"
+				:tab="panel.tab"
 				:anio="resumen.anio"
 				:referencia="resumen.referencia"
 				@close="close" />
@@ -81,13 +81,13 @@ import { FILTERS, countByFilter, statusOf } from '../status.js'
 import FilterTiles from './FilterTiles.vue'
 import MetaCard from './MetaCard.vue'
 
-// The panel and the app sidebar are their own chunk, fetched on the first click (#43's way).
-const ResumenFuente = defineAsyncComponent(() => import(/* webpackChunkName: "fuente" */ './ResumenFuente.vue'))
+// The detail, its chart and the app sidebar are their own chunk, fetched on the first click (#43's way).
+const DetailSidebar = defineAsyncComponent(() => import(/* webpackChunkName: "detalle" */ './DetailSidebar.vue'))
 
 export default {
 	name: 'EstadisticaResumen',
 
-	components: { FilterTiles, MetaCard, NcButton, NcNoteCard, ResumenFuente },
+	components: { DetailSidebar, FilterTiles, MetaCard, NcButton, NcNoteCard },
 
 	emits: ['metas'],
 
@@ -98,7 +98,7 @@ export default {
 			failed: '',
 			/** The pressed filter tile's id (FILTERS). */
 			filtro: 'todas',
-			/** The open panel's card, figure and opening count ({meta, cifra, opening}); opener is the figure that opened it. */
+			/** The open detail's card, the tab it opened on and its opening count ({meta, tab, opening}); opener is the button that opened it. */
 			panel: null,
 			opener: null,
 		}
@@ -143,8 +143,8 @@ export default {
 	},
 
 	methods: {
-		open(meta, cifra, event) {
-			this.panel = { meta, cifra, opening: (this.panel?.opening ?? 0) + 1 }
+		open(meta, tab, event) {
+			this.panel = { meta, tab, opening: (this.panel?.opening ?? 0) + 1 }
 			this.opener = event.currentTarget
 		},
 
@@ -192,8 +192,8 @@ export default {
 </style>
 
 <style>
-/* A button that reads as its text: a card's title, which opens its
-   histórico, and a figure, which opens its source panel, underlined as a
+/* A button that reads as its text: a card's title, which opens its detail
+   on Evolución, and its figure, which opens it on Origen, underlined as a
    link. */
 .estadistica-resumen .estadistica-cifra,
 .estadistica-resumen .estadistica-cifra:hover,
