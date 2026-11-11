@@ -74,6 +74,20 @@ describe('App', () => {
 		expect(wrapper.findComponent({ name: 'EstadisticaResumen' }).exists()).toBe(false)
 	})
 
+	it('opens Metas Sanitarias on the year the Resumen offers, and on its own year from the navigation', async () => {
+		const wrapper = mount(App)
+		await flushPromises()
+
+		wrapper.findComponent({ name: 'EstadisticaResumen' }).vm.$emit('metas', 2026)
+		await flushPromises()
+		expect(current(wrapper)).toEqual(['Metas Sanitarias'])
+		expect(wrapper.findComponent({ name: 'SanitaryGoals' }).vm.$attrs.year).toBe(2026)
+
+		await open(wrapper, 'Resumen')
+		await open(wrapper, 'Metas Sanitarias')
+		expect(wrapper.findComponent({ name: 'SanitaryGoals' }).vm.$attrs.year).toBeNull()
+	})
+
 	it('offers «Ajustes de Estadística», the app\'s admin settings page, to an administrator only', async () => {
 		const member = mount(App)
 		await flushPromises()
