@@ -14,7 +14,7 @@ It also checks a8 in a browser: a second user, who is no admin and in no
 delegated group, opens the same tablero and sees the same figures with no
 controls to change it.
 
-And the Resumen (docs/adr/0009), the tab the app opens on: each card shows
+And the Resumen (docs/adr/0009), the view the app opens on: each card shows
 the figure, or the state, GET resumen answers, its figures are GET
 indicadores' local series for the card's month, a keyboard reaches every
 card, and the cards fit a phone's width. The metas view still answers its
