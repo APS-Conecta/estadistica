@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import axios from '@nextcloud/axios'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import QueryBuilder from './QueryBuilder.vue'
 import Visualization from './Visualization.vue'
 
@@ -25,7 +26,10 @@ const FUENTES = [
 	{ id: 'establecimientos', nombre: 'Establecimientos de salud (Base de Establecimientos)', origen: 'datos públicos DEIS', fecha_corte: '2025', filas: 3, estado: 'ok', anios: [] },
 ]
 
-/** Catalog::tree of `anio`: A03 with one sección, whose title the 2025 dictionary words differently. */
+/**
+ * Catalog::tree of `anio`: A03 with one sección, whose title the 2025 dictionary words differently,
+ * and A01, whose second sección holds the controles.
+ */
 function catalogo(anio) {
 	const seccion = anio === 2026 ? 'SECCIÓN A: EVALUACIONES' : 'SECCIÓN A. EVALUACIONES'
 	return {
@@ -39,6 +43,21 @@ function catalogo(anio) {
 				seccion,
 				columnas: [{ col: 'col08', etiqueta: '20-24' }, { col: 'col09', etiqueta: '25-29' }],
 				prestaciones: [{ codigo: '02010420', etiqueta: 'Test' }],
+			}],
+		}, {
+			hoja: 'A01',
+			titulo: 'REM-A01',
+			secciones: [{
+				seccion: 'SECCIÓN A: CONSULTAS',
+				columnas: [{ col: 'col01', etiqueta: 'Total' }],
+				prestaciones: [{ codigo: '01010101', etiqueta: 'Consulta de morbilidad' }],
+			}, {
+				seccion: 'SECCIÓN B: CONTROLES',
+				columnas: [{ col: 'col01', etiqueta: 'Total' }, { col: 'col02', etiqueta: 'Hombres' }],
+				prestaciones: [
+					{ codigo: '01080008', etiqueta: 'Control de salud del niño' },
+					{ codigo: '01080011', etiqueta: 'Control de lactancia' },
+				],
 			}],
 		}],
 	}
@@ -66,6 +85,23 @@ async function builder(establishment = { deisCode: '900001', type: '', comunaCut
 	const wrapper = mount(QueryBuilder, { props: { establishment }, global: { stubs: { Visualization: true } } })
 	await flushPromises()
 	return wrapper
+}
+
+/** The NcSelect a person finds by its label. */
+function selectNamed(wrapper, label) {
+	const found = wrapper.findAllComponents(NcSelect).find((select) => select.props('inputLabel') === label)
+	if (found === undefined) {
+		throw new Error(`no select labelled «${label}»`)
+	}
+	return found
+}
+
+/** Types into a select's search box and reads the options its dropdown (in document.body) lists. */
+async function typeInto(select, text) {
+	await select.find('input').trigger('focus')
+	await select.find('input').setValue(text)
+	await flushPromises()
+	return [...document.body.querySelectorAll('.vs__dropdown-option')].map((option) => option.textContent.trim())
 }
 
 beforeEach(() => {
@@ -105,6 +141,53 @@ describe('QueryBuilder — Datos → Filtrar → Resumir → Visualizar (a7, a22
 		})
 		expect(wrapper.findComponent(Visualization).props('tipo')).toBe('linea')
 		wrapper.unmount()
+	})
+
+	it('finds a prestación in the catálogo by its código or a word of its label, and choosing one picks its hoja and sección', async () => {
+		const wrapper = await builder()
+		const search = selectNamed(wrapper, 'Buscar una prestación')
+
+		expect(await typeInto(search, '0108')).toStrictEqual([
+			'Control de salud del niño (01080008) — A01',
+			'Control de lactancia (01080011) — A01',
+		])
+		expect(await typeInto(search, 'nino')).toStrictEqual(['Control de salud del niño (01080008) — A01'])
+		expect(await typeInto(search, 'lactancia')).toStrictEqual(['Control de lactancia (01080011) — A01'])
+
+		document.body.querySelector('.vs__dropdown-option').click()
+		await flushPromises()
+
+		expect(selectNamed(wrapper, 'Hoja del REM').text()).toContain('A01 — REM-A01')
+		expect(selectNamed(wrapper, 'Sección').text()).toContain('SECCIÓN B: CONTROLES')
+		expect(selectNamed(wrapper, 'Prestaciones (vacío: todas las de la sección)').text()).toContain('Control de lactancia (01080011)')
+		wrapper.unmount()
+	})
+
+	it('asks the same spec whether a prestación was found by the search or chosen step by step', async () => {
+		const asked = async (choose) => {
+			const wrapper = await builder()
+			await choose(wrapper)
+			wrapper.vm.state.filtrar.columnas = ['col02']
+			axios.post.mockReturnValueOnce(ok({ series: { local: [], nacional: [], pares: null }, etiquetas: { local: '900001', pares: null, codigos: [] }, fuente: FUENTES[0] }))
+			await wrapper.find('form').trigger('submit')
+			await flushPromises()
+			wrapper.unmount()
+			return axios.post.mock.calls.at(-1)
+		}
+
+		const stepByStep = await asked(async ({ vm }) => {
+			vm.chooseHoja('A01')
+			vm.chooseSeccion('SECCIÓN B: CONTROLES')
+			vm.state.filtrar.codigos = ['01080011']
+		})
+		const found = await asked(async (wrapper) => {
+			await typeInto(selectNamed(wrapper, 'Buscar una prestación'), '01080011')
+			document.body.querySelector('.vs__dropdown-option').click()
+			await flushPromises()
+		})
+
+		expect(found).toStrictEqual(stepByStep)
+		expect(found[1].consulta.filtros).toStrictEqual({ hoja: 'A01', seccion: 'SECCIÓN B: CONTROLES', codigos: ['01080011'], columnas: ['col02'] })
 	})
 
 	it('shows each fuente with its origen and fecha de corte, and the register it compares with', async () => {

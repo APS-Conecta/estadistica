@@ -6,7 +6,8 @@
 	No control names an establishment: the local series is this install's, from
 	app config (suite ADR-0009), and «pares» are chosen by register traits.
 	A consulta runs on «Consultar», never on every change: a national series
-	costs about two seconds, and the route spends the read limit.
+	costs about two seconds, and the route spends the read limit. The steps sit
+	in a column beside the answer, which stays in view as they scroll (#88).
 
 	An answer can be saved as a pregunta, under a title, for all the staff
 	(a8, a22): what is saved is the spec that was asked and the chart it is
@@ -26,31 +27,29 @@
 			name="Todavía no hay cifras REM"
 			description="Aparecerán aquí cuando se carguen los datos públicos del DEIS." />
 
-		<template v-else>
+		<div v-else class="estadistica-builder__layout">
 			<form class="estadistica-builder__steps" @submit.prevent="ask">
-				<section class="estadistica-builder__step">
-					<h2>1. Datos</h2>
+				<fieldset class="estadistica-builder__step">
+					<legend>1. Datos</legend>
 					<SourcesPanel :fuentes="fuentes"
 						:model-value="state.datos.fuente"
 						@update:model-value="chooseFuente" />
-				</section>
+				</fieldset>
 
-				<section class="estadistica-builder__step">
-					<h2>2. Filtrar</h2>
-					<div class="estadistica-builder__row">
-						<NcSelect :model-value="state.filtrar.desde"
-							input-label="Desde"
-							:options="months"
-							:reduce="id"
-							:clearable="false"
-							@update:model-value="choosePeriod('desde', $event)" />
-						<NcSelect :model-value="state.filtrar.hasta"
-							input-label="Hasta"
-							:options="months"
-							:reduce="id"
-							:clearable="false"
-							@update:model-value="choosePeriod('hasta', $event)" />
-					</div>
+				<fieldset class="estadistica-builder__step">
+					<legend>2. Filtrar</legend>
+					<NcSelect :model-value="state.filtrar.desde"
+						input-label="Desde"
+						:options="months"
+						:reduce="id"
+						:clearable="false"
+						@update:model-value="choosePeriod('desde', $event)" />
+					<NcSelect :model-value="state.filtrar.hasta"
+						input-label="Hasta"
+						:options="months"
+						:reduce="id"
+						:clearable="false"
+						@update:model-value="choosePeriod('hasta', $event)" />
 
 					<NcNoteCard v-if="catalogFailed" type="error">
 						{{ catalogFailed }}
@@ -66,6 +65,13 @@
 							{{ catalogo.anio }} no trae un diccionario que se pueda leer: las hojas y columnas son las del
 							diccionario de {{ catalogo.etiquetas_de }}.
 						</p>
+						<NcSelect :model-value="null"
+							input-label="Buscar una prestación"
+							placeholder="Su código o parte de su nombre"
+							:options="catalogPrestaciones"
+							:filter-by="(option, label, text) => textMatches(text, [label])"
+							:limit="SEARCH_LIMIT"
+							@update:model-value="choosePrestacion" />
 						<NcSelect :model-value="state.filtrar.hoja"
 							input-label="Hoja del REM"
 							:options="hojas"
@@ -92,10 +98,10 @@
 								multiple />
 						</template>
 					</template>
-				</section>
+				</fieldset>
 
-				<section class="estadistica-builder__step">
-					<h2>3. Resumir</h2>
+				<fieldset class="estadistica-builder__step">
+					<legend>3. Resumir</legend>
 					<NcSelect v-model="state.resumir.agrupar"
 						input-label="Agrupar por (hasta 2)"
 						:options="dimensionOptions"
@@ -135,20 +141,18 @@
 						<p class="estadistica-builder__hint">
 							Pares: los establecimientos que comparten lo que elija aquí.
 						</p>
-						<div class="estadistica-builder__row">
-							<NcSelect v-for="trait in traits"
-								:key="trait.id"
-								v-model="state.resumir.pares[trait.id]"
-								:input-label="trait.nombre"
-								:options="trait.options"
-								:reduce="id"
-								placeholder="Sin usar" />
-						</div>
+						<NcSelect v-for="trait in traits"
+							:key="trait.id"
+							v-model="state.resumir.pares[trait.id]"
+							:input-label="trait.nombre"
+							:options="trait.options"
+							:reduce="id"
+							placeholder="Sin usar" />
 					</fieldset>
-				</section>
+				</fieldset>
 
-				<section class="estadistica-builder__step">
-					<h2>4. Visualizar</h2>
+				<fieldset class="estadistica-builder__step">
+					<legend>4. Visualizar</legend>
 					<fieldset class="estadistica-builder__group">
 						<legend>Mostrar como</legend>
 						<NcCheckboxRadioSwitch v-for="chart in CHART_TYPES"
@@ -161,7 +165,7 @@
 							{{ chart.nombre }}
 						</NcCheckboxRadioSwitch>
 					</fieldset>
-				</section>
+				</fieldset>
 
 				<div class="estadistica-builder__ask">
 					<NcButton type="submit" variant="primary" :disabled="reason !== '' || asking">
@@ -171,35 +175,38 @@
 				</div>
 			</form>
 
-			<NcNoteCard v-if="askFailed" type="error">
-				{{ askFailed }}
-			</NcNoteCard>
-
-			<template v-else-if="answer">
-				<Visualization :answer="answer"
-					:spec="asked"
-					:tipo="state.visualizar.tipo" />
-
-				<form class="estadistica-builder__save" @submit.prevent="save">
-					<label class="estadistica-field">
-						<span>Título de la pregunta</span>
-						<input v-model="title" type="text" :maxlength="MAX_TITLE">
-					</label>
-					<NcButton type="submit" :disabled="title.trim() === '' || saving">
-						Guardar como pregunta
-					</NcButton>
-					<p class="estadistica-builder__hint">
-						Lo que guarde queda visible para todo el personal.
-					</p>
-				</form>
-				<NcNoteCard v-if="saved" type="success">
-					«{{ saved }}» quedó guardada en Preguntas.
+			<div class="estadistica-builder__answer">
+				<NcNoteCard v-if="askFailed" type="error">
+					{{ askFailed }}
 				</NcNoteCard>
-				<NcNoteCard v-if="saveFailed" type="error">
-					{{ saveFailed }}
-				</NcNoteCard>
-			</template>
-		</template>
+
+				<template v-else-if="answer">
+					<Visualization :answer="answer"
+						:spec="asked"
+						:tipo="state.visualizar.tipo" />
+
+					<form class="estadistica-builder__save" @submit.prevent="save">
+						<NcTextField v-model="title" label="Título de la pregunta" :maxlength="MAX_TITLE" />
+						<NcButton type="submit" :disabled="title.trim() === '' || saving">
+							Guardar como pregunta
+						</NcButton>
+						<p class="estadistica-builder__hint">
+							Lo que guarde queda visible para todo el personal.
+						</p>
+					</form>
+					<NcNoteCard v-if="saved" type="success">
+						«{{ saved }}» quedó guardada en Preguntas.
+					</NcNoteCard>
+					<NcNoteCard v-if="saveFailed" type="error">
+						{{ saveFailed }}
+					</NcNoteCard>
+				</template>
+
+				<NcEmptyContent v-else
+					name="El resultado aparece aquí"
+					description="Elija qué contar y presione «Consultar»." />
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -209,8 +216,10 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import SourcesPanel from './SourcesPanel.vue'
 import Visualization from './Visualization.vue'
+import { textMatches } from '../aps/filters.js'
 import { formatValue } from '../charts.js'
 import { ocsMessageFrom, ocsPost, warnError } from '../api.js'
 import {
@@ -218,10 +227,13 @@ import {
 	MAX_DIMENSIONS, MAX_TITLE, metricFor, missing, monthsOf, seccionOf, seriesCount, specFrom, TRAITS,
 } from '../query.js'
 
+/** The search lists this many prestaciones at most: a year's catálogo holds thousands. */
+const SEARCH_LIMIT = 50
+
 export default {
 	name: 'QueryBuilder',
 
-	components: { NcButton, NcCheckboxRadioSwitch, NcEmptyContent, NcNoteCard, NcSelect, SourcesPanel, Visualization },
+	components: { NcButton, NcCheckboxRadioSwitch, NcEmptyContent, NcNoteCard, NcSelect, NcTextField, SourcesPanel, Visualization },
 
 	props: {
 		/** This install's establishment (initial state; Establishment::jsonSerialize). */
@@ -232,6 +244,7 @@ export default {
 		return {
 			CHART_TYPES,
 			MAX_DIMENSIONS,
+			SEARCH_LIMIT,
 			fuentes: [],
 			loadFailed: '',
 			state: null,
@@ -271,6 +284,12 @@ export default {
 		},
 		seccion() {
 			return this.state.filtrar.seccion === null ? null : seccionOf(this.catalogo, this.state.filtrar.hoja, this.state.filtrar.seccion)
+		},
+		/** Every prestación of the catálogo, for the search: each carries its hoja and sección. */
+		catalogPrestaciones() {
+			return (this.catalogo?.hojas ?? []).flatMap((h) => h.secciones.flatMap((s) => s.prestaciones.map((p) => ({
+				id: p.codigo, label: `${p.etiqueta} (${p.codigo}) — ${h.hoja}`, hoja: h.hoja, seccion: s.seccion,
+			}))))
 		},
 		prestaciones() {
 			return (this.seccion?.prestaciones ?? []).map((p) => ({ id: p.codigo, label: `${p.etiqueta} (${p.codigo})` }))
@@ -316,6 +335,7 @@ export default {
 
 	methods: {
 		id: (option) => option.id,
+		textMatches,
 
 		/** The catálogo of the periodo's last year: the year the answer is labelled from (QueryExecutor). */
 		async loadCatalog() {
@@ -380,6 +400,17 @@ export default {
 			this.state.filtrar.seccion = seccion
 			this.state.filtrar.codigos = []
 			this.state.filtrar.columnas = []
+		},
+
+		/** A prestación the search found: its hoja and sección are chosen with it, and it joins the prestaciones. */
+		choosePrestacion(prestacion) {
+			if (prestacion.hoja !== this.state.filtrar.hoja || prestacion.seccion !== this.state.filtrar.seccion) {
+				this.chooseHoja(prestacion.hoja)
+				this.chooseSeccion(prestacion.seccion)
+			}
+			if (!this.state.filtrar.codigos.includes(prestacion.id)) {
+				this.state.filtrar.codigos.push(prestacion.id)
+			}
 		},
 
 		/**
@@ -447,31 +478,52 @@ export default {
 	gap: 24px;
 }
 
-.estadistica-builder__steps {
+/* The steps beside the answer. The answer's column is never narrower than
+   Visualization's narrowest panel (320px) with this box's padding and border;
+   both columns fit beside the open navigation of a 1024px screen. */
+.estadistica-builder__layout {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-	gap: 24px;
+	grid-template-columns: minmax(240px, 380px) minmax(360px, 1fr);
+	gap: calc(var(--default-grid-baseline) * 5);
+	align-items: start;
 }
 
-.estadistica-builder__step {
+.estadistica-builder__steps,
+.estadistica-builder__step,
+.estadistica-builder__group,
+.estadistica-builder__answer {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: calc(var(--default-grid-baseline) * 2);
+	/* A fieldset is min-content wide by default: these shrink with their column. */
+	min-inline-size: 0;
 }
 
-.estadistica-builder__step h2 {
-	font-size: 1.1em;
+.estadistica-builder__step,
+.estadistica-builder__answer {
 	margin: 0;
+	padding: calc(var(--default-grid-baseline) * 4);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-container);
 }
 
-.estadistica-builder__row {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
+.estadistica-builder__step > legend,
 .estadistica-builder__group legend {
+	padding-inline: var(--default-grid-baseline);
 	font-weight: bold;
+}
+
+/* NcSelect keeps a 260px minimum of its own: in a step it fills its column and shrinks with it. */
+.estadistica-builder__step :deep(.v-select.select) {
+	min-inline-size: 0;
+	inline-size: 100%;
+}
+
+/* The answer stays in view as the steps scroll; a table wider than its column scrolls inside it. */
+.estadistica-builder__answer {
+	position: sticky;
+	inset-block-start: calc(var(--default-grid-baseline) * 4);
+	overflow-x: auto;
 }
 
 .estadistica-builder__hint {
@@ -481,14 +533,25 @@ export default {
 .estadistica-builder__save {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: center;
+	align-items: end;
 	gap: 8px;
 }
 
 .estadistica-builder__ask {
-	grid-column: 1 / -1;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 12px;
+}
+
+/* A narrow screen: the answer follows the steps. */
+@media (max-width: 900px) {
+	.estadistica-builder__layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.estadistica-builder__answer {
+		position: static;
+	}
 }
 </style>
