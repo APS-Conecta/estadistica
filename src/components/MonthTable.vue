@@ -24,7 +24,7 @@
 						{{ MONTHS[Number(month) - 1] }}
 					</th>
 					<td v-for="year in years" :key="year.anio">
-						{{ cell(year, month) }}
+						{{ cell(year, month).figure }} <span v-if="cell(year, month).count" class="estadistica-month-table__count">{{ cell(year, month).count }}</span>
 					</td>
 				</tr>
 			</tbody>
@@ -69,16 +69,16 @@ export default {
 	methods: {
 		formatValue,
 
-		/** A month's figure: «58,3 % (7 de 12)», sin informar, or «—» for a month that has not come yet. */
+		/** A month's figure and its count: «58,3 %» and «(7 de 12)», sin informar, or «—» for a month that has not come yet. */
 		cell(year, month) {
 			const mes = year.meses.find((one) => one.mes.endsWith(`-${month}`))
 			if (!mes) {
-				return '—'
+				return { figure: '—' }
 			}
 			if (mes.porcentaje === null) {
-				return 'sin informar'
+				return { figure: 'sin informar' }
 			}
-			return `${formatValue(mes.porcentaje)} % (${formatValue(mes.numerador)} de ${formatValue(mes.denominador)})`
+			return { figure: `${formatValue(mes.porcentaje)} %`, count: `(${formatValue(mes.numerador)} de ${formatValue(mes.denominador)})` }
 		},
 	},
 }
@@ -108,6 +108,13 @@ export default {
 	padding: 2px 6px;
 	border-bottom: 1px solid var(--color-border);
 	text-align: end;
+}
+
+/* «N de D» under its percentage, so a year's column stays narrow enough for the sidebar. */
+.estadistica-month-table__count {
+	display: block;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
 }
 
 .estadistica-month-table th[scope='row'],
