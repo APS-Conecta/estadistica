@@ -14,10 +14,10 @@ const ok = (data) => Promise.resolve({ data: { ocs: { meta: { status: 'ok' }, da
 
 const CONSULTA = { fuente: 'rem-a', periodo: { desde: '2026-01', hasta: '2026-03' }, filtros: { codigos: ['02010420'], columnas: ['col01'] } }
 
-/** GET preguntas: one of the person's own, one of someone else's. */
+/** GET preguntas: one of the person's own, one of someone else's saved on 10 November 2026 at noon in Chile. */
 const PREGUNTAS = [
 	{ id: 1, titulo: 'Controles', consulta: CONSULTA, tipo: 'barra', autor: 'ana', autor_nombre: 'Ana', actualizada: 1, editable: true },
-	{ id: 2, titulo: 'Visitas', consulta: CONSULTA, tipo: 'linea', autor: 'luis', autor_nombre: 'Luis', actualizada: 1, editable: false },
+	{ id: 2, titulo: 'Visitas', consulta: CONSULTA, tipo: 'linea', autor: 'luis', autor_nombre: 'Luis', actualizada: 1794322800, editable: false },
 ]
 
 async function listed(preguntas = PREGUNTAS) {
@@ -31,7 +31,24 @@ const item = (wrapper, index) => wrapper.findAll('.estadistica-questions__item')
 
 const button = (element, text) => element.findAll('button').find((b) => b.text() === text)
 
+/** The actions menu and the dialog open in the page's body, outside the list. */
+const inPage = (selector, text) => [...document.body.querySelectorAll(selector)].find((element) => element.textContent.trim() === text)
+
+/** «Editar» or «Eliminar» from a pregunta's actions menu, as a person picks it. */
+async function choose(wrapper, titulo, action) {
+	await wrapper.find(`button[aria-label="Acciones de «${titulo}»"]`).trigger('click')
+	await flushPromises()
+	inPage('[role="menuitem"]', action).click()
+	await flushPromises()
+}
+
+const dialog = () => document.body.querySelector('[role="dialog"]')
+
+// jsdom has no ResizeObserver; the actions menu's popover observes its own size.
+vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+
 beforeEach(() => {
+	document.body.innerHTML = ''
 	axios.get.mockReset()
 	axios.post.mockReset()
 	axios.put.mockReset()
@@ -39,12 +56,12 @@ beforeEach(() => {
 })
 
 describe('Questions — every pregunta, everyone\'s to read (a8)', () => {
-	it('lists each with its author, and asks one only when it is opened', async () => {
+	it('lists each with its author and date, and asks one only when it is opened', async () => {
 		const wrapper = await listed()
 		axios.post.mockReturnValueOnce(ok({ series: { local: [], nacional: [], pares: null }, etiquetas: { local: null, pares: null, codigos: [] }, fuente: {} }))
 
 		expect(item(wrapper, 0).text()).toContain('Controles')
-		expect(item(wrapper, 1).text()).toContain('de Luis')
+		expect(item(wrapper, 1).text()).toContain('de Luis · 10 de noviembre de 2026')
 		expect(axios.post).not.toHaveBeenCalled()
 
 		await button(item(wrapper, 1), 'Ver').trigger('click')
@@ -54,18 +71,16 @@ describe('Questions — every pregunta, everyone\'s to read (a8)', () => {
 		wrapper.unmount()
 	})
 
-	it('offers Editar and Eliminar only where the person may change it, with accessible names containing item context', async () => {
+	it('offers Editar and Eliminar in an actions menu only where the person may change it', async () => {
 		const wrapper = await listed()
 
-		const firstItem = item(wrapper, 0)
-		expect(button(firstItem, 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Controles»')
-		expect(button(firstItem, 'Editar').attributes('aria-label')).toBe('Editar la pregunta «Controles»')
-		expect(button(firstItem, 'Eliminar').attributes('aria-label')).toBe('Eliminar la pregunta «Controles»')
+		expect(button(item(wrapper, 0), 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Controles»')
+		await item(wrapper, 0).find('button[aria-label="Acciones de «Controles»"]').trigger('click')
+		await flushPromises()
+		expect([...document.body.querySelectorAll('[role="menuitem"]')].map((action) => action.textContent.trim())).toEqual(['Editar', 'Eliminar'])
 
-		const secondItem = item(wrapper, 1)
-		expect(button(secondItem, 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Visitas»')
-		expect(button(secondItem, 'Editar')).toBeUndefined()
-		expect(button(secondItem, 'Eliminar')).toBeUndefined()
+		expect(button(item(wrapper, 1), 'Ver').attributes('aria-label')).toBe('Ver la pregunta «Visitas»')
+		expect(item(wrapper, 1).find('button[aria-haspopup="menu"]').exists()).toBe(false)
 		wrapper.unmount()
 	})
 
@@ -73,7 +88,7 @@ describe('Questions — every pregunta, everyone\'s to read (a8)', () => {
 		const wrapper = await listed()
 		axios.put.mockImplementationOnce((url, body) => ok({ ...PREGUNTAS[0], ...body }))
 
-		await button(item(wrapper, 0), 'Editar').trigger('click')
+		await choose(wrapper, 'Controles', 'Editar')
 		expect(item(wrapper, 0).find('form input[type="text"]').element.value).toBe('Controles')
 		await item(wrapper, 0).find('form input[type="text"]').setValue('Controles de salud')
 		wrapper.vm.draft.tipo = 'tabla'
@@ -101,20 +116,22 @@ describe('Questions — every pregunta, everyone\'s to read (a8)', () => {
 		wrapper.unmount()
 	})
 
-	it('deletes one only once the person confirms, warning the tableros will say so', async () => {
+	it('deletes one only once the person confirms in a dialog, warning the tableros will say so', async () => {
 		const wrapper = await listed()
-		const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
 		axios.delete.mockReturnValueOnce(ok([]))
 
-		await wrapper.vm.remove(PREGUNTAS[0])
+		await choose(wrapper, 'Controles', 'Eliminar')
+		expect(dialog().textContent).toContain('¿Eliminar la pregunta «Controles»? Los tableros que la muestran dirán que fue eliminada.')
+		inPage('[role="dialog"] button', 'Cancelar').click()
+		await vi.waitFor(() => expect(dialog()).toBeNull())
 		expect(axios.delete).not.toHaveBeenCalled()
-		expect(confirm.mock.calls[0][0]).toContain('Los tableros que la muestran dirán que fue eliminada.')
+		expect(wrapper.findAll('.estadistica-questions__item')).toHaveLength(2)
 
-		await wrapper.vm.remove(PREGUNTAS[0])
+		await choose(wrapper, 'Controles', 'Eliminar')
+		inPage('[role="dialog"] button', 'Eliminar').click()
 		await flushPromises()
 		expect(axios.delete).toHaveBeenCalledWith(`${OCS}/preguntas/1`)
 		expect(wrapper.findAll('.estadistica-questions__item')).toHaveLength(1)
-		confirm.mockRestore()
 		wrapper.unmount()
 	})
 

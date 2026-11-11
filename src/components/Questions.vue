@@ -30,27 +30,29 @@
 			<ul class="estadistica-questions__list">
 				<li v-for="pregunta in preguntas" :key="pregunta.id" class="estadistica-questions__item">
 					<div class="estadistica-questions__row">
-						<strong>{{ pregunta.titulo }}</strong>
-						<span class="estadistica-questions__hint">de {{ pregunta.autor_nombre }}</span>
+						<div class="estadistica-questions__title">
+							<strong>{{ pregunta.titulo }}</strong>
+							<span class="estadistica-questions__hint">de {{ pregunta.autor_nombre }} · {{ dateOf(pregunta.actualizada) }}</span>
+						</div>
 						<NcButton variant="tertiary"
 							:aria-label="`${shown.includes(pregunta.id) ? 'Ocultar' : 'Ver'} la pregunta «${pregunta.titulo}»`"
 							@click="toggle(pregunta.id)">
 							{{ shown.includes(pregunta.id) ? 'Ocultar' : 'Ver' }}
 						</NcButton>
-						<template v-if="pregunta.editable">
-							<NcButton variant="tertiary"
-								:aria-label="`Editar la pregunta «${pregunta.titulo}»`"
-								:disabled="saving"
-								@click="edit(pregunta)">
+						<NcActions v-if="pregunta.editable" :aria-label="`Acciones de «${pregunta.titulo}»`" :disabled="saving">
+							<NcActionButton close-after-click @click="edit(pregunta)">
+								<template #icon>
+									<NcIconSvgWrapper :path="mdiPencilOutline" />
+								</template>
 								Editar
-							</NcButton>
-							<NcButton variant="tertiary"
-								:aria-label="`Eliminar la pregunta «${pregunta.titulo}»`"
-								:disabled="saving"
-								@click="remove(pregunta)">
+							</NcActionButton>
+							<NcActionButton close-after-click @click="deleting = pregunta">
+								<template #icon>
+									<NcIconSvgWrapper :path="mdiTrashCanOutline" />
+								</template>
 								Eliminar
-							</NcButton>
-						</template>
+							</NcActionButton>
+						</NcActions>
 					</div>
 
 					<form v-if="editing === pregunta.id" class="estadistica-questions__form" @submit.prevent="save">
@@ -81,28 +83,42 @@
 					<QuestionCard v-if="shown.includes(pregunta.id)" :pregunta="pregunta" />
 				</li>
 			</ul>
+
+			<NcDialog v-if="deleting"
+				open
+				name="Eliminar la pregunta"
+				:message="`¿Eliminar la pregunta «${deleting.titulo}»? Los tableros que la muestran dirán que fue eliminada.`"
+				:buttons="deleteButtons"
+				@update:open="deleting = null" />
 		</template>
 	</div>
 </template>
 
 <script>
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import QuestionCard from './QuestionCard.vue'
 import { ocsDelete, ocsGet, ocsMessageFrom, ocsPut, warnError } from '../api.js'
+import { mdiPencilOutline, mdiTrashCanOutline } from '../icons.js'
 import { CHART_TYPES, MAX_TITLE } from '../query.js'
 
 export default {
 	name: 'SavedQuestions',
 
-	components: { NcButton, NcCheckboxRadioSwitch, NcEmptyContent, NcNoteCard, QuestionCard },
+	components: { NcActionButton, NcActions, NcButton, NcCheckboxRadioSwitch, NcDialog, NcEmptyContent, NcIconSvgWrapper, NcNoteCard, QuestionCard },
 
 	data() {
 		return {
 			CHART_TYPES,
 			MAX_TITLE,
+			mdiPencilOutline,
+			mdiTrashCanOutline,
 			preguntas: null,
 			loadFailed: '',
 			shown: [],
@@ -110,7 +126,18 @@ export default {
 			draft: { titulo: '', tipo: 'barra' },
 			saving: false,
 			saveFailed: '',
+			/** The pregunta the delete dialog asks about, or null when it is closed. */
+			deleting: null,
 		}
+	},
+
+	computed: {
+		deleteButtons() {
+			return [
+				{ label: 'Cancelar' },
+				{ label: 'Eliminar', variant: 'error', callback: () => this.remove(this.deleting) },
+			]
+		},
 	},
 
 	async mounted() {
@@ -123,6 +150,11 @@ export default {
 	},
 
 	methods: {
+		/** When it was last saved, as es-CL writes a date: «10 de noviembre de 2026». */
+		dateOf(seconds) {
+			return new Date(seconds * 1000).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+		},
+
 		toggle(id) {
 			this.shown = this.shown.includes(id) ? this.shown.filter((shown) => shown !== id) : [...this.shown, id]
 		},
@@ -147,11 +179,7 @@ export default {
 			}
 		},
 
-		/** ponytail: the browser's own confirm; NcDialog when the page needs more than one yes/no. */
 		async remove(pregunta) {
-			if (!window.confirm(`¿Eliminar la pregunta «${pregunta.titulo}»? Los tableros que la muestran dirán que fue eliminada.`)) {
-				return
-			}
 			this.saving = true
 			this.saveFailed = ''
 			try {
@@ -170,9 +198,8 @@ export default {
 
 <style scoped>
 .estadistica-questions__list {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
 }
 
 .estadistica-questions__item,
@@ -182,11 +209,25 @@ export default {
 	gap: 8px;
 }
 
+.estadistica-questions__item {
+	padding: 12px 16px;
+}
+
+.estadistica-questions__item + .estadistica-questions__item {
+	border-top: 1px solid var(--color-border);
+}
+
 .estadistica-questions__row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
+}
+
+.estadistica-questions__title {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
 }
 
 .estadistica-questions__form legend {
