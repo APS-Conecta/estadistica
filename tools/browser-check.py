@@ -46,6 +46,13 @@ API's figures. At Nextcloud's narrowest desktop width every control stays in
 its step, with the answer beside the steps; on a phone the answer follows
 them.
 
+And every chart the app draws for an answer (#91): Consultar's, a pregunta's
+and a tablero card's, in the light and the dark theme, and in Firefox. Each
+draws as SVG at its container's width, our establishment in the theme's
+primary and the country in its muted text colour, with a legend naming both;
+a column is a keyboard stop that says its value, and a line chart reads a
+point by the arrow keys.
+
 It makes everything it needs and removes it all however it ends:
 - a few synthetic REM rows under a código of its own. They sit in 2009, the
   window's floor: outside the default window the REM job neither loads that
@@ -358,6 +365,57 @@ def arrange_the_card(page, pregunta):
     except PlaywrightTimeout:
         failures.append("«Eliminar el tablero» did not ask in a dialog that «Cancelar» closes")
     return failures
+
+
+def answer_chart(page, scope, where):
+    """The answer's chart in `scope` (#91): SVG at its container's width, ours in the theme's primary and the country
+    in its muted text colour, a legend naming both, and its first value read by keyboard above the plot."""
+    chart = page.locator(f"{scope} .estadistica-chart").first
+    try:
+        chart.locator(".estadistica-chart__plot svg").wait_for(timeout=30_000)
+        page.wait_for_function("(svg) => Math.abs(svg.getAttribute('width') - svg.parentElement.getBoundingClientRect().width) <= 1",
+                               arg=chart.locator(".estadistica-chart__plot svg").element_handle(), timeout=10_000)
+    except PlaywrightTimeout:
+        return [f"{where}: the answer's chart never drew at its container's width"]
+    failures = []
+    legend = [key.strip() for key in chart.locator(".estadistica-chart__legend li").all_inner_texts()]
+    if legend != ["Su establecimiento", "Nacional"]:
+        failures.append(f"{where}: the chart's legend reads {legend}")
+    columns = chart.locator(".estadistica-chart__column[role=img]").count() > 0
+    # A column is filled; a line is its path's stroke.
+    ours, country = ((".estadistica-chart__column.estadistica-chart__line--emphasis", ".estadistica-chart__column.estadistica-chart__line--context")
+                     if columns else (".estadistica-chart__line--emphasis path", ".estadistica-chart__line--context path"))
+    painted = chart.evaluate("""(figure, [ours, country]) => {
+        const tone = (name) => { const probe = document.createElement('span'); probe.style.color = `var(${name})`;
+            figure.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color }
+        const paint = (selector) => { const style = getComputedStyle(figure.querySelector(`.estadistica-chart__plot ${selector}`));
+            return style.fill === 'none' ? style.stroke : style.fill }
+        return { primary: tone('--color-primary-element'), muted: tone('--color-text-maxcontrast'), ours: paint(ours), country: paint(country) }
+    }""", [ours, country])
+    if painted["ours"] != painted["primary"] or painted["country"] != painted["muted"]:
+        failures.append(f"{where}: ours is painted {painted['ours']} and the country {painted['country']}, "
+                        f"not the primary {painted['primary']} and the muted {painted['muted']}")
+    if columns:
+        first = chart.locator(".estadistica-chart__column[role=img]").first
+        first.focus()
+        said = first.get_attribute("aria-label")
+        if said != f"enero de {YEAR}: 4 Su establecimiento":
+            failures.append(f"{where}: the first column says {said!r}")
+    else:
+        chart.locator("svg[role=img]").focus()
+        page.keyboard.press("ArrowLeft")
+    readout = " ".join(chart.locator(".estadistica-chart__readout").inner_text().split())
+    if not readout.startswith(f"enero de {YEAR}: 4 Su establecimiento 3 Nacional"):
+        failures.append(f"{where}: the chart's readout says {readout!r}")
+    page.screenshot(path=str(SHOTS / f"{where.replace(' ', '-')}-grafico.png"), full_page=True)
+    return failures
+
+
+def open_the_pregunta(page, title, where):
+    """Preguntas → «Ver» the pregunta → its answer's chart."""
+    navigation_entry(page, "Preguntas").click()
+    page.get_by_role("button", name=f"Ver la pregunta «{title}»").click()
+    return answer_chart(page, ".estadistica-questions__item", where)
 
 
 def card_figures(rows):
@@ -702,15 +760,20 @@ def main():
             page.screenshot(path=str(SHOTS / "tablero.png"), full_page=True)
             if shown != expected:
                 failures.append(f"a15: the card shows {shown}, the API answers {expected}")
-            if page.locator(".estadistica-card canvas").count() != 1:
+            if page.locator(".estadistica-card .estadistica-chart").count() != 1:
                 failures.append("the card drew no chart above its table")
+            failures += answer_chart(page, ".estadistica-card", "chromium tablero")
             failures += arrange_the_card(page, f"Navegador {RUN}")
+            failures += open_the_pregunta(page, f"Navegador {RUN}", "chromium pregunta")
             failures += walk_the_navigation(page, fetched, "chromium")
 
             # #88: a consulta from the search to the answer, then the layout at the narrowest desktop.
             log_in(page, ADMIN, ADMIN_PASSWORD)
             if (asked := ask_in_consultar(page, "chromium")) != expected:
                 failures.append(f"Consultar shows {asked}, the API answers {expected}")
+            failures += answer_chart(page, ".estadistica-builder__answer", "chromium consultar barras")
+            page.get_by_text("Líneas", exact=True).click()
+            failures += answer_chart(page, ".estadistica-builder__answer", "chromium consultar lineas")
             page.set_viewport_size(NARROWEST_DESKTOP)
             failures += steps_beside_the_answer(page, "chromium at 1024 px", beside=True)
             failures += [f"console error for the creator: {e}" for e in errors]
@@ -758,6 +821,10 @@ def main():
                 failures.append("the admin's dark theme did not reach the page")
             if (asked := ask_in_consultar(dark, "chromium-oscuro")) != expected:
                 failures.append(f"Consultar in the dark theme shows {asked}, the API answers {expected}")
+            failures += answer_chart(dark, ".estadistica-builder__answer", "chromium oscuro consultar")
+            failures += open_the_pregunta(dark, f"Navegador {RUN}", "chromium oscuro pregunta")
+            open_the_tablero(dark, f"Tablero navegador {RUN}")
+            failures += answer_chart(dark, ".estadistica-card", "chromium oscuro tablero")
             failures += [f"console error in the dark theme: {e}" for e in dark_errors]
             occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete")
             made.pop("dark")
@@ -774,6 +841,10 @@ def main():
             log_in(page, ADMIN, ADMIN_PASSWORD)
             if (asked := ask_in_consultar(page, "firefox")) != expected:
                 failures.append(f"Consultar in Firefox shows {asked}, the API answers {expected}")
+            failures += answer_chart(page, ".estadistica-builder__answer", "firefox consultar")
+            failures += open_the_pregunta(page, f"Navegador {RUN}", "firefox pregunta")
+            open_the_tablero(page, f"Tablero navegador {RUN}")
+            failures += answer_chart(page, ".estadistica-card", "firefox tablero")
             failures += [f"console error in Firefox: {e}" for e in firefox_errors]
             failures += dark_resumen(firefox, "firefox")
             failures += resumen_detail(firefox, "firefox", "light") + resumen_detail(firefox, "firefox", "dark")
@@ -819,6 +890,7 @@ def main():
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
+    print("ok    Consultar's answer, a pregunta and a tablero card draw their SVG chart at its container's width, ours in the primary and the country muted, named in the legend and read by keyboard, light and dark, in Chromium and Firefox")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
     print("\nAll good.")
     return 0

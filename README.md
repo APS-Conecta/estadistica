@@ -90,4 +90,4 @@ Tres trampas que esta aplicación ya pagó:
 
 AGPL-3.0-or-later ([`LICENSE`](LICENSE)). Las cifras REM son datos públicos del DEIS, la población es de FONASA y las metas son las Orientaciones Técnicas del MINSAL; ninguna viaja en este repositorio: la aplicación descarga la primera y un administrador carga la segunda. El archivo de metas 2026 reformula las rutas y las metas nacionales de las Orientaciones Técnicas.
 
-Los avisos del código de terceros incluido en los paquetes (Vue, Chart.js, las bibliotecas de Nextcloud) están en los archivos `js/*.LICENSE.txt` que la compilación escribe junto a cada paquete y fragmento. Los avisos y licencias de la organización viven en [Aviso y licencias](https://aps-conecta.github.io/documentation/aviso.html).
+Los avisos del código de terceros incluido en los paquetes (Vue y las bibliotecas de Nextcloud) están en los archivos `js/*.LICENSE.txt` que la compilación escribe junto a cada paquete y fragmento. Los avisos y licencias de la organización viven en [Aviso y licencias](https://aps-conecta.github.io/documentation/aviso.html).

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chartConfig, MAX_PANELS, panelsOf, SERIES, tableOf, themeOf, tooltipLabel } from './charts.js'
+import { MAX_PANELS, panelsOf, tableOf } from './charts.js'
 
 vi.mock('@nextcloud/axios', () => ({ default: {} }))
 vi.mock('@nextcloud/router', () => ({ generateOcsUrl: (url) => url }))
@@ -16,8 +16,6 @@ const point = (grupo, valor, informantes = 1) => ({ grupo, valor, informantes })
 function answer(series) {
 	return { series: { local: null, nacional: null, pares: null, ...series }, etiquetas, fuente: {} }
 }
-
-const LIGHT = themeOf((name) => ({ '--color-main-background': '#ffffff' })[name] ?? '')
 
 describe('panelsOf — what is drawn', () => {
 	it('puts local, nacional and pares on one panel over the first dimension, months in order', () => {
@@ -111,43 +109,5 @@ describe('tableOf — the side-by-side table (a22)', () => {
 		const table = tableOf(answer({ nacional: [point([null], 1, 3), point(['CESFAM'], 2, 40)] }), { agrupar: ['tipo'] })
 
 		expect(table.filas.map((fila) => fila.grupo)).toStrictEqual([['CESFAM'], ['sin dato']])
-	})
-})
-
-describe('chartConfig — each series keeps its color', () => {
-	it('paints a series by what it is, not by its place in the answer', () => {
-		const view = panelsOf(answer({ nacional: [point(['2026-01'], 3, 10)], pares: [point(['2026-01'], 2, 5)] }), { agrupar: ['mes'] })
-		const config = chartConfig(view.panels[0], 'barra', view.max, LIGHT)
-
-		// No local series: the country still wears slot 2, not the local's slot 1.
-		expect(config.data.datasets.map((d) => d.backgroundColor)).toStrictEqual([SERIES[1].light, SERIES[2].light])
-		expect(config.type).toBe('bar')
-		expect(config.options.plugins.legend.display).toBe(true)
-		expect(config.options.scales.y.suggestedMax).toBe(3)
-	})
-
-	it('takes the dark steps on a dark surface, and shows no legend for one series', () => {
-		const dark = themeOf((name) => ({ '--color-main-background': '#171717', '--color-main-text': '#ebebeb' })[name] ?? '')
-		const view = panelsOf(answer({ local: [point(['2026-01'], 3)] }), { agrupar: ['mes'] })
-		const config = chartConfig(view.panels[0], 'linea', view.max, dark)
-
-		expect(dark.dark).toBe(true)
-		expect(config.type).toBe('line')
-		expect(config.data.datasets[0].borderColor).toBe(SERIES[0].dark)
-		expect(config.data.datasets[0].pointBorderColor).toBe('#171717')
-		expect(config.options.plugins.legend.display).toBe(false)
-		expect(config.options.plugins.legend.labels.color).toBe('#ebebeb')
-	})
-
-	it('reads a three-digit surface color as the six-digit one it abbreviates', () => {
-		expect(themeOf((name) => (name === '--color-main-background' ? '#111' : '')).dark).toBe(true)
-		expect(themeOf((name) => (name === '--color-main-background' ? '#fff' : '')).dark).toBe(false)
-	})
-
-	it('says in the tooltip how many establishments reported, beyond the local one', () => {
-		const dataset = { label: 'Nacional', serie: 'nacional', informantes: [1204] }
-
-		expect(tooltipLabel({ dataset, raw: 3.25, dataIndex: 0 })).toBe('Nacional: 3,3 (1.204 establecimientos informaron)')
-		expect(tooltipLabel({ dataset: { label: 'Su establecimiento', serie: 'local', informantes: [1] }, raw: 4, dataIndex: 0 })).toBe('Su establecimiento: 4')
 	})
 })

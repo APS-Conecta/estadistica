@@ -30,6 +30,11 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   its hoja and sección (#88).
 - Tableros use Nextcloud's controls: a tablero is chosen in «Tablero», its author beside it; each card's «Subir»,
   «Bajar», width and «Quitar» sit in its actions menu; deleting a tablero asks in a dialog (#90).
+- Consultar's answer, a pregunta and a tablero card draw their bars and lines as the app's own SVG charts, at their
+  container's width and in the theme's colours: the establishment in the primary colour, the country and the peers
+  in muted tones told apart by their dash, with a legend always shown. A line chart is read point by point with the
+  arrow keys, and each column is a keyboard stop that says its value; the table under the chart is unchanged.
+  Chart.js and its fixed palette are gone (#91).
 - The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
   contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.
 

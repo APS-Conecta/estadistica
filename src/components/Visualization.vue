@@ -25,15 +25,16 @@
 			</p>
 
 			<div v-if="tipo !== 'tabla'" class="estadistica-answer__panels">
-				<figure v-for="(panel, index) in view.panels" :key="index" class="estadistica-answer__panel">
+				<figure v-for="(panel, index) in charts" :key="index" class="estadistica-answer__panel">
 					<figcaption v-if="panel.titulo">
 						{{ panel.titulo }}
 					</figcaption>
-					<div class="estadistica-answer__canvas">
-						<canvas :ref="(el) => setCanvas(index, el)"
-							role="img"
-							:aria-label="`Gráfico${panel.titulo ? ` de ${panel.titulo}` : ''}; sus valores están en la tabla.`" />
-					</div>
+					<MetricChart :series="panel.lines"
+						:labels="panel.labels"
+						:columns="tipo === 'barra'"
+						:max="view.max"
+						unit=""
+						:label="`Gráfico${panel.titulo ? ` de ${panel.titulo}` : ''}; sus valores están en la tabla.`" />
 				</figure>
 			</div>
 
@@ -45,7 +46,6 @@
 							{{ columna }}
 						</th>
 						<th v-for="serie in table.series" :key="serie.id" scope="col">
-							<span class="estadistica-answer__swatch" :style="{ backgroundColor: colors[serie.id] }" />
 							{{ serie.nombre }}
 						</th>
 					</tr>
@@ -93,13 +93,14 @@
 <script>
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { chartConfig, draw, formatValue, MAX_PANELS, panelsOf, tableOf, themeOf } from '../charts.js'
+import MetricChart from './MetricChart.vue'
+import { formatValue, linesOf, MAX_PANELS, panelsOf, tableOf } from '../charts.js'
 import { dimensionName, monthName } from '../query.js'
 
 export default {
 	name: 'QueryVisualization',
 
-	components: { NcEmptyContent, NcNoteCard },
+	components: { MetricChart, NcEmptyContent, NcNoteCard },
 
 	props: {
 		/** POST consultas' answer: series, etiquetas, fuente (QueryExecutor::response). */
@@ -111,12 +112,15 @@ export default {
 	},
 
 	data() {
-		return { colors: {}, MAX_PANELS }
+		return { MAX_PANELS }
 	},
 
 	computed: {
 		view() {
 			return panelsOf(this.answer, this.spec)
+		},
+		charts() {
+			return this.view.panels.map((panel) => ({ ...panel, lines: linesOf(panel) }))
 		},
 		table() {
 			return tableOf(this.answer, this.spec)
@@ -154,56 +158,8 @@ export default {
 		},
 	},
 
-	watch: {
-		answer: { handler: 'draw', flush: 'post' },
-		tipo: { handler: 'draw', flush: 'post' },
-	},
-
-	created() {
-		// Plain fields, not reactive state: Chart.js owns these objects.
-		this.canvases = []
-		this.charts = []
-	},
-
-	mounted() {
-		this.draw()
-	},
-
-	beforeUnmount() {
-		this.destroy()
-	},
-
 	methods: {
 		formatValue,
-
-		setCanvas(index, el) {
-			this.canvases[index] = el
-		},
-
-		destroy() {
-			this.charts.forEach((chart) => chart.destroy())
-			this.charts = []
-		},
-
-		/**
-		 * The theme is read where the chart sits, at every draw, so a theme
-		 * changed since the last consulta is picked up by the next one.
-		 */
-		draw() {
-			this.destroy()
-			const style = window.getComputedStyle(this.$el)
-			const theme = themeOf((name) => style.getPropertyValue(name))
-			this.colors = theme.colors
-			if (this.tipo === 'tabla' || this.empty) {
-				return
-			}
-			this.view.panels.forEach((panel, index) => {
-				const canvas = this.canvases[index]
-				if (canvas) {
-					this.charts.push(draw(canvas, chartConfig(panel, this.tipo, this.view.max, theme)))
-				}
-			})
-		},
 	},
 }
 </script>
@@ -227,11 +183,6 @@ export default {
 
 .estadistica-answer__panel {
 	margin: 0;
-}
-
-.estadistica-answer__canvas {
-	position: relative;
-	height: 280px;
 }
 
 .estadistica-answer__table {
@@ -258,14 +209,6 @@ export default {
 
 .estadistica-answer__table td {
 	text-align: end;
-}
-
-.estadistica-answer__swatch {
-	display: inline-block;
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	margin-inline-end: 4px;
 }
 
 .estadistica-answer__who {

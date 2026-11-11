@@ -1,15 +1,9 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { draw, MAX_PANELS } from '../charts.js'
+import { MAX_PANELS } from '../charts.js'
 import Visualization from './Visualization.vue'
 
-// jsdom has no canvas: only Chart.js's own drawing is replaced, every other
-// helper (panels, table, theme) is the real one.
-vi.mock('../charts.js', async (importOriginal) => ({
-	...(await importOriginal()),
-	draw: vi.fn(() => ({ destroy: vi.fn() })),
-}))
 vi.mock('@nextcloud/axios', () => ({ default: {} }))
 vi.mock('@nextcloud/router', () => ({ generateOcsUrl: (url) => url }))
 
@@ -32,16 +26,11 @@ function shown(props) {
 	return mount(Visualization, { props: { spec: { agrupar: ['mes'], metrica: 'suma' }, tipo: 'barra', ...props } })
 }
 
-beforeEach(() => {
-	draw.mockClear()
-})
-
 describe('Visualization — one answer, drawn and told', () => {
 	it('draws a panel, tabulates it, and says where the figures come from', () => {
 		const wrapper = shown({ answer: answer({ series: MONTHS }) })
 
-		expect(draw).toHaveBeenCalledTimes(1)
-		expect(wrapper.findAll('canvas')).toHaveLength(1)
+		expect(wrapper.findAll('.estadistica-chart')).toHaveLength(1)
 		expect(wrapper.findAll('tbody tr')).toHaveLength(2)
 		expect(wrapper.text()).toContain('Fuente: REM Serie A, datos públicos DEIS, con cifras hasta agosto de 2026.')
 		expect(wrapper.text()).toContain('Suma de lo informado; entre paréntesis, los establecimientos que informaron.')
@@ -53,8 +42,7 @@ describe('Visualization — one answer, drawn and told', () => {
 	it('shows only the table for a tabla, and draws nothing', () => {
 		const wrapper = shown({ answer: answer({ series: MONTHS }), tipo: 'tabla' })
 
-		expect(draw).not.toHaveBeenCalled()
-		expect(wrapper.findAll('canvas')).toHaveLength(0)
+		expect(wrapper.findAll('.estadistica-chart')).toHaveLength(0)
 		expect(wrapper.findAll('tbody tr')).toHaveLength(2)
 		wrapper.unmount()
 	})
@@ -62,7 +50,7 @@ describe('Visualization — one answer, drawn and told', () => {
 	it('says there are no figures instead of drawing an empty chart', () => {
 		const wrapper = shown({ answer: answer({ series: { local: [], nacional: [] } }) })
 
-		expect(draw).not.toHaveBeenCalled()
+		expect(wrapper.findAll('.estadistica-chart')).toHaveLength(0)
 		expect(wrapper.text()).toContain('No hay cifras para esta consulta')
 		expect(wrapper.find('table').exists()).toBe(false)
 		wrapper.unmount()
@@ -87,6 +75,62 @@ describe('Visualization — one answer, drawn and told', () => {
 		expect(wrapper.text()).toContain('Pares: los establecimientos con tipo de establecimiento «CESFAM».')
 		expect(wrapper.text()).toContain('Promedio por establecimiento: la suma dividida por los establecimientos que informaron')
 		expect(wrapper.text()).toContain('Qué se contó: 2 prestaciones')
+		wrapper.unmount()
+	})
+})
+
+// Every series of the answer, with two establishments behind the country's and twelve behind the peers'.
+const ALL = {
+	local: [point(['2026-01'], 2), point(['2026-02'], 4)],
+	nacional: [point(['2026-01'], 3.5, 1204), point(['2026-02'], 5, 1190)],
+	pares: [point(['2026-01'], 3, 12)],
+}
+
+describe('Visualization — every series drawn by the app, named, and in its table twin', () => {
+	it('draws a column per value as a keyboard stop that says it, our establishment emphasised, and a legend naming each series', () => {
+		const wrapper = shown({ answer: answer({ series: ALL }) })
+
+		const chart = wrapper.find('.estadistica-chart')
+		expect(chart.findAll('.estadistica-chart__legend li').map((key) => key.text())).toEqual(['Su establecimiento', 'Nacional', 'Pares'])
+		const columns = chart.findAll('[role="img"][tabindex="0"]')
+		expect(columns.map((column) => column.attributes('aria-label'))).toEqual([
+			'enero de 2026: 2 Su establecimiento',
+			'enero de 2026: 3,5 Nacional · 1.204 establecimientos informaron',
+			'enero de 2026: 3 Pares · 12 establecimientos informaron',
+			'febrero de 2026: 4 Su establecimiento',
+			'febrero de 2026: 5 Nacional · 1.190 establecimientos informaron',
+		])
+		expect(chart.findAll('.estadistica-chart__line--emphasis[role="img"]').map((column) => column.attributes('aria-label')), 'only ours in the primary')
+			.toEqual(['enero de 2026: 2 Su establecimiento', 'febrero de 2026: 4 Su establecimiento'])
+		wrapper.unmount()
+	})
+
+	it('draws a line per series with a dot per value, read by keyboard above the plot', async () => {
+		const wrapper = shown({ answer: answer({ series: ALL }), tipo: 'linea' })
+
+		const chart = wrapper.find('.estadistica-chart')
+		expect(chart.findAll('.estadistica-chart__legend li').map((key) => key.text())).toEqual(['Su establecimiento', 'Nacional', 'Pares'])
+		expect(chart.findAll('svg[role="img"] circle')).toHaveLength(5)
+		const plot = chart.find('svg[role="img"]')
+		const said = () => chart.find('[aria-live="polite"]').text().replace(/\s+/g, ' ')
+		await plot.trigger('focus')
+		expect(said()).toBe('febrero de 2026: 4 Su establecimiento 5 Nacional · 1.190 establecimientos informaron — Pares')
+		await plot.trigger('keydown', { key: 'ArrowLeft' })
+		expect(said()).toBe('enero de 2026: 2 Su establecimiento 3,5 Nacional · 1.204 establecimientos informaron 3 Pares · 12 establecimientos informaron')
+		wrapper.unmount()
+	})
+
+	it('names a lone series in its legend too, and holds every value in the table twin with who reported it', () => {
+		const lone = shown({ answer: answer({ series: { nacional: ALL.nacional } }) })
+		expect(lone.findAll('.estadistica-chart__legend li').map((key) => key.text())).toEqual(['Nacional'])
+		lone.unmount()
+
+		const wrapper = shown({ answer: answer({ series: ALL }) })
+		expect(wrapper.findAll('thead th').map((cell) => cell.text())).toEqual(['Mes', 'Su establecimiento', 'Nacional', 'Pares'])
+		expect(wrapper.findAll('tbody tr').map((row) => row.findAll('th, td').map((cell) => cell.text().replace(/\s+/g, ' ')))).toEqual([
+			['enero de 2026', '2', '3,5 (1.204)', '3 (12)'],
+			['febrero de 2026', '4', '5 (1.190)', '—'],
+		])
 		wrapper.unmount()
 	})
 })
