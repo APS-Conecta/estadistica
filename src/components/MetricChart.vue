@@ -218,7 +218,7 @@ export default {
 		},
 		hint() {
 			return this.columns
-				? 'Pase el cursor sobre una columna, o recórralas con el tabulador, para leer su valor.'
+				? 'Pase el cursor sobre una barra, o recórralas con el tabulador, para leer su valor.'
 				: `Pase el cursor sobre el gráfico, o enfóquelo y use las flechas, para leer ${this.labels ? 'cada punto' : 'un mes'}.`
 		},
 		scale() {
