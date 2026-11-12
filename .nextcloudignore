@@ -34,6 +34,7 @@
 - /phpunit.xml
 - /phpunit.integration.xml
 - /eslint.config.mjs
+- /eslint.config.test.mjs
 - /vitest.config.ts
 - /webpack.config.js
 - /Dockerfile.test
