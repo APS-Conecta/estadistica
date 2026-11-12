@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `npm run lint-js` fails when a file under `src/` writes a colour (a hex, `rgb()`, `hsl()` or a colour's name in
+  CSS or an SVG paint attribute) or a font: the app reads only Nextcloud's CSS variables, and the suite's theme
+  gives the brand. `make test-browser` opens every view in the dark theme too, set as the admin's theming user
+  setting (#92).
 - `GET indicadores` takes an optional `establecimiento`, the six-digit DEIS code of the local series, as `GET resumen`
   and `POST consultas` do. Another establishment's metas read only its own commitments.
 

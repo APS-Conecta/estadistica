@@ -38,7 +38,8 @@ serves: every view opens from the navigation, marked as the open one,
 with its title beside the toggle and its own chunk fetched; «Ajustes de
 Estadística» takes an admin to the admin section and is not offered to the
 second user; and on a phone the navigation folds away. No page logs a
-console error or a CSP violation.
+console error or a CSP violation. Every view opens so again in the dark
+theme (#92), set as the admin's theming user setting through occ.
 
 And Consultar (#88), in Chromium, light and dark, and in Firefox: the search
 finds the synthetic prestación by its código, and the consulta shows the
@@ -65,7 +66,8 @@ It makes everything it needs and removes it all however it ends:
   for the fabricated establishment only;
 - the establishment code, set to a fabricated one and put back after;
 - a pregunta, a tablero, an app password and a throwaway user;
-- the admin's dark theme, for one Consultar run.
+- the admin's dark theme, for one Consultar run and for each browser's walk
+  through the views.
 
 Screenshots land in tools/.browser-check/ for a person to look at afterwards.
 
@@ -83,6 +85,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
@@ -190,14 +193,19 @@ def dismiss_first_run_wizard():
         occ(*args, check=False)
 
 
+FIRST_LOG_IN_MS = 90_000
+
+
 def log_in(page, user, password):
     page.goto(f"{BASE}/index.php/apps/estadistica/", wait_until="domcontentloaded")
     if "/login" in page.url:
         page.wait_for_selector("#user", timeout=30_000)
         page.fill("#user", user)
         page.fill("#password", password)
-        page.click('button[type="submit"]')
-        page.wait_for_url(f"{BASE}/index.php/apps/estadistica/**", timeout=30_000)
+        # A user's first log-in does Nextcloud's first-run work (home folder, app hooks) before the redirect; on a
+        # loaded host that took longer than 30 s, so the log-in gets its own budget.
+        page.click('button[type="submit"]', timeout=FIRST_LOG_IN_MS)
+        page.wait_for_url(f"{BASE}/index.php/apps/estadistica/**", timeout=FIRST_LOG_IN_MS)
 
 
 # Nextcloud's own noise on a fresh instance, not the app's: the header asks for
@@ -583,6 +591,31 @@ def dark_resumen(browser, name):
     return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
 
 
+@contextmanager
+def admin_in_dark(browser, where):
+    """The admin logged in under the dark theme, a theming user setting set through occ (#92) and cleared however it
+    ends: the page, its console errors, the chunks it fetched, and the failure when the theme did not reach it."""
+    occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
+    try:
+        page = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
+        errors = console_errors(page)
+        fetched = chunks_fetched(page)
+        log_in(page, ADMIN, ADMIN_PASSWORD)
+        failures = [] if "dark" in page.evaluate("() => document.body.dataset.themes ?? ''") else [
+            f"{where}: the admin's dark theme did not reach the page"]
+        yield page, errors, fetched, failures
+        page.context.close()
+    finally:
+        occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete", check=False)
+
+
+def dark_views(browser, name):
+    """Every view from the navigation in the admin's dark theme (#92)."""
+    with admin_in_dark(browser, name) as (page, errors, fetched, failures):
+        failures += walk_the_navigation(page, fetched, f"{name}-oscuro")
+    return failures + [f"console error in the {name} dark theme's views: {e}" for e in errors]
+
+
 def with_a_historico(answer):
     """GET resumen with its first REM meta given a figure for March and two comparable years, for the detail alone."""
     anio = answer["anio"]
@@ -809,25 +842,19 @@ def main():
             failures += steps_beside_the_answer(phone, "a phone", beside=False)
             failures += [f"console error on a phone: {e}" for e in phone_errors]
             failures += dark_resumen(browser, "chromium")
+            failures += dark_views(browser, "chromium")
             failures += resumen_detail(browser, "chromium", "light") + resumen_detail(browser, "chromium", "dark")
 
             # The dark theme: a consulta still runs, with no violation or console error.
-            occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
-            made["dark"] = True
-            dark = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
-            dark_errors = console_errors(dark)
-            log_in(dark, ADMIN, ADMIN_PASSWORD)
-            if "dark" not in dark.evaluate("() => document.body.dataset.themes ?? ''"):
-                failures.append("the admin's dark theme did not reach the page")
-            if (asked := ask_in_consultar(dark, "chromium-oscuro")) != expected:
-                failures.append(f"Consultar in the dark theme shows {asked}, the API answers {expected}")
-            failures += answer_chart(dark, ".estadistica-builder__answer", "chromium oscuro consultar")
-            failures += open_the_pregunta(dark, f"Navegador {RUN}", "chromium oscuro pregunta")
-            open_the_tablero(dark, f"Tablero navegador {RUN}")
-            failures += answer_chart(dark, ".estadistica-card", "chromium oscuro tablero")
+            with admin_in_dark(browser, "chromium consultar") as (dark, dark_errors, _, dark_failures):
+                failures += dark_failures
+                if (asked := ask_in_consultar(dark, "chromium-oscuro")) != expected:
+                    failures.append(f"Consultar in the dark theme shows {asked}, the API answers {expected}")
+                failures += answer_chart(dark, ".estadistica-builder__answer", "chromium oscuro consultar")
+                failures += open_the_pregunta(dark, f"Navegador {RUN}", "chromium oscuro pregunta")
+                open_the_tablero(dark, f"Tablero navegador {RUN}")
+                failures += answer_chart(dark, ".estadistica-card", "chromium oscuro tablero")
             failures += [f"console error in the dark theme: {e}" for e in dark_errors]
-            occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete")
-            made.pop("dark")
 
             browser.close()
 
@@ -847,6 +874,7 @@ def main():
             failures += answer_chart(page, ".estadistica-card", "firefox tablero")
             failures += [f"console error in Firefox: {e}" for e in firefox_errors]
             failures += dark_resumen(firefox, "firefox")
+            failures += dark_views(firefox, "firefox")
             failures += resumen_detail(firefox, "firefox", "light") + resumen_detail(firefox, "firefox", "dark")
             firefox.close()
     finally:
@@ -867,8 +895,6 @@ def main():
             psql(f"DELETE FROM oc_estadistica_code WHERE anio = {YEAR} AND codigo = '{CODE}';"
                  f"DELETE FROM oc_estadistica_dictionary WHERE anio = {YEAR} AND serie = 'A';"
                  f"DELETE FROM oc_estadistica_ingest WHERE anio = {YEAR} AND serie = 'A';")
-        if made.get("dark"):
-            occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete", check=False)
         if made.get("metas"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {METAS_YEAR} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
@@ -888,7 +914,7 @@ def main():
     print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
     print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
-    print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
+    print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, light and dark, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    Consultar's answer, a pregunta and a tablero card draw their SVG chart at its container's width, ours in the primary and the country muted, named in the legend and read by keyboard, light and dark, in Chromium and Firefox")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
