@@ -7,14 +7,20 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-12
+
+The redesign (spec #83): Estadística becomes an idiomatic Nextcloud app. Its five views sit in Nextcloud's side
+navigation, every screen uses Nextcloud's own components, and the app reads only Nextcloud's CSS variables, so the
+suite's theme gives it the APS Conecta look, light or dark. No database change.
+
 ### Added
 
+- `GET indicadores` takes an optional `establecimiento`, the six-digit DEIS code of the local series, as `GET resumen`
+  and `POST consultas` do. Another establishment's metas read only its own commitments (#76).
 - `npm run lint-js` fails when a file under `src/` writes a colour (a hex, `rgb()`, `hsl()` or a colour's name in
   CSS or an SVG paint attribute) or a font: the app reads only Nextcloud's CSS variables, and the suite's theme
   gives the brand. `make test-browser` opens every view in the dark theme too, set as the admin's theming user
   setting (#92).
-- `GET indicadores` takes an optional `establecimiento`, the six-digit DEIS code of the local series, as `GET resumen`
-  and `POST consultas` do. Another establishment's metas read only its own commitments.
 
 ### Changed
 
@@ -29,9 +35,14 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   read month by month with the arrow keys, and its table twin. Its figure opens «Origen»: the ruta, as that year's
   diccionario labels it, and the referencia. The Chart.js histórico inside each card and the source panel of each
   figure are gone (#86).
+- Metas Sanitarias lists each meta as one row: its code, name, target and weight, a small line of its year, its last
+  figure and its status in the Resumen's words. A row opens to the indicator's text and its month table, one at a
+  time. The year and the peers' traits are Nextcloud's select and checkboxes (#87).
 - Consultar puts its four steps beside the answer, which stays in view as they scroll and follows them on a narrow
   screen. «Buscar una prestación» finds one in the catálogo by its código or part of its name, and choosing it picks
   its hoja and sección (#88).
+- Preguntas shows each pregunta's title, author and date; «Editar» and «Eliminar» sit in its actions menu, and
+  deleting asks in a dialog instead of the browser's confirm box (#89).
 - Tableros use Nextcloud's controls: a tablero is chosen in «Tablero», its author beside it; each card's «Subir»,
   «Bajar», width and «Quitar» sit in its actions menu; deleting a tablero asks in a dialog (#90).
 - Consultar's answer, a pregunta and a tablero card draw their bars and lines as the app's own SVG charts, at their
@@ -41,6 +52,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   Chart.js and its fixed palette are gone (#91).
 - The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
   contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.
+
+### Upgrade notes
+
+- Nothing to do on upgrade: no migration, no new setting, and the API only gains an optional parameter.
+- `make test-browser` needs Playwright for Python on the host with both Chromium and Firefox
+  (`python3 -m playwright install chromium firefox`).
 
 ## [0.3.0] - 2026-11-10
 
