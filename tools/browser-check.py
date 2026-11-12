@@ -192,14 +192,19 @@ def dismiss_first_run_wizard():
         occ(*args, check=False)
 
 
+FIRST_LOG_IN_MS = 90_000
+
+
 def log_in(page, user, password):
     page.goto(f"{BASE}/index.php/apps/estadistica/", wait_until="domcontentloaded")
     if "/login" in page.url:
         page.wait_for_selector("#user", timeout=30_000)
         page.fill("#user", user)
         page.fill("#password", password)
-        page.click('button[type="submit"]')
-        page.wait_for_url(f"{BASE}/index.php/apps/estadistica/**", timeout=30_000)
+        # A user's first log-in does Nextcloud's first-run work (home folder, app hooks) before the redirect; on a
+        # loaded host that took longer than 30 s, so the log-in gets its own budget.
+        page.click('button[type="submit"]', timeout=FIRST_LOG_IN_MS)
+        page.wait_for_url(f"{BASE}/index.php/apps/estadistica/**", timeout=FIRST_LOG_IN_MS)
 
 
 # Nextcloud's own noise on a fresh instance, not the app's: the header asks for
