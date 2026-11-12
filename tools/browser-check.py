@@ -85,6 +85,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
@@ -590,8 +591,10 @@ def dark_resumen(browser, name):
     return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
 
 
-def dark_views(browser, name):
-    """Every view from the navigation in the admin's dark theme, a theming user setting set through occ (#92)."""
+@contextmanager
+def admin_in_dark(browser, where):
+    """The admin logged in under the dark theme, a theming user setting set through occ (#92) and cleared however it
+    ends: the page, its console errors, the chunks it fetched, and the failure when the theme did not reach it."""
     occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
     try:
         page = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
@@ -599,12 +602,18 @@ def dark_views(browser, name):
         fetched = chunks_fetched(page)
         log_in(page, ADMIN, ADMIN_PASSWORD)
         failures = [] if "dark" in page.evaluate("() => document.body.dataset.themes ?? ''") else [
-            f"{name}: the admin's dark theme did not reach the page"]
-        failures += walk_the_navigation(page, fetched, f"{name}-oscuro")
+            f"{where}: the admin's dark theme did not reach the page"]
+        yield page, errors, fetched, failures
         page.context.close()
-        return failures + [f"console error in the {name} dark theme's views: {e}" for e in errors]
     finally:
         occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete", check=False)
+
+
+def dark_views(browser, name):
+    """Every view from the navigation in the admin's dark theme (#92)."""
+    with admin_in_dark(browser, name) as (page, errors, fetched, failures):
+        failures += walk_the_navigation(page, fetched, f"{name}-oscuro")
+    return failures + [f"console error in the {name} dark theme's views: {e}" for e in errors]
 
 
 def with_a_historico(answer):
@@ -837,22 +846,15 @@ def main():
             failures += resumen_detail(browser, "chromium", "light") + resumen_detail(browser, "chromium", "dark")
 
             # The dark theme: a consulta still runs, with no violation or console error.
-            occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
-            made["dark"] = True
-            dark = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
-            dark_errors = console_errors(dark)
-            log_in(dark, ADMIN, ADMIN_PASSWORD)
-            if "dark" not in dark.evaluate("() => document.body.dataset.themes ?? ''"):
-                failures.append("the admin's dark theme did not reach the page")
-            if (asked := ask_in_consultar(dark, "chromium-oscuro")) != expected:
-                failures.append(f"Consultar in the dark theme shows {asked}, the API answers {expected}")
-            failures += answer_chart(dark, ".estadistica-builder__answer", "chromium oscuro consultar")
-            failures += open_the_pregunta(dark, f"Navegador {RUN}", "chromium oscuro pregunta")
-            open_the_tablero(dark, f"Tablero navegador {RUN}")
-            failures += answer_chart(dark, ".estadistica-card", "chromium oscuro tablero")
+            with admin_in_dark(browser, "chromium consultar") as (dark, dark_errors, _, dark_failures):
+                failures += dark_failures
+                if (asked := ask_in_consultar(dark, "chromium-oscuro")) != expected:
+                    failures.append(f"Consultar in the dark theme shows {asked}, the API answers {expected}")
+                failures += answer_chart(dark, ".estadistica-builder__answer", "chromium oscuro consultar")
+                failures += open_the_pregunta(dark, f"Navegador {RUN}", "chromium oscuro pregunta")
+                open_the_tablero(dark, f"Tablero navegador {RUN}")
+                failures += answer_chart(dark, ".estadistica-card", "chromium oscuro tablero")
             failures += [f"console error in the dark theme: {e}" for e in dark_errors]
-            occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete")
-            made.pop("dark")
 
             browser.close()
 
@@ -893,8 +895,6 @@ def main():
             psql(f"DELETE FROM oc_estadistica_code WHERE anio = {YEAR} AND codigo = '{CODE}';"
                  f"DELETE FROM oc_estadistica_dictionary WHERE anio = {YEAR} AND serie = 'A';"
                  f"DELETE FROM oc_estadistica_ingest WHERE anio = {YEAR} AND serie = 'A';")
-        if made.get("dark"):
-            occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete", check=False)
         if made.get("metas"):
             psql(f"DELETE FROM oc_estadistica_rem WHERE estab = {LOCAL} AND anio = {METAS_YEAR} AND codigo IN ('A0200002', 'A0200001');")
         if previous_code.returncode == 0:
