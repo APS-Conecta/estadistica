@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import axios from '@nextcloud/axios'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
@@ -347,6 +347,10 @@ const withSources = () => {
 }
 
 describe('Resumen — a meta\'s detail beside the cards: Evolución and Origen (#86)', () => {
+	// The panel is its own chunk. Compiling it on the first click can take longer than vi.waitFor's 1 s on a loaded
+	// host, so it is loaded once here: the waits below then cover only the click and the render.
+	beforeAll(() => import('./DetailSidebar.vue'))
+
 	beforeEach(() => {
 		// NcContent's root, where the app sidebar sits beside the content.
 		document.body.innerHTML = '<div id="content-vue"><div id="resumen"></div></div>'
