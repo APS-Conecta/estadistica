@@ -71,11 +71,11 @@ Otras aplicaciones leen la API OCS (con `OCS-APIRequest: true`) bajo `/ocs/v2.ph
 Las pruebas y compuertas:
 
 - `make test`: la batería unitaria en un contenedor PHP básico, sin Nextcloud.
-- `npm run lint-js` y `npm test`: ESLint y Vitest.
+- `npm run lint-js` y `npm test`: ESLint y Vitest. ESLint falla si un archivo de `src/` escribe un color (hexadecimal, `rgb()`, `hsl()` o un nombre de color en CSS) o una tipografía: la aplicación lee solo las variables CSS de Nextcloud, y la marca la pone el tema de la suite.
 - `make aps-drift`: las copias vendorizadas de `aps-common` están al día (`make aps-sync` las refresca).
 - `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
 - `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
-- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, y un recorrido por la navegación de la aplicación en Chromium y en Firefox (cada vista, «Ajustes de Estadística» solo para un administrador, la navegación plegada en un teléfono) sin violaciones de CSP ni errores de consola. Requiere Playwright para Python en el host, con sus navegadores Chromium y Firefox (`python3 -m playwright install chromium firefox`). Tampoco la ejecuta CI.
+- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, y un recorrido por la navegación de la aplicación en Chromium y en Firefox, con el tema claro y el oscuro (cada vista, «Ajustes de Estadística» solo para un administrador, la navegación plegada en un teléfono) sin violaciones de CSP ni errores de consola. Requiere Playwright para Python en el host, con sus navegadores Chromium y Firefox (`python3 -m playwright install chromium firefox`). Tampoco la ejecuta CI.
 - `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada vista (no se confirman; CI y el flujo de release ejecutan lo mismo).
 
 La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes y `make smoke` sobre una instancia en frío; el flujo de release (`.github/workflows/release.yml`) compila y empaqueta en cada PR.

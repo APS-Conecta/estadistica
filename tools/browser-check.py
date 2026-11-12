@@ -38,7 +38,8 @@ serves: every view opens from the navigation, marked as the open one,
 with its title beside the toggle and its own chunk fetched; «Ajustes de
 Estadística» takes an admin to the admin section and is not offered to the
 second user; and on a phone the navigation folds away. No page logs a
-console error or a CSP violation.
+console error or a CSP violation. Every view opens so again in the dark
+theme (#92), set as the admin's theming user setting through occ.
 
 And Consultar (#88), in Chromium, light and dark, and in Firefox: the search
 finds the synthetic prestación by its código, and the consulta shows the
@@ -65,7 +66,8 @@ It makes everything it needs and removes it all however it ends:
   for the fabricated establishment only;
 - the establishment code, set to a fabricated one and put back after;
 - a pregunta, a tablero, an app password and a throwaway user;
-- the admin's dark theme, for one Consultar run.
+- the admin's dark theme, for one Consultar run and for each browser's walk
+  through the views.
 
 Screenshots land in tools/.browser-check/ for a person to look at afterwards.
 
@@ -583,6 +585,23 @@ def dark_resumen(browser, name):
     return failures + [f"console error in the {name} dark theme: {e}" for e in errors]
 
 
+def dark_views(browser, name):
+    """Every view from the navigation in the admin's dark theme, a theming user setting set through occ (#92)."""
+    occ("user:setting", ADMIN, "theming", "enabled-themes", '["dark"]')
+    try:
+        page = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
+        errors = console_errors(page)
+        fetched = chunks_fetched(page)
+        log_in(page, ADMIN, ADMIN_PASSWORD)
+        failures = [] if "dark" in page.evaluate("() => document.body.dataset.themes ?? ''") else [
+            f"{name}: the admin's dark theme did not reach the page"]
+        failures += walk_the_navigation(page, fetched, f"{name}-oscuro")
+        page.context.close()
+        return failures + [f"console error in the {name} dark theme's views: {e}" for e in errors]
+    finally:
+        occ("user:setting", ADMIN, "theming", "enabled-themes", "--delete", check=False)
+
+
 def with_a_historico(answer):
     """GET resumen with its first REM meta given a figure for March and two comparable years, for the detail alone."""
     anio = answer["anio"]
@@ -809,6 +828,7 @@ def main():
             failures += steps_beside_the_answer(phone, "a phone", beside=False)
             failures += [f"console error on a phone: {e}" for e in phone_errors]
             failures += dark_resumen(browser, "chromium")
+            failures += dark_views(browser, "chromium")
             failures += resumen_detail(browser, "chromium", "light") + resumen_detail(browser, "chromium", "dark")
 
             # The dark theme: a consulta still runs, with no violation or console error.
@@ -847,6 +867,7 @@ def main():
             failures += answer_chart(page, ".estadistica-card", "firefox tablero")
             failures += [f"console error in Firefox: {e}" for e in firefox_errors]
             failures += dark_resumen(firefox, "firefox")
+            failures += dark_views(firefox, "firefox")
             failures += resumen_detail(firefox, "firefox", "light") + resumen_detail(firefox, "firefox", "dark")
             firefox.close()
     finally:
@@ -888,7 +909,7 @@ def main():
     print("ok    the Resumen opens first, its cards show GET resumen's figures and status, which are GET indicadores' local months, a keyboard reaches each card's buttons, each tile filters and says so, and it fits a phone")
     print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
-    print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, and «{SETTINGS}» opens the admin section for an admin only")
+    print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, light and dark, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    Consultar's answer, a pregunta and a tablero card draw their SVG chart at its container's width, ours in the primary and the country muted, named in the legend and read by keyboard, light and dark, in Chromium and Firefox")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
