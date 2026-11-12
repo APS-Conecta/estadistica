@@ -3,8 +3,8 @@ import eslintPluginVue from 'eslint-plugin-vue'
 // The theme is the only source of colour and font (#83): src/ reads Nextcloud's CSS variables, and the suite's
 // theme gives the brand, light or dark. A comment is not read: blanked, it keeps every other line and column.
 const WRITTEN = /#[\da-f]{3,8}\b|\b(?:rgb|hsl)a?\(|\bfont-?family\b/gi
-// CSS's 148 named colours. A name means a colour only in CSS: a style block's or a style attribute's declarations,
-// where the font shorthand, which names a family, is read too.
+// CSS's 148 named colours. A name means a colour only where CSS or SVG paint is written: a style block's or a style
+// attribute's declarations, where the font shorthand, which names a family, is read too, and an SVG paint attribute.
 const NAMES = `aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood
 cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray
 darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen
@@ -20,8 +20,10 @@ rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen sea
 slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white
 whitesmoke yellow yellowgreen`
 const NAMED = new RegExp(`(?<![\\w-])(?:${NAMES.split(/\s+/).join('|')})(?![\\w-])`, 'gi')
-const CSS = /<style\b[^>]*>[\s\S]*?<\/style>|\sstyle="[^"]*"/g
-const DECLARATION = /([\w-]+)\s*:([^;{}"]*)(?=[;}"])/dg
+const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style>/dg
+// An attribute, bound or not, in either quote, its value ending at its own closing quote: style's declarations, or paint.
+const ATTRIBUTE = /\s(?:v-bind:|:)?(style|fill|stroke|stop-color|flood-color|lighting-color|color)=(["'])([\s\S]*?)\2/dg
+const DECLARATION = /([\w-]+)['"]?\s*:([^;{}]*)(?=[;}]|$)/dg
 const KEYWORD = /^\s*(?:inherit|initial|unset|revert(?:-layer)?)\s*$/i
 const blank = (text) => text.replace(/\S/g, ' ')
 
@@ -48,15 +50,26 @@ const themeOnly = {
 				for (const match of text.matchAll(WRITTEN)) {
 					report(match.index, match[0])
 				}
-				for (const css of text.matchAll(CSS)) {
-					for (const { 1: property, 2: value, indices } of css[0].matchAll(DECLARATION)) {
-						const at = css.index + indices[2][0]
+				const named = (value, at) => {
+					for (const name of value.matchAll(NAMED)) {
+						report(at + name.index, name[0])
+					}
+				}
+				const css = [...text.matchAll(STYLE_BLOCK)].map((block) => [block[1], block.indices[1][0]])
+				for (const { 1: attribute, 3: value, indices } of text.matchAll(ATTRIBUTE)) {
+					if (attribute === 'style') {
+						css.push([value, indices[3][0]])
+					} else {
+						named(value, indices[3][0])
+					}
+				}
+				for (const [declarations, start] of css) {
+					for (const { 1: property, 2: value, indices } of declarations.matchAll(DECLARATION)) {
+						const at = start + indices[2][0]
 						if (property.toLowerCase() === 'font' && !KEYWORD.test(value)) {
 							report(at, `font: ${value.trim()}`)
 						}
-						for (const name of value.matchAll(NAMED)) {
-							report(at + name.index, name[0])
-						}
+						named(value, at)
 					}
 				}
 			},

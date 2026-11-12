@@ -33,6 +33,25 @@ describe('the theme gate', () => {
 		expect(found).toEqual(['2: «Navy»', '8: «white»', '9: «font: 600 1rem Fraunces»'])
 	})
 
+	it('fails on a colour named in a style binding, in either spelling', async () => {
+		const found = (await written('<template>\n\t<p :style="{ color: \'red\', background: \'white\' }">Hola</p>\n'
+			+ '\t<p v-bind:style="{ \'border-color\': \'navy\' }">Chao</p>\n</template>\n')).map((message) => message.split(' writes')[0])
+		expect(found).toEqual(['2: «red»', '2: «white»', '3: «navy»'])
+	})
+
+	it('fails on a colour named in a single-quoted style attribute', async () => {
+		const found = (await written('<template>\n\t<p style=\'background: white; color: navy\'>Hola</p>\n</template>\n'))
+			.map((message) => message.split(' writes')[0])
+		expect(found).toEqual(['2: «white»', '2: «navy»'])
+	})
+
+	it('fails on a colour named in an SVG paint attribute, never on currentColor or none', async () => {
+		const found = (await written('<template>\n\t<svg><rect fill="red" stroke="white" /><path fill="none" stroke="currentColor" />\n'
+			+ '\t\t<stop stop-color="Gold" /><feFlood flood-color="black" /><text :fill="\'navy\'">1</text></svg>\n</template>\n'))
+			.map((message) => message.split(' writes')[0])
+		expect(found).toEqual(['2: «red»', '2: «white»', '3: «Gold»', '3: «black»', '3: «navy»'])
+	})
+
 	it('takes SVG geometry and the theme\'s variables for what they are', async () => {
 		expect(await written('<template>\n\t<svg class="a" viewBox="0 0 24 24"><path d="M19 3H5C3.9 3 3 3.9 3 5V19L12,2A10,10 0 0,0 2,12Z"'
 			+ ' fill="currentColor" stroke-dasharray="4 2" /></svg>\n</template>\n\n'
