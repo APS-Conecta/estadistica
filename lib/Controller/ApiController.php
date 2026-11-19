@@ -94,7 +94,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/fuentes')]
-	#[AiOperation('read')]
 	public function fuentes(): DataResponse {
 		return new DataResponse($this->sources->all());
 	}
@@ -123,7 +122,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/fuentes/{id}', requirements: ['id' => '[a-z-]+'])]
-	#[AiOperation('read')]
 	public function fuente(string $id, ?int $anio = null): DataResponse {
 		try {
 			return new DataResponse($this->sources->one($id, $anio));
@@ -171,7 +169,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/consultas')]
-	#[AiOperation('read')]
 	public function consultas(array $consulta, ?string $establecimiento = null): DataResponse {
 		try {
 			$local = $this->local($establecimiento);
@@ -196,7 +193,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/preguntas')]
-	#[AiOperation('read')]
 	public function preguntas(): DataResponse {
 		return new DataResponse($this->saved->listQuestions());
 	}
@@ -213,7 +209,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/preguntas/{id}', requirements: ['id' => '\d+'])]
-	#[AiOperation('read')]
 	public function pregunta(int $id): DataResponse {
 		try {
 			return new DataResponse($this->saved->getQuestion($id));
@@ -237,7 +232,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/preguntas')]
-	#[AiOperation('write')]
 	public function crearPregunta(string $titulo, array $consulta, string $tipo = 'barra'): DataResponse {
 		return $this->write(fn (): DataResponse => new DataResponse($this->saved->createQuestion($titulo, $consulta, $tipo), Http::STATUS_CREATED));
 	}
@@ -260,7 +254,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'PUT', url: '/api/v1/preguntas/{id}', requirements: ['id' => '\d+'])]
-	#[AiOperation('write')]
 	public function editarPregunta(int $id, ?string $titulo = null, ?array $consulta = null, ?string $tipo = null): DataResponse {
 		return $this->write(fn (): DataResponse => new DataResponse($this->saved->updateQuestion($id, $titulo, $consulta, $tipo)));
 	}
@@ -301,7 +294,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/tableros')]
-	#[AiOperation('read')]
 	public function tableros(): DataResponse {
 		return new DataResponse($this->saved->listDashboards());
 	}
@@ -318,7 +310,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/tableros/{id}', requirements: ['id' => '\d+'])]
-	#[AiOperation('read')]
 	public function tablero(int $id): DataResponse {
 		try {
 			return new DataResponse($this->saved->getDashboard($id));
@@ -341,7 +332,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'POST', url: '/api/v1/tableros')]
-	#[AiOperation('write')]
 	public function crearTablero(string $titulo, array $tarjetas = []): DataResponse {
 		return $this->write(fn (): DataResponse => new DataResponse($this->saved->createDashboard($titulo, $tarjetas), Http::STATUS_CREATED));
 	}
@@ -365,7 +355,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::WRITE_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'PUT', url: '/api/v1/tableros/{id}', requirements: ['id' => '\d+'])]
-	#[AiOperation('write')]
 	public function editarTablero(int $id, ?string $titulo = null, ?array $tarjetas = null): DataResponse {
 		return $this->write(fn (): DataResponse => new DataResponse($this->saved->updateDashboard($id, $titulo, $tarjetas)));
 	}
@@ -434,7 +423,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/indicadores')]
-	#[AiOperation('read')]
 	public function indicadores(?int $anio = null, string $pares = 'tipo', ?string $establecimiento = null): DataResponse {
 		$current = $this->window->currentYear();
 		$traits = array_values(array_unique(array_filter(array_map('trim', explode(',', $pares)), static fn (string $trait): bool => $trait !== '')));
@@ -538,7 +526,6 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: self::READ_LIMIT, period: self::PERIOD)]
 	#[ApiRoute(verb: 'GET', url: '/api/v1/resumen')]
-	#[AiOperation('read')]
 	public function resumen(?string $establecimiento = null): DataResponse {
 		try {
 			$local = $this->local($establecimiento);
