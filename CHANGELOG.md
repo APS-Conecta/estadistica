@@ -50,8 +50,6 @@ suite's theme gives it the APS Conecta look, light or dark. No database change.
   in muted tones told apart by their dash, with a legend always shown. A line chart is read point by point with the
   arrow keys, and each column is a keyboard stop that says its value; the table under the chart is unchanged.
   Chart.js and its fixed palette are gone (#91).
-- The summaries of `GET indicadores`, `GET preguntas/{id}` and `GET tableros/{id}` fit the suite connector's tool
-  contract (gestion-aio#93): at most 1400 bytes per tool and at least 20 characters of description.
 
 ### Upgrade notes
 
@@ -114,10 +112,6 @@ The Resumen (spec #41): Estadística opens on the establishment's Metas Sanitari
   «el doble», «la mitad»); and while the Resumen it was asked for is still the stored one. It shows at the top of
   the Resumen as plain text, labelled «Escrita por un modelo de IA a partir de las cifras», and
   `docs/threat-model.md` records how it is bounded.
-- **The operations the suite AI may call** (#77): each OCS operation the suite AI may call carries an
-  `x-aps-ai` extension in `openapi.json`, `read` or `write`. Reads are the fuentes, consultas, indicadores, the
-  Resumen and the user's preguntas and tableros; writes create or update the user's preguntas and tableros. No
-  delete and no admin route is marked.
 
 ### Changed
 
