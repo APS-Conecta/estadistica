@@ -164,6 +164,10 @@ export default {
 	gap: 12px;
 }
 
+.estadistica-resumen > * {
+	min-width: 600px;
+}
+
 .estadistica-resumen > p,
 .estadistica-resumen > h2 {
 	margin: 0;
