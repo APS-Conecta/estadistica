@@ -12,16 +12,22 @@ DOCKER := docker run --rm -v "$(CURDIR)":/app -v "$(APS)":/aps-common -w /app $(
 COMPOSE := docker compose -f compose.dev.yaml
 OCC := $(COMPOSE) exec --user www-data nextcloud php occ
 
-.PHONY: test bundles build-test-image deps test-integration integration test-browser instance-up instance-occ instance-down instance-clean openapi smoke clean aps-sync aps-drift
+.PHONY: test bundles build-test-image aps-check deps test-integration integration test-browser instance-up instance-occ instance-down instance-clean openapi smoke clean aps-sync aps-drift
 
 build-test-image:
 	docker build -q -f Dockerfile.test -t $(IMG) . >/dev/null
 
+# A missing $(APS) would reach `docker run -v`, which creates it empty, and composer
+# would mirror that emptiness over the committed vendor/aps/common/src (#107): every
+# target that reads the sibling checks it first.
+aps-check:
+	@test -d "$(APS)/src" || { echo "aps-common not found at $(APS) — clone the sibling first"; exit 1; }
+
 # Vendor lands through the container, so no host PHP is needed.
-deps: build-test-image
+deps: aps-check build-test-image
 	$(DOCKER) composer install --no-interaction --no-progress
 
-test: build-test-image
+test: aps-check build-test-image
 	$(DOCKER) sh -c "composer install --no-interaction --no-progress -q && vendor/bin/phpunit --configuration phpunit.xml --testdox"
 
 # Against the throwaway instance's real PostgreSQL. Needs `make deps` and `make instance-up` first.
@@ -71,8 +77,7 @@ openapi:
 # Copy the aps-common package into its committed homes: vendor/aps/common/src
 # (the subtree the tarball ships), the OC\Hooks\Emitter test stub, and the js
 # half under src/aps/. The sibling checkout must exist beside this repo.
-aps-sync:
-	@test -d "$(APS)/src" || { echo "aps-common not found at $(APS) — clone the sibling first"; exit 1; }
+aps-sync: aps-check
 	rm -rf vendor/aps/common/src src/aps
 	mkdir -p vendor/aps/common tests/stubs/OC/Hooks src/aps
 	git -C "$(APS)" archive HEAD src | tar -x -C vendor/aps/common

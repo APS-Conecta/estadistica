@@ -34,6 +34,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   `composer-stable.phar` was that day and ran it unchecked, inside CI's smoke too. It now fetches Composer 2.11.3,
   checks `tools/composer.phar` against its published sha256 on every run and stops on a mismatch, and requires
   `nextcloud/openapi-extractor` v1.9.1. `openapi.json` regenerates unchanged.
+- **`make test` and `make deps` refuse an `APS` path without aps-common's sources** (#107): in a checkout where
+  `../aps-common` does not exist, Docker created the path empty and composer wiped the committed
+  `vendor/aps/common/src`. Both now stop before Docker runs and name the path, the check `make aps-sync` makes.
 
 ## [0.4.0] - 2026-11-12
 
