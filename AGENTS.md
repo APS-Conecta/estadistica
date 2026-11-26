@@ -16,7 +16,7 @@ Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for ev
   `make aps-drift`; `npm ci`; `npm run lint-js`; `npm test`; `make bundles` (builds, then asserts every bundle,
   its `.LICENSE.txt` and each tab's chunk; never committed — the release packs them); then
   `make test`;
-  `make instance-up && make smoke`, then `make instance-clean`.
+  `make instance-up && make smoke && make test-browser` (Playwright for Python at the version `ci.yml` pins, with Chromium and Firefox), then `make instance-clean`.
   A step you could not run is named in the PR, never reported as passed.
 - **`src/` changed → `npm run build`**: `js/` is build output, ignored — nothing to commit. CI and the
   release both run `make bundles`, so a build that drops a bundle, a license file or a tab's chunk fails.
