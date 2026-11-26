@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A national consulta of a whole hoja answers within the 10 s limit** (#27): every chosen cell was unpivoted
+  before counting distinct establishments, so all 50 columns of a hoja over the default window were cancelled. Each
+  establishment is now summed first and its sums then summed and counted, which PostgreSQL does in parallel; columns
+  are unpivoted only to group by columna; a trait joins the establishments' sums; the códigos are bound as one
+  `text[]`; and JIT is off for consultas. A05's 50 columns by month, nacional, answer in 7.7–9.5 s on the default
+  window (30.1 M rows, PostgreSQL defaults), and the local and peer series are faster. The limit stays 10 s.
 - **Early in a year, completeness compares the same months of the neighbour year** (#24): a servicio's reporting
   establishments are counted up to the member's last month in both years, so a year's first extracts are no longer
   «incompleto» against a whole year, and a republish no longer stays frozen at the first load. A real gap is still

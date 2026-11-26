@@ -48,7 +48,7 @@ use OCP\Server;
  *     900002   1   02010420     30     10     CESFAM, Servicio Dos
  *     900002   2   02010420     (col01 = 7 only: reported, not «informante»)
  *     900003   1   02010420      6            PSR, Servicio Uno
- *     900003   2   02010420            4
+ *     900003   2   02010420            4     (and col50 = 3)
  *
  * 2098 has no dictionary, so it borrows 2099's: 900001 reports 2 in
  * December and 900002 reports 8 in November (02010420, col04).
@@ -92,7 +92,7 @@ class QueryExecutorTest extends IntegrationTestCase {
 			. ZipFixture::row(2099, 1, '900002', '02010420', [4 => '30', 5 => '10'])
 			. ZipFixture::row(2099, 2, '900002', '02010420', [1 => '7'])
 			. ZipFixture::row(2099, 1, '900003', '02010420', [4 => '6'])
-			. ZipFixture::row(2099, 2, '900003', '02010420', [5 => '4']);
+			. ZipFixture::row(2099, 2, '900003', '02010420', [5 => '4', 50 => '3']);
 		$state = $importer->import(new LocalRange(ZipFixture::zip([
 			'Datos/SerieA2099.csv' => $member,
 			self::DICTIONARY => (string)file_get_contents(XlsxFixture::dictionary()),
@@ -214,6 +214,82 @@ class QueryExecutorTest extends IntegrationTestCase {
 			'comparar' => ['nacional' => true],
 		]);
 		self::assertSame([[[], 67.0, 3]], self::flat($this->executor->answer($bySeccion, Establishment::none())['series']['nacional']), 'sección B\'s 100 is out');
+	}
+
+	/**
+	 * Every grouping and both metrics, from the rows above: a cell counts once
+	 * and only where it was reported, and an establishment is informante only
+	 * with a reported cell among the chosen columns (900002's February col01
+	 * is not one). A total of nothing reported is no point, not 0.
+	 */
+	public function testEveryGroupingAndMetricCountsEachReportedCellOnce(): void {
+		foreach ([
+			[[], [[[], 86.0, 3]]],
+			[['anio'], [[[2099], 86.0, 3]]],
+			[['mes'], [[['2099-01'], 62.0, 3], [['2099-02'], 24.0, 2]]],
+			[['codigo'], [[['02010420'], 85.0, 3], [['03500366'], 1.0, 1]]],
+			[['columna'], [[['col04'], 67.0, 3], [['col05'], 19.0, 3]]],
+			[['servicio'], [[['Servicio de Salud Dos'], 40.0, 1], [['Servicio de Salud Uno'], 46.0, 2]]],
+			[['tipo'], [[[self::CESFAM], 76.0, 2], [['Posta de Salud Rural (PSR)'], 10.0, 1]]],
+		] as [$agrupar, $expected]) {
+			$changes = [
+				'filtros' => ['codigos' => ['02010420', '03500366'], 'columnas' => ['col04', 'col05']],
+				'agrupar' => $agrupar,
+				'comparar' => ['nacional' => true],
+			];
+			$suma = $this->executor->answer(self::spec($changes), Establishment::none())['series']['nacional'];
+			self::assertSame($expected, self::flat($suma), 'suma by ' . implode(', ', $agrupar));
+
+			$promedio = $this->executor->answer(self::spec($changes + ['metrica' => 'promedio_establecimiento']), Establishment::none())['series']['nacional'];
+			self::assertEqualsWithDelta(array_map(static fn (array $point): float => $point[1] / $point[2], $expected), array_column($promedio, 'valor'), 1e-9, 'promedio by ' . implode(', ', $agrupar));
+			self::assertSame(array_column($expected, 2), array_column($promedio, 'informantes'));
+		}
+
+		foreach (['suma', 'promedio_establecimiento'] as $metrica) {
+			$nothing = self::spec(['filtros' => ['codigos' => ['06900300'], 'columnas' => ['col04', 'col05']], 'agrupar' => [], 'metrica' => $metrica, 'comparar' => ['nacional' => true]]);
+			self::assertSame([], $this->executor->answer($nothing, Establishment::none())['series']['nacional'], "$metrica of a código nobody reported");
+		}
+	}
+
+	/** A whole hoja with every column: col01 and col50 count, and by columna each stays apart. */
+	public function testAWholeHojaWithEveryColumnSumsEachReportedCell(): void {
+		$changes = [
+			'filtros' => ['hoja' => 'A03', 'columnas' => array_map(static fn (int $col): string => sprintf('col%02d', $col), range(1, 50))],
+			'comparar' => ['nacional' => true],
+		];
+
+		self::assertSame([[['2099-01'], 162.0, 3], [['2099-02'], 34.0, 3]], self::flat($this->executor->answer(self::spec($changes), Establishment::none())['series']['nacional']));
+		self::assertSame(
+			[[['col01'], 7.0, 1], [['col04'], 167.0, 3], [['col05'], 19.0, 3], [['col50'], 3.0, 1]],
+			self::flat($this->executor->answer(self::spec(['agrupar' => ['columna']] + $changes), Establishment::none())['series']['nacional']),
+		);
+	}
+
+	/**
+	 * #27: a national consulta of a whole hoja with all 50 columns answers
+	 * within the limit. On the default window (30.1 M rows) unpivoting every
+	 * cell before counting the distinct establishments ran 60 s; here 100,000
+	 * rows with every cell reported, and a limit scaled down with them,
+	 * reproduce it.
+	 */
+	public function testEveryColumnOfAWholeHojaAnswersWithinTheLimit(): void {
+		$columns = array_map(static fn (int $col): string => sprintf('col%02d', $col), range(1, 50));
+		// Row g is month 1 + g % 12, código g / 12 % 3 and establishment 910000 + g / 36: one row per key.
+		$this->db()->executeStatement(
+			'INSERT INTO *PREFIX*estadistica_rem (serie, anio, mes, estab, codigo, ' . implode(', ', $columns) . ')'
+			. " SELECT 'A', 2099, 1 + g % 12, 910000 + g / 36, (ARRAY['02010420', '03500366', '03500400'])[1 + g / 12 % 3], "
+			. implode(', ', array_fill(0, 50, '1')) . ' FROM generate_series(0, 99999) AS g',
+		);
+		$spec = self::spec([
+			'periodo' => ['desde' => '2099-01', 'hasta' => '2099-12'],
+			'filtros' => ['hoja' => 'A03', 'columnas' => $columns],
+			'comparar' => ['nacional' => true],
+		]);
+
+		$points = $this->executor->readOnly(fn (): array => $this->executor->series($spec, ['02010420', '03500366', '03500400', '06900300'], []), 2000);
+
+		self::assertCount(12, $points);
+		self::assertSame(100000 * 50 + 162.0 + 34.0, array_sum(array_column($points, 'valor')), 'every generated cell, and the fixture\'s January and February');
 	}
 
 	public function testAHojaNoDictionaryHasAndACodigoOutsideItAreRefused(): void {

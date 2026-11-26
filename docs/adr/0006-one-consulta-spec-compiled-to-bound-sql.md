@@ -32,12 +32,16 @@ statement.
   closed sets: the columns, the dimensions, the traits and the two aggregates. Every value is bound. Two consultas
   that differ only in values compile to the same statement, and none of their values appears in it
   (QueryCompilerTest).
-- **Only reported cells count.** The chosen columns are unpivoted (`LATERAL VALUES`), and a cell counts only where
-  it was reported. An empty cell is NULL, never 0, so an «informante» is an establishment with at least one reported
-  cell among the chosen columns.
+- **Only reported cells count.** A row's value is its reported cells among the chosen columns, summed; grouped by
+  `columna`, the chosen columns are unpivoted (`LATERAL VALUES`) instead, one value per cell. An empty cell is NULL,
+  never 0, so an «informante» is an establishment with at least one reported cell among the chosen columns.
+- **Each establishment is summed first.** Its sums are then summed and counted, without `count(DISTINCT)`, so
+  PostgreSQL aggregates in parallel, and a trait joins those sums rather than the rows. The códigos are one bound
+  `text[]`, a constant the planner hashes.
 - **One statement per series, one snapshot.** Local, national and peer series differ only in who is counted. They
   run in one transaction opened with `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`, and
-  `statement_timeout` is set locally through `set_config(…, true)` (10 s). A write that reached the executor fails
+  `statement_timeout` is set locally through `set_config(…, true)` (10 s), and JIT is set off the same way: compiling
+  a whole hoja's 50 columns took 2.9 s of the limit. A write that reached the executor fails
   in PostgreSQL. A statement past the timeout is cancelled and answered as a Spanish 422.
 - **Names resolve on the server.** A hoja or sección becomes the códigos that the periodo's dictionaries put there:
   each year's own, or the nearest later year's (`Catalog::scope`). A peer trait of `true` becomes the local
