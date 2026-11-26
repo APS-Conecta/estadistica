@@ -139,7 +139,9 @@ jobs:
         with:
           name: browser-check-screenshots
           path: tools/.browser-check/
-          if-no-files-found: warn
+          # upload-artifact skips a dot directory unless told otherwise
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Tear down
         if: always()
         run: make instance-clean
