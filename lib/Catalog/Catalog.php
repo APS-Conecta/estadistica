@@ -327,7 +327,8 @@ class Catalog {
 			];
 		}
 
-		// A year reads its own labels, or the nearest later year's of the same serie.
+		// labelsFrom names the dictionary a year's catálogo comes from, its own or the
+		// nearest later year's of the same serie, not where every label comes from.
 		foreach ($status as $i => $row) {
 			if ($row['codes'] > 0) {
 				$status[$i]['labelsFrom'] = $row['anio'];
@@ -546,7 +547,11 @@ class Catalog {
 		);
 	}
 
-	/** The year whose dictionary labels $anio: its own, else the nearest later one's, else none. */
+	/**
+	 * The year whose dictionary gives $anio its catálogo tree and hoja/sección
+	 * scope: its own, else the nearest later one's, else none. Each código's
+	 * label follows resolve().
+	 */
 	private function labelYear(int $anio, string $serie): ?int {
 		return $this->hasLabels($anio, $serie) ? $anio : $this->nearestLater($anio, $serie);
 	}

@@ -43,7 +43,7 @@ Los errores abiertos y el trabajo pendiente están en los issues de este reposit
 
 Falta:
 
-- Queda comparar las Metas I a VII de junio de 2026 con el cálculo de la unidad de Estadística-REM antes de avisar al personal. Con datos reales en el laboratorio el 2026-09-29 (la ventana por defecto, 27,3 millones de filas, y la exportación de FONASA) aparecieron hallazgos para el hito M2: etiquetas prestadas del diccionario de otro año y consultas nacionales de hoja entera que llegan al límite de 10 s.
+- Queda comparar las Metas I a VII de junio de 2026 con el cálculo de la unidad de Estadística-REM antes de avisar al personal. Con datos reales en el laboratorio el 2026-09-29 (la ventana por defecto, 27,3 millones de filas, y la exportación de FONASA) aparecieron hallazgos para el hito M2: consultas nacionales de hoja entera que llegan al límite de 10 s.
 - Los archivos del personal (CSV, XLSX) como fuente son el hito M2.
 
 ## Inicio rápido de desarrollo
