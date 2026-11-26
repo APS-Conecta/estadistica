@@ -1,7 +1,9 @@
 # estadistica's CI — the org template for a suite app: the unit suite in the bare-PHP
 # container behind aps-drift, the js suite (the release workflow builds and packs the
-# bundles on every pull request, .github/workflows/release.yml), and the smoke suite
-# against a REAL provisioned instance — the wiring no unit test can see.
+# bundles on every pull request, .github/workflows/release.yml), and the smoke suite and
+# the browser check, each against a REAL provisioned instance — what no unit test can see.
+# Every job runs on every pull request with no path filter: main's ruleset requires them
+# by name (APS-Conecta/.github#16), so a rename here is a rename there.
 name: CI
 
 on:
@@ -101,6 +103,43 @@ jobs:
         run: make instance-up
       - name: Smoke (pages, delegation, refusals, icon, .htaccess, bundle, openapi regen)
         run: make smoke
+      - name: Tear down
+        if: always()
+        run: make instance-clean
+
+  browser:
+    name: Browser check — Chromium and Firefox (compose instance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      # the bundles the check drives: js/ is built, not committed
+      - run: npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Pinned, and the browsers are that version's own. Chromium's headless shell is all
+      # the check launches; the runner image ships both browsers' system libraries.
+      - name: Playwright
+        run: |
+          pip install --quiet playwright==1.64.1
+          playwright install --only-shell chromium firefox
+      - name: The throwaway instance (Nextcloud 34 + PostgreSQL 18, compose.dev.yaml)
+        run: make instance-up
+      - name: Browser check (a15, a8, Resumen, Metas Sanitarias, Consultar, charts, navigation)
+        run: make test-browser
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-check-screenshots
+          path: tools/.browser-check/
+          if-no-files-found: warn
       - name: Tear down
         if: always()
         run: make instance-clean
