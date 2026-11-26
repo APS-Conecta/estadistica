@@ -121,7 +121,7 @@ class IngestStateMapper extends QBMapper {
 	 * complete: the baseline Completeness compares a member against. The
 	 * nearest year wins; on a tie the earlier one, which is a closed year.
 	 *
-	 * @return ?array{anio: int, profile: array<string, int>}
+	 * @return ?array{anio: int, profile: array<string, array<int, int>>}
 	 */
 	public function neighbour(int $anio, string $serie): ?array {
 		$qb = $this->db->getQueryBuilder();
@@ -142,9 +142,14 @@ class IngestStateMapper extends QBMapper {
 		usort($rows, static fn (array $a, array $b): int => [abs((int)$a['anio'] - $anio), (int)$a['anio']]
 			<=> [abs((int)$b['anio'] - $anio), (int)$b['anio']]);
 
+		/** @var array<string, int|array<int, int>> $profile */
+		$profile = json_decode((string)$rows[0]['profile'], true, 512, JSON_THROW_ON_ERROR);
+
 		return [
 			'anio' => (int)$rows[0]['anio'],
-			'profile' => json_decode((string)$rows[0]['profile'], true, 512, JSON_THROW_ON_ERROR),
+			// A profile stored before it counted by month holds each servicio's
+			// total: what had reported by the end of the year.
+			'profile' => array_map(static fn (int|array $months): array => is_int($months) ? [12 => $months] : $months, $profile),
 		];
 	}
 }

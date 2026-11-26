@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Early in a year, completeness compares the same months of the neighbour year** (#24): a servicio's reporting
+  establishments are counted up to the member's last month in both years, so a year's first extracts are no longer
+  «incompleto» against a whole year, and a republish no longer stays frozen at the first load. A real gap is still
+  named. No migration: a year loaded before this holds totals only, so it is a baseline for whole years until it
+  loads again.
+
 ## [0.4.0] - 2026-11-12
 
 The redesign (spec #83): Estadística becomes an idiomatic Nextcloud app. Its five views sit in Nextcloud's side

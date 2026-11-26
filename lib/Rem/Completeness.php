@@ -21,7 +21,8 @@ namespace OCA\Estadistica\Rem;
 final class Completeness {
 	/**
 	 * A servicio reporting fewer establishments than this share of its count in
-	 * the nearest complete year is a gap, not drift. In 2025 Serie A the
+	 * the same months of the nearest complete year is a gap, not drift (early in
+	 * a year a member holds only its first months, #24). In 2025 Serie A the
 	 * collapsed servicios fell to 0.15–0.65 of 2024; the intact ones stayed at
 	 * 0.99–1.07.
 	 */
@@ -32,7 +33,7 @@ final class Completeness {
 
 	/**
 	 * @param Summary $summary RemReader::rows()'s return
-	 * @param ?array{anio: int, profile: array<string, int>} $neighbour the nearest complete load of the same serie
+	 * @param ?array{anio: int, profile: array<string, array<int, int>>} $neighbour the nearest complete load of the same serie
 	 * @return list<string>
 	 */
 	public static function of(array $summary, ?array $neighbour): array {
@@ -48,19 +49,20 @@ final class Completeness {
 			$findings[] = sprintf('Se omitieron %s filas de otro año.', self::count($summary['otherYear']));
 		}
 		if ($neighbour !== null) {
-			array_push($findings, ...self::gaps($summary['profile'], $neighbour));
+			array_push($findings, ...self::gaps($summary['profile'], $summary['lastMonth'], $neighbour));
 		}
 
 		return $findings;
 	}
 
 	/**
-	 * @param array<string, int> $profile
-	 * @param array{anio: int, profile: array<string, int>} $neighbour
+	 * @param array<string, array<int, int>> $profile
+	 * @param array{anio: int, profile: array<string, array<int, int>>} $neighbour
 	 * @return list<string>
 	 */
-	private static function gaps(array $profile, array $neighbour): array {
-		$compared = array_filter($neighbour['profile'], static fn (int $count): bool => $count >= self::MIN_ESTABLISHMENTS);
+	private static function gaps(array $profile, int $lastMonth, array $neighbour): array {
+		$sameMonths = array_map(static fn (array $months): int => self::by($months, $lastMonth), $neighbour['profile']);
+		$compared = array_filter($sameMonths, static fn (int $count): bool => $count >= self::MIN_ESTABLISHMENTS);
 
 		// Most servicios missing outright is not a gap. It means the codes
 		// changed between eras (research: IdServicio drifts by era), and there
@@ -71,7 +73,7 @@ final class Completeness {
 
 		$gaps = [];
 		foreach ($compared as $servicio => $before) {
-			$now = $profile[$servicio] ?? 0;
+			$now = self::by($profile[$servicio] ?? [], $lastMonth);
 			if ($now < $before * self::RATIO) {
 				$gaps[] = sprintf(
 					'Servicio de salud %s: informan %s establecimientos, frente a %s en %d.',
@@ -84,6 +86,16 @@ final class Completeness {
 		}
 
 		return $gaps;
+	}
+
+	/**
+	 * @param array<int, int> $months a profile's month → establishments that had reported by then
+	 * @return int its count for the last month it holds up to $month, 0 when it holds none
+	 */
+	private static function by(array $months, int $month): int {
+		$held = array_filter($months, static fn (int $m): bool => $m <= $month, ARRAY_FILTER_USE_KEY);
+
+		return $held === [] ? 0 : max($held);
 	}
 
 	private static function count(int $n): string {

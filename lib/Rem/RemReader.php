@@ -19,9 +19,9 @@ use OCA\Estadistica\Exception\RefusedException;
  *   1SSLLL in the 6-digit numbering (2,086 of 2,097 match, 2013 P vs 2014);
  * - `,` decimals (2015–2022, exponent forms included) read as `.`;
  * - an empty cell is null, never 0;
- * - servicio is read only to profile the member (the establishments reporting
- *   per servicio, for Completeness). Servicio, región and comuna are never
- *   returned for storage.
+ * - servicio is read only to profile the member (per servicio, the
+ *   establishments that had reported by each month, for Completeness).
+ *   Servicio, región and comuna are never returned for storage.
  *
  * A row that does not fit is skipped and counted, never guessed at: a row
  * without 57 fields, a code or month that is not one, a cell that is not a
@@ -33,7 +33,7 @@ use OCA\Estadistica\Exception\RefusedException;
  * rows() RETURNS the member's summary once it is exhausted.
  *
  * @psalm-type Row = list<int|string|null>
- * @psalm-type Summary = array{rows: int, lastMonth: int, cut: bool, malformed: int, otherYear: int, profile: array<string, int>}
+ * @psalm-type Summary = array{rows: int, lastMonth: int, cut: bool, malformed: int, otherYear: int, profile: array<string, array<int, int>>}
  */
 final class RemReader {
 	/** The extract's Col01…Col50: the typed table's figures. */
@@ -60,7 +60,7 @@ final class RemReader {
 		$otherYear = 0;
 		$lastMonth = 0;
 		$yearConfirmed = false;
-		/** @var array<string, array<int, true>> $establishments servicio → estab → seen */
+		/** @var array<string, array<int, int>> $establishments servicio → estab → the first month it reported */
 		$establishments = [];
 
 		for (; $lines->valid(); $lines->next()) {
@@ -93,7 +93,8 @@ final class RemReader {
 				continue;
 			}
 
-			$establishments[trim($fields[1])][$row[1]] = true;
+			$servicio = trim($fields[1]);
+			$establishments[$servicio][$row[1]] = min($establishments[$servicio][$row[1]] ?? $row[0], $row[0]);
 			$lastMonth = max($lastMonth, $row[0]);
 			$rows++;
 			yield $row;
@@ -103,7 +104,7 @@ final class RemReader {
 			throw new RefusedException(self::NO_ROWS);
 		}
 
-		$profile = array_map('count', $establishments);
+		$profile = array_map(static fn (array $firsts): array => self::byMonth($firsts, $lastMonth), $establishments);
 		ksort($profile, SORT_NATURAL);
 
 		return [
@@ -114,6 +115,19 @@ final class RemReader {
 			'otherYear' => $otherYear,
 			'profile' => $profile,
 		];
+	}
+
+	/**
+	 * @param array<int, int> $firsts estab → the first month it reported
+	 * @return array<int, int> month → establishments that had reported by then, January to $lastMonth
+	 */
+	private static function byMonth(array $firsts, int $lastMonth): array {
+		$counts = [];
+		for ($month = 1; $month <= $lastMonth; $month++) {
+			$counts[$month] = count(array_filter($firsts, static fn (int $first): bool => $first <= $month));
+		}
+
+		return $counts;
 	}
 
 	/**
