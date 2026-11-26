@@ -24,7 +24,8 @@ final class Completeness {
 	 * the same months of the nearest complete year is a gap, not drift (early in
 	 * a year a member holds only its first months, #24). In 2025 Serie A the
 	 * collapsed servicios fell to 0.15–0.65 of 2024; the intact ones stayed at
-	 * 0.99–1.07.
+	 * 0.99–1.07. The same share of the month before's rows ends the fecha de
+	 * corte (cutOff).
 	 */
 	public const RATIO = 0.75;
 
@@ -96,6 +97,23 @@ final class Completeness {
 		$held = array_filter($months, static fn (int $m): bool => $m <= $month, ARRAY_FILTER_USE_KEY);
 
 		return $held === [] ? 0 : max($held);
+	}
+
+	/**
+	 * The member's fecha de corte: its last month whose rows reach RATIO of the
+	 * month before's. A month a few establishments have reported ahead of the
+	 * rest is past it (#25: in DEIS's 2026 extract of 2026-09-25, one
+	 * establishment's 551 rows for September, against about 2,975 for August).
+	 *
+	 * @param array<int, int> $monthRows month → its rows, RemReader's Summary
+	 */
+	public static function cutOff(array $monthRows): int {
+		$month = max(array_keys($monthRows));
+		while ($month > 1 && ($monthRows[$month] ?? 0) < ($monthRows[$month - 1] ?? 0) * self::RATIO) {
+			$month--;
+		}
+
+		return $month;
 	}
 
 	private static function count(int $n): string {

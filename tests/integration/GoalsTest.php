@@ -493,8 +493,9 @@ class GoalsTest extends IntegrationTestCase {
 	/**
 	 * #25: only 900003 reported December, and 900001's own Serie A ends in
 	 * October (its November row is blank), so its Meta I has no figure after
-	 * October, while the country and the peers still reach December and the
-	 * fuente's fecha de corte stays December's.
+	 * October. December's one row reaches three quarters of November's one,
+	 * so the country and the peers still reach December and the fuente's
+	 * fecha de corte stays December's.
 	 */
 	public function testTheLocalSeriesEndsAtItsOwnLastReportedMonth(): void {
 		$answer = $this->evaluator()->evaluate(2099, Server::get(EstablishmentConfig::class)->get(), ['tipo']);
@@ -506,6 +507,31 @@ class GoalsTest extends IntegrationTestCase {
 		self::assertSame([56.25, 53.13], [$meses[11]['nacional'], $meses[11]['pares']], 'the country and the peers are unchanged');
 		self::assertSame(['rem-a' => '2099-10', 'rem-p' => '2099-12'], $answer['fecha_corte_local']);
 		self::assertSame('2099-12', $answer['fuentes'][0]['fecha_corte'], 'the country\'s fecha de corte stays');
+	}
+
+	/**
+	 * #25: once 900002 and 900003 also report November, December's one row
+	 * (900003's) falls short of three quarters of November's three. The
+	 * country and the peers end in November, and the fuente's fecha de corte,
+	 * which Consultar's «cifras hasta» and default end month read, is
+	 * November's. The local series still ends at 900001's own October.
+	 */
+	public function testAMonthFewEstablishmentsReportedIsPastTheCountrysCutOff(): void {
+		$base = array_values(array_filter(self::loads(), static fn (array $load): bool => $load[0] === 2099 && $load[1] === 'A'))[0];
+		// On a código no meta counts, so no figure changes.
+		$this->load(2099, 'A', $base[2]
+			. ZipFixture::row(2099, 11, '900002', '01010101', [8 => '1'])
+			. ZipFixture::row(2099, 11, '900003', '01010101', [8 => '1']), $base[3]);
+
+		$answer = $this->evaluator()->evaluate(2099, Server::get(EstablishmentConfig::class)->get(), ['tipo']);
+		$meses = array_column($answer['indicadores'], null, 'codigo')['I']['meses'];
+
+		self::assertSame([null, null], [$meses[11]['nacional'], $meses[11]['pares']], 'December is past the country\'s cut-off');
+		// November leaves out 900003's December 1: 17 ÷ 32 = 53.13 %, the country's and the CESFAM peers'.
+		self::assertSame([53.13, 53.13], [$meses[10]['nacional'], $meses[10]['pares']]);
+		self::assertSame([7.0, 12.0, 58.33], [$meses[9]['numerador'], $meses[9]['denominador'], $meses[9]['porcentaje']], 'the local series is unchanged');
+		self::assertSame(['rem-a' => '2099-10', 'rem-p' => '2099-12'], $answer['fecha_corte_local']);
+		self::assertSame(['2099-11', '2099-11'], [$answer['fuentes'][0]['fecha_corte'], array_column($answer['fuentes'][0]['anios'], 'fecha_corte', 'anio')[2099]]);
 	}
 
 	/**

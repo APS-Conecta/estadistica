@@ -116,7 +116,7 @@ class RemImporter {
 			$state->setMemberSize($member['size']);
 			$state->setOrigin($origin);
 			$state->setRowCount($summary['rows']);
-			$state->setFechaCorte(sprintf('%04d-%02d', $year, $summary['lastMonth']));
+			$state->setFechaCorte(sprintf('%04d-%02d', $year, Completeness::cutOff($summary['monthRows'])));
 			$state->setDetail($findings === [] ? null : implode("\n", $findings));
 			$state->setProfile(json_encode($summary['profile'], JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR));
 			$state->setLastSuccess($this->time->getTime());

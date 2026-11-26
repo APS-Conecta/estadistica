@@ -103,6 +103,22 @@ class RemImportTest extends IntegrationTestCase {
 		return $year;
 	}
 
+	/**
+	 * #25: the fecha de corte is the last month whose rows reach three quarters
+	 * of the month before's, so a month a few establishments reported ahead of
+	 * the rest is past it.
+	 */
+	public function testTheFechaDeCorteIsTheLastMonthReachingThreeQuartersOfTheMonthBefore(): void {
+		$january = ZipFixture::member(2099, ZipFixture::establishments(4), ['02010420'], 1);
+		$february = static fn (int $count): string => implode('', array_map(
+			static fn (string $estab): string => ZipFixture::row(2099, 2, $estab, '02010420', [1 => '2']),
+			ZipFixture::establishments($count),
+		));
+
+		self::assertSame('2099-02', $this->import(ZipFixture::zip(['SerieA2099.csv' => $january . $february(3)]), 2099)->getFechaCorte(), '3 rows of 4 reach it');
+		self::assertSame('2099-01', $this->import(ZipFixture::zip(['SerieA2099.csv' => $january . $february(2)]), 2099)->getFechaCorte(), '2 rows of 4 fall short');
+	}
+
 	/** a5: the whole national member, every establishment and month; the center's share read through config. */
 	public function testAFreshYearLoadsTheWholeNationalMember(): void {
 		$this->provision(EstablishmentConfig::KEY_DEIS, '900002');
