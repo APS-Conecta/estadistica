@@ -120,7 +120,7 @@ class RemReaderTest extends TestCase {
 
 		self::assertCount(4, $rows);
 		self::assertSame(
-			['rows' => 4, 'lastMonth' => 2, 'cut' => false, 'malformed' => 0, 'otherYear' => 0, 'profile' => ['91' => [1 => 2, 2 => 2], '92' => [1 => 1, 2 => 1]]],
+			['rows' => 4, 'lastMonth' => 2, 'monthRows' => [1 => 3, 2 => 1], 'cut' => false, 'malformed' => 0, 'otherYear' => 0, 'profile' => ['91' => [1 => 2, 2 => 2], '92' => [1 => 1, 2 => 1]]],
 			$summary,
 		);
 	}

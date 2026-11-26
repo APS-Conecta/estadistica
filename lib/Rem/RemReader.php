@@ -21,7 +21,8 @@ use OCA\Estadistica\Exception\RefusedException;
  * - an empty cell is null, never 0;
  * - servicio is read only to profile the member (per servicio, the
  *   establishments that had reported by each month, for Completeness).
- *   Servicio, región and comuna are never returned for storage.
+ *   Servicio, región and comuna are never returned for storage;
+ * - each month's rows are counted, for the fecha de corte (Completeness::fechaCorte).
  *
  * A row that does not fit is skipped and counted, never guessed at: a row
  * without 57 fields, a code or month that is not one, a cell that is not a
@@ -33,7 +34,7 @@ use OCA\Estadistica\Exception\RefusedException;
  * rows() RETURNS the member's summary once it is exhausted.
  *
  * @psalm-type Row = list<int|string|null>
- * @psalm-type Summary = array{rows: int, lastMonth: int, cut: bool, malformed: int, otherYear: int, profile: array<string, array<int, int>>}
+ * @psalm-type Summary = array{rows: int, lastMonth: int, monthRows: array<int, int>, cut: bool, malformed: int, otherYear: int, profile: array<string, array<int, int>>}
  */
 final class RemReader {
 	/** The extract's Col01…Col50: the typed table's figures. */
@@ -59,6 +60,8 @@ final class RemReader {
 		$malformed = 0;
 		$otherYear = 0;
 		$lastMonth = 0;
+		/** @var array<int, int> $monthRows month → its rows */
+		$monthRows = [];
 		$yearConfirmed = false;
 		/** @var array<string, array<int, int>> $establishments servicio → estab → the first month it reported */
 		$establishments = [];
@@ -96,6 +99,7 @@ final class RemReader {
 			$servicio = trim($fields[1]);
 			$establishments[$servicio][$row[1]] = min($establishments[$servicio][$row[1]] ?? $row[0], $row[0]);
 			$lastMonth = max($lastMonth, $row[0]);
+			$monthRows[$row[0]] = ($monthRows[$row[0]] ?? 0) + 1;
 			$rows++;
 			yield $row;
 		}
@@ -110,6 +114,7 @@ final class RemReader {
 		return [
 			'rows' => $rows,
 			'lastMonth' => $lastMonth,
+			'monthRows' => $monthRows,
 			'cut' => !$lines->getReturn(),
 			'malformed' => $malformed,
 			'otherYear' => $otherYear,
