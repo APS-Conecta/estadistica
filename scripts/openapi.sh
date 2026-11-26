@@ -5,8 +5,9 @@
 # and M3 read, so it is generated and committed, never hand-edited.
 #
 # The generator is a *dev* dependency, fetched into tools/ and gitignored there
-# (/tools/composer.phar, /tools/openapi/). The app keeps no PHP dependencies and
-# no composer autoloader at runtime.
+# (/tools/composer.phar, /tools/openapi/), both at a pinned version: CI's smoke
+# runs this script. The app keeps no PHP dependencies and no composer autoloader
+# at runtime.
 #
 # Usage: scripts/openapi.sh     (override with ESTADISTICA_CONTAINER=…)
 set -euo pipefail
@@ -18,17 +19,30 @@ APP=/var/www/html/custom_apps/estadistica
 # mount, which the host owns.
 run() { docker exec -w "$APP" -u root "$CONTAINER" "$@"; }
 
+COMPOSER_VERSION=2.11.3
+# What getcomposer.org publishes at /download/2.11.3/composer.phar.sha256sum.
+COMPOSER_SHA256=04f8b003da4e3a2459056591fbfebd02b4dc3e5adeb158616b90cf55a65113ec
+EXTRACTOR_VERSION=v1.9.1
+
 if ! run test -f tools/composer.phar; then
-	printf 'Downloading Composer…\n'
+	printf 'Downloading Composer %s…\n' "$COMPOSER_VERSION"
 	run mkdir -p tools
-	run sh -c 'curl -sSL -o tools/composer.phar https://getcomposer.org/composer-stable.phar'
+	run curl -sSL -o tools/composer.phar "https://getcomposer.org/download/$COMPOSER_VERSION/composer.phar"
+fi
+
+# On every run, a composer.phar already in tools/ included: nothing runs one
+# that is not the pinned build.
+if ! run sh -c "echo '$COMPOSER_SHA256  tools/composer.phar' | sha256sum -c --status"; then
+	printf 'tools/composer.phar is not Composer %s (sha256 mismatch): delete it and run again\n' \
+		"$COMPOSER_VERSION" >&2
+	exit 1
 fi
 
 if ! run test -f tools/openapi/vendor/bin/generate-spec; then
 	printf 'Installing nextcloud/openapi-extractor…\n'
 	run mkdir -p tools/openapi
-	run sh -c 'cd tools/openapi && COMPOSER_HOME=/tmp/composer php ../composer.phar \
-		require --quiet --no-interaction nextcloud/openapi-extractor'
+	run sh -c "cd tools/openapi && COMPOSER_HOME=/tmp/composer php ../composer.phar \
+		require --quiet --no-interaction nextcloud/openapi-extractor:$EXTRACTOR_VERSION"
 fi
 
 printf 'Generating openapi.json…\n'

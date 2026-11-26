@@ -32,7 +32,7 @@
 #     it, and its creator deletes it (a8, a14)
 #   - the icon serves, the .htaccess holes stay shut, the bundles and the tabs'
 #     chunks build and serve, and openapi.json regenerates without drift once
-#     the OCS surface exists
+#     the OCS surface exists, from a composer.phar that must be the pinned build
 #
 # Output of every command is captured before it is matched, never piped into
 # `grep -q` (epidemiologia's SIGPIPE lesson), and every curl carries --max-time.
@@ -640,6 +640,19 @@ elif scripts/openapi.sh >/dev/null 2>&1; then
 		fail "openapi.json drifted from ApiController — run scripts/openapi.sh and commit the result"
 		printf '%s\n' "$drift" | sed 's/^/        /'
 	fi
+	# A composer.phar already in tools/ that is not the pinned build stops the
+	# script before anything runs it (#105). Swapped inside the container: root
+	# owns tools/ there. The pinned one is put back either way.
+	docker exec -u root -w "/var/www/html/custom_apps/$APP" "$CONTAINER" \
+		sh -c 'cp tools/composer.phar /tmp/composer.phar.pinned && printf x >> tools/composer.phar'
+	if refused="$(scripts/openapi.sh 2>&1)"; then
+		fail "scripts/openapi.sh ran with a composer.phar that is not the pinned build"
+	else
+		expect "$refused" "sha256" "scripts/openapi.sh refuses a composer.phar that is not the pinned build" \
+			"scripts/openapi.sh failed, but not on the composer.phar checksum"
+	fi
+	docker exec -u root -w "/var/www/html/custom_apps/$APP" "$CONTAINER" \
+		mv /tmp/composer.phar.pinned tools/composer.phar
 else
 	fail "scripts/openapi.sh did not run — the extractor needs the instance up (and, on a first run, the network)"
 fi
