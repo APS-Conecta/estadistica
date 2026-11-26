@@ -481,8 +481,9 @@ class ApiController extends OCSController {
 	 * fecha_corte, on the card for its mes and on each month of historico,
 	 * say where that month comes from: «planilla del establecimiento», saved
 	 * that day (YYYY-MM-DD), for a month its planilla covers (docs/adr/0010),
-	 * else «datos públicos DEIS», cut at that year's load's last month
-	 * (YYYY-MM). Each year of historico carries its
+	 * else «datos públicos DEIS», cut at that year's fecha de corte: its last
+	 * month whose rows reach three quarters of the month before's (YYYY-MM).
+	 * Each year of historico carries its
 	 * ruta: the numerador's and the denominador's fuente, its nombre as GET
 	 * fuentes serves it, periodo (desde, hasta: YYYY-MM, moved to that year)
 	 * and the códigos to add (sumar) and subtract (restar), one list per

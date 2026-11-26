@@ -516,7 +516,7 @@ class GoalsTest extends IntegrationTestCase {
 	 * which Consultar's «cifras hasta» and default end month read, is
 	 * November's. The local series still ends at 900001's own October.
 	 */
-	public function testAMonthFewEstablishmentsReportedIsPastTheCountrysCutOff(): void {
+	public function testAMonthFewEstablishmentsReportedIsPastTheCountrysFechaDeCorte(): void {
 		$base = array_values(array_filter(self::loads(), static fn (array $load): bool => $load[0] === 2099 && $load[1] === 'A'))[0];
 		// On a código no meta counts, so no figure changes.
 		$this->load(2099, 'A', $base[2]
@@ -526,7 +526,7 @@ class GoalsTest extends IntegrationTestCase {
 		$answer = $this->evaluator()->evaluate(2099, Server::get(EstablishmentConfig::class)->get(), ['tipo']);
 		$meses = array_column($answer['indicadores'], null, 'codigo')['I']['meses'];
 
-		self::assertSame([null, null], [$meses[11]['nacional'], $meses[11]['pares']], 'December is past the country\'s cut-off');
+		self::assertSame([null, null], [$meses[11]['nacional'], $meses[11]['pares']], 'December is past the country\'s fecha de corte');
 		// November leaves out 900003's December 1: 17 ÷ 32 = 53.13 %, the country's and the CESFAM peers'.
 		self::assertSame([53.13, 53.13], [$meses[10]['nacional'], $meses[10]['pares']]);
 		self::assertSame([7.0, 12.0, 58.33], [$meses[9]['numerador'], $meses[9]['denominador'], $meses[9]['porcentaje']], 'the local series is unchanged');

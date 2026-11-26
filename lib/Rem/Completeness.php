@@ -25,7 +25,7 @@ final class Completeness {
 	 * a year a member holds only its first months, #24). In 2025 Serie A the
 	 * collapsed servicios fell to 0.15–0.65 of 2024; the intact ones stayed at
 	 * 0.99–1.07. The same share of the month before's rows ends the fecha de
-	 * corte (cutOff).
+	 * corte (fechaCorte).
 	 */
 	public const RATIO = 0.75;
 
@@ -107,7 +107,7 @@ final class Completeness {
 	 *
 	 * @param array<int, int> $monthRows month → its rows, RemReader's Summary
 	 */
-	public static function cutOff(array $monthRows): int {
+	public static function fechaCorte(array $monthRows): int {
 		$month = max(array_keys($monthRows));
 		while ($month > 1 && ($monthRows[$month] ?? 0) < ($monthRows[$month - 1] ?? 0) * self::RATIO) {
 			$month--;

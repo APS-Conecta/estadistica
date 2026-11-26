@@ -66,7 +66,8 @@ export function monthName(yearMonth) {
 /**
  * Where a month's figures come from, as GET resumen says it (docs/adr/0010):
  * the planilla with the day its file was saved (AAAA-MM-DD), or DEIS with
- * the last month its zip holds (AAAA-MM).
+ * its fecha de corte: the last month whose rows reach three quarters of the
+ * month before's (AAAA-MM).
  */
 export function originText(origen, fechaCorte) {
 	const [year, month, day] = String(fechaCorte).split('-')

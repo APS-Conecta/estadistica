@@ -22,7 +22,7 @@ use OCA\Estadistica\Exception\RefusedException;
  * - servicio is read only to profile the member (per servicio, the
  *   establishments that had reported by each month, for Completeness).
  *   Servicio, región and comuna are never returned for storage;
- * - each month's rows are counted, for the fecha de corte (Completeness::cutOff).
+ * - each month's rows are counted, for the fecha de corte (Completeness::fechaCorte).
  *
  * A row that does not fit is skipped and counted, never guessed at: a row
  * without 57 fields, a code or month that is not one, a cell that is not a
