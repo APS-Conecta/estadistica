@@ -99,7 +99,7 @@ aps-drift: aps-sync
 BUNDLES := main.js main.js.LICENSE.txt admin.js admin.js.LICENSE.txt \
 	resumen.js consultar.js preguntas.js tableros.js metas.js
 # Every page loads the main bundle: over this many bytes, `make bundles` fails (#23).
-MAIN_BUDGET := 720000
+MAIN_BUDGET := 500000
 
 bundles:
 	npm run build
