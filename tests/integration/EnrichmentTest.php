@@ -199,6 +199,27 @@ class EnrichmentTest extends IntegrationTestCase {
 		self::assertSame(2099, $catalog->tree(2098, 'A')['etiquetas_de']);
 	}
 
+	/** #26: 2099 plays 2026, whose own dictionary (2026's layout) lacks a código 2098 and 2097 label. */
+	public function testACodigoItsYearsDictionaryLacksTakesTheNearestEarlierYearsLabel(): void {
+		foreach ([2097, 2098] as $year) {
+			$this->import($year, ["Datos/SerieA$year.csv" => ZipFixture::member($year, ZipFixture::establishments(2)), self::DICTIONARY => self::dictionary()]);
+		}
+		$this->import(2099, [
+			'Datos/SerieA2099.csv' => ZipFixture::member(2099, ZipFixture::establishments(2), ['01010101', '03500366', '09000001']),
+			self::DICTIONARY => (string)file_get_contents(XlsxFixture::dictionary2026('A')),
+		]);
+
+		$labels = Server::get(Catalog::class)->labels(2099, 'A', ['01010101', '03500366', '09000001']);
+		self::assertSame(
+			['hoja' => 'A03', 'seccion' => 'SECCIÓN A: PRIMERA SECCIÓN', 'prestacion' => 'Evaluación › Alterada', 'columna' => 'TOTAL › Ambos sexos', 'nota' => 'etiqueta de 2098'],
+			Catalog::describe($labels['03500366'], 2099, 1),
+			'the nearest earlier year, not the furthest',
+		);
+		self::assertNull(Catalog::describe($labels['01010101'], 2099, 1)['nota'], 'its own dictionary labels it');
+		self::assertSame(Catalog::NO_LABEL, $labels['09000001']['prestacion'], 'no dictionary labels it');
+		self::assertSame(1, self::dictionaryRow(2099)['unmapped'], 'only 09000001 is counted');
+	}
+
 	/** #74: a dictionary that is not one never holds back the figures, and says why. */
 	public function testADictionaryThatCannotBeReadKeepsTheFiguresAndSaysWhy(): void {
 		$state = $this->import(2099, ['Datos/SerieA2099.csv' => ZipFixture::member(2099, ZipFixture::establishments(2)), self::DICTIONARY => 'no es una planilla']);

@@ -49,9 +49,10 @@ member is cut by its publisher: 615 establishments missing, the last row cut, th
 
 - **Labels.** `estadistica_code` holds one row per (año, serie, código) from that year's own DICCIONARIO CODIGOS, and
   `estadistica_dictionary` says, per (año, serie), which dictionary that was and what it could not do (Catalog).
-  - A year with a readable dictionary reads only its own: códigos and columns change by year (DEIS FAQ).
-  - A year without one (2009–2016 ship BIFF `.xls`) takes each código's label from the nearest later year that has
-    it, marked «etiqueta de <año>».
+  - A year's own dictionary wins: códigos and columns change by year (DEIS FAQ).
+  - A código it lacks takes its label from the nearest later year that has it, else the nearest earlier one, marked
+    «etiqueta de <año>» (owner, 2026-09-29: DEIS's 2026 dictionary left out códigos 2023–2025 label). A year without
+    one (2009–2016 ship BIFF `.xls`) lacks every código.
   - A código no dictionary explains is «sin descripción», counted per (año, serie) when the serie loads.
   - The rules that read a dictionary were measured on the 2017–2026 files; DictionaryParser states them.
 - **Establishments.** `estadistica_establishment` is DEIS's Base de Establecimientos, header-locked by its field
