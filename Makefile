@@ -100,12 +100,15 @@ BUNDLES := main.js main.js.LICENSE.txt admin.js admin.js.LICENSE.txt \
 	resumen.js consultar.js preguntas.js tableros.js metas.js
 # Every page loads the main bundle: over this many bytes, `make bundles` fails (#23).
 MAIN_BUDGET := 720000
+# A bundle that holds `sourcesContent` embeds a css-loader source map: a whole .vue file (#23).
 
 bundles:
 	npm run build
 	@for f in $(BUNDLES:%=js/estadistica-%); do \
 		test -s "$$f" || { echo "::error::npm run build produced no $$f — the release packer would refuse this tree"; exit 1; }; \
 	done
+	@maps=$$(grep -l sourcesContent js/*.js | xargs); \
+	test -z "$$maps" || { echo "::error::$$maps embed a CSS source map"; exit 1; }
 	@size=$$(wc -c < js/estadistica-main.js); \
 	test "$$size" -le $(MAIN_BUDGET) || { echo "::error::js/estadistica-main.js is $$size bytes, over its $(MAIN_BUDGET)-byte budget"; exit 1; }
 
