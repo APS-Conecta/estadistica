@@ -37,8 +37,7 @@ statement.
   never 0, so an «informante» is an establishment with at least one reported cell among the chosen columns.
 - **Each establishment is summed first.** Its sums are then summed and counted, without `count(DISTINCT)`, so
   PostgreSQL aggregates in parallel, and a trait joins those sums rather than the rows. The códigos are one bound
-  `text[]`, a constant the planner hashes. A whole hoja's 50 columns over the default window was cancelled at 10 s
-  when every cell was unpivoted (#27).
+  `text[]`, a constant the planner hashes.
 - **One statement per series, one snapshot.** Local, national and peer series differ only in who is counted. They
   run in one transaction opened with `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`, and
   `statement_timeout` is set locally through `set_config(…, true)` (10 s), and JIT is set off the same way: compiling
