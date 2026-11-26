@@ -47,6 +47,9 @@ API's figures. At Nextcloud's narrowest desktop width every control stays in
 its step, with the answer beside the steps; on a phone the answer follows
 them.
 
+And Administración → Estadística on a phone (#22): every table fits its
+section or scrolls inside it, and the page does not scroll sideways.
+
 And every chart the app draws for an answer (#91): Consultar's, a pregunta's
 and a tablero card's, in the light and the dark theme, and in Firefox. Each
 draws as SVG at its container's width, our establishment in the theme's
@@ -259,6 +262,32 @@ def title_clears_the_toggle(page, where):
     overlaps = (toggle["x"] < title["x"] + title["width"] and title["x"] < toggle["x"] + toggle["width"]
                 and toggle["y"] < title["y"] + title["height"] and title["y"] < toggle["y"] + toggle["height"])
     return [f"{where}: the title sits under the navigation toggle"] if overlaps else []
+
+
+def admin_fits_a_phone(page):
+    """Administración → Estadística on a phone (#22): every table fits its section or scrolls inside it, and the
+    page, which Nextcloud scrolls in its .app-content, never scrolls sideways. The planilla table shows only with a
+    file, so GET ingests answers one more."""
+    def with_a_planilla(route):
+        response = route.fetch()
+        body = response.json()
+        body["planillas"]["files"].append({"name": "REM serie A marzo corregida.xlsm", "mtime": int(time.time()),
+                                           "state": "rechazado", "serie": None, "anio": None, "mes": None,
+                                           "error": "La planilla es del establecimiento 900002, no del configurado."})
+        route.fulfill(response=response, json=body)
+
+    page.route("**/apps/estadistica/admin/ingests", with_a_planilla)
+    page.goto(f"{BASE}/index.php/settings/admin/estadistica")
+    for shown in (".estadistica-admin__planillas", "input[aria-label='Mujeres de 0 a 9 años']", ".estadistica-admin__goal"):
+        page.locator(shown).first.wait_for(timeout=30_000)
+    # Nextcloud scrolls the page in its .app-content, which a full-page screenshot does not reach.
+    page.locator(".estadistica-admin__planillas").scroll_into_view_if_needed()
+    page.screenshot(path=str(SHOTS / "ajustes-telefono.png"))
+    return page.evaluate("""() => [...document.querySelectorAll('.settings-section')]
+        .filter((section) => section.querySelector('table') && section.scrollWidth > section.clientWidth)
+        .map((section) => `on a phone a table in «${section.querySelector('h2').textContent.trim()}» is wider than its section (${section.scrollWidth} px against ${section.clientWidth} px)`)
+        .concat([document.querySelector('.app-content')].filter((page) => page.scrollWidth > page.clientWidth)
+            .map((page) => `on a phone Administración → Estadística scrolls sideways (${page.scrollWidth} px against ${page.clientWidth} px)`))""")
 
 
 def walk_the_navigation(page, fetched, browser):
@@ -840,6 +869,7 @@ def main():
             navigation_entry(phone, "Consultar").click()
             phone.locator(".estadistica-builder__steps").wait_for(timeout=30_000)
             failures += steps_beside_the_answer(phone, "a phone", beside=False)
+            failures += admin_fits_a_phone(phone)
             failures += [f"console error on a phone: {e}" for e in phone_errors]
             failures += dark_resumen(browser, "chromium")
             failures += dark_views(browser, "chromium")
@@ -916,6 +946,7 @@ def main():
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, light and dark, and «{SETTINGS}» opens the admin section for an admin only")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
+    print("ok    on a phone every table of Administración → Estadística fits its section or scrolls inside it, and the page does not scroll sideways")
     print("ok    Consultar's answer, a pregunta and a tablero card draw their SVG chart at its container's width, ours in the primary and the country muted, named in the legend and read by keyboard, light and dark, in Chromium and Firefox")
     print("ok    the title sits beside the navigation toggle, which folds the navigation away on a phone; no page logged a CSP violation or console error")
     print("\nAll good.")
