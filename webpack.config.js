@@ -8,4 +8,15 @@ webpackConfig.entry = {
 	admin: path.join(__dirname, 'src', 'admin.js'),
 }
 
+// css-loader follows devtool, and the base config's production 'source-map' made it
+// inline each <style> block's whole .vue file, base64, in every bundle (#23).
+// A development build keeps them; the base config's own switch is the same test.
+if (process.env.NODE_ENV !== 'development') {
+	for (const rule of webpackConfig.module.rules) {
+		if (rule.use) {
+			rule.use = rule.use.map((loader) => (loader === 'css-loader' ? { loader, options: { sourceMap: false } } : loader))
+		}
+	}
+}
+
 module.exports = webpackConfig

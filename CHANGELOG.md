@@ -23,6 +23,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   wins, else the nearest later year's, else the nearest earlier year's, marked «etiqueta de <año>». A código no
   dictionary labels stays «sin descripción». No migration: a year loaded before this keeps its unmapped («sin
   descripción») count until that year loads again.
+- **The bundles no longer carry each `<style>` block's source** (#23): css-loader followed the production build's
+  source maps and inlined each component's whole `.vue` file, base64, in its bundle. The main bundle falls from
+  603,268 to 519,819 bytes and all bundles from 1,465,062 to 1,078,395, and `make bundles` now fails when the main
+  bundle is over its 720,000-byte budget. A development build is unchanged.
 
 ## [0.4.0] - 2026-11-12
 
