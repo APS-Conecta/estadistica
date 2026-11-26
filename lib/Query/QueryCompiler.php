@@ -25,10 +25,13 @@ use OCA\Estadistica\Rem\RemReader;
  *   reads local(), where the newest planilla of a serie and month stands in
  *   for every DEIS row of its establishment. The national and peer series,
  *   and so their informantes, read DEIS's rows alone.
- * - **Only reported cells count.** The chosen columns are unpivoted (LATERAL
- *   VALUES) and a cell counts only where it was reported. An empty cell is
- *   NULL, never 0 (docs/adr/0004), and an establishment «informante» is one
- *   with at least one reported cell among the chosen columns.
+ * - **Only reported cells count.** A row's value is its reported cells among
+ *   the chosen columns, summed; grouped by columna, the columns are unpivoted
+ *   (LATERAL VALUES) instead, one value per cell. An empty cell is NULL, never
+ *   0 (docs/adr/0004), and an establishment «informante» is one with at least
+ *   one reported cell among the chosen columns.
+ * - **Each establishment is summed first** (#27), then its sums are summed
+ *   and counted: without count(DISTINCT), PostgreSQL aggregates in parallel.
  *
  * It is pure (no Nextcloud class).
  *
@@ -50,8 +53,8 @@ final class QueryCompiler {
 		. ' FROM *PREFIX*estadistica_planilla WHERE error IS NULL AND estab IS NOT NULL ORDER BY estab, serie, anio, mes, mtime DESC, file_id DESC';
 
 	private const METRIC = [
-		'suma' => 'sum(c.valor)',
-		'promedio_establecimiento' => 'sum(c.valor) / count(DISTINCT r.estab)',
+		'suma' => 'sum(s.valor)',
+		'promedio_establecimiento' => 'sum(s.valor) / count(*)',
 	];
 
 	/**
@@ -61,30 +64,33 @@ final class QueryCompiler {
 	 * @return Compiled
 	 */
 	public static function compile(QuerySpec $spec, array $codigos, array $who): array {
-		$groups = [];
+		// A trait is the establishment's, so it joins its sums, not its rows.
+		$inner = [];
+		$outer = [];
 		foreach ($spec->agrupar as $i => $dimension) {
-			$groups["g$i"] = self::expression($dimension);
+			if (in_array($dimension, QuerySpec::TRAITS, true)) {
+				$outer[] = self::expression($dimension) . " AS g$i";
+			} else {
+				$inner["g$i"] = self::expression($dimension) . " AS g$i";
+				$outer[] = "s.g$i";
+			}
 		}
-		$select = [];
-		foreach ($groups as $alias => $expression) {
-			$select[] = "$expression AS $alias";
-		}
-		$select[] = self::METRIC[$spec->metrica] . ' AS valor';
-		$select[] = 'count(DISTINCT r.estab) AS informantes';
+		$byColumna = in_array('columna', $spec->agrupar, true);
+		$columns = array_map(static fn (int $col): string => sprintf('r.col%02d', $col), $spec->columnas);
 
-		$cells = implode(', ', array_map(static fn (int $col): string => sprintf('(%d, r.col%02d)', $col, $col), $spec->columnas));
-		$sql = 'SELECT ' . implode(', ', $select)
-			. ' FROM ' . (isset($who['estab']) ? self::local() : '*PREFIX*estadistica_rem') . ' r'
-			. " CROSS JOIN LATERAL (VALUES $cells) AS c(columna, valor)";
-		if (array_intersect($spec->agrupar, QuerySpec::TRAITS) !== []) {
-			$sql .= ' LEFT JOIN *PREFIX*estadistica_establishment e ON e.estab = r.estab';
+		$sql = 'SELECT ' . implode(', ', [...$inner, 'r.estab', 'sum(' . ($byColumna ? 'c.valor' : self::total($columns)) . ') AS valor'])
+			. ' FROM ' . (isset($who['estab']) ? self::local() : '*PREFIX*estadistica_rem') . ' r';
+		if ($byColumna) {
+			$cells = implode(', ', array_map(static fn (int $col, string $column): string => "($col, $column)", $spec->columnas, $columns));
+			$sql .= " CROSS JOIN LATERAL (VALUES $cells) AS c(columna, valor)";
 		}
 		$sql .= ' WHERE r.serie = ? AND r.anio BETWEEN ? AND ? AND r.anio * 100 + r.mes BETWEEN ? AND ?'
-			. ' AND r.codigo IN (SELECT jsonb_array_elements_text(CAST(? AS jsonb)))'
-			. ' AND c.valor IS NOT NULL';
+			. ' AND r.codigo = ANY(CAST(? AS text[]))'
+			. ($byColumna ? ' AND c.valor IS NOT NULL' : '');
 		$params = [
 			$spec->serie, $spec->firstYear(), $spec->lastYear(), $spec->desde, $spec->hasta,
-			json_encode(array_values($codigos), JSON_THROW_ON_ERROR),
+			// A text[] literal: a constant the planner hashes and estimates (#27).
+			'{' . implode(',', array_map(static fn (string $codigo): string => '"' . addcslashes($codigo, '"\\') . '"', $codigos)) . '}',
 		];
 
 		if (isset($who['estab'])) {
@@ -103,8 +109,14 @@ final class QueryCompiler {
 			$sql .= ' AND r.estab IN (SELECT p.estab FROM *PREFIX*estadistica_establishment p WHERE ' . implode(' AND ', $traits) . ')';
 		}
 
-		if ($groups !== []) {
-			$aliases = implode(', ', array_keys($groups));
+		$outer[] = self::METRIC[$spec->metrica] . ' AS valor';
+		$outer[] = 'count(*) AS informantes';
+		$sql = 'SELECT ' . implode(', ', $outer)
+			. " FROM ($sql GROUP BY " . implode(', ', [...array_keys($inner), 'r.estab']) . ') s'
+			. (array_intersect($spec->agrupar, QuerySpec::TRAITS) === [] ? '' : ' LEFT JOIN *PREFIX*estadistica_establishment e ON e.estab = s.estab')
+			. ' WHERE s.valor IS NOT NULL';
+		if ($spec->agrupar !== []) {
+			$aliases = implode(', ', array_map(static fn (int $i): string => "g$i", array_keys($spec->agrupar)));
 			$sql .= " GROUP BY $aliases ORDER BY $aliases LIMIT " . (self::MAX_GROUPS + 1);
 		}
 
@@ -124,6 +136,17 @@ final class QueryCompiler {
 		return "(SELECT $columns FROM *PREFIX*estadistica_rem d WHERE NOT EXISTS (SELECT 1 FROM *PREFIX*estadistica_planilla p"
 			. ' WHERE p.error IS NULL AND p.estab = d.estab AND p.serie = d.serie AND p.anio = d.anio AND p.mes = d.mes)'
 			. " UNION ALL SELECT $columns FROM *PREFIX*estadistica_planilla_rem WHERE file_id IN (SELECT file_id FROM (" . self::PLANILLAS . ') n))';
+	}
+
+	/**
+	 * A row's reported cells among $columns, summed: NULL when none is
+	 * reported, so the row makes no establishment informante.
+	 *
+	 * @param non-empty-list<string> $columns
+	 */
+	private static function total(array $columns): string {
+		return 'CASE WHEN COALESCE(' . implode(', ', $columns) . ') IS NOT NULL THEN '
+			. implode(' + ', array_map(static fn (string $column): string => "COALESCE($column, 0)", $columns)) . ' END';
 	}
 
 	/**

@@ -28,10 +28,11 @@ use Throwable;
  * set locally. set_config(…, true) is the SET LOCAL that a bound value can
  * reach. So a write that got this far fails in PostgreSQL, whoever built it,
  * and a statement past the timeout is cancelled and answered as a Spanish
- * refusal. REPEATABLE READ gives the whole answer one snapshot: a load or a
- * dictionary that commits mid-request cannot put the local series and the
- * national one on different data, nor the labels on another dictionary than
- * the códigos they label.
+ * refusal. JIT is set off the same way: compiling a whole hoja's 50 columns
+ * took 2.9 s of the limit (#27). REPEATABLE READ gives the whole answer one
+ * snapshot: a load or a dictionary that commits mid-request cannot put the
+ * local series and the national one on different data, nor the labels on
+ * another dictionary than the códigos they label.
  *
  * Nextcloud issues nothing between BEGIN and the transaction's first statement
  * (lib/private/DB/Connection.php; design, Key Discoveries), so SET TRANSACTION
@@ -155,7 +156,7 @@ class QueryExecutor {
 		$this->db->beginTransaction();
 		try {
 			$this->db->executeStatement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
-			$this->db->executeQuery("SELECT set_config('statement_timeout', ?, true)", [(string)$timeoutMs])->closeCursor();
+			$this->db->executeQuery("SELECT set_config('statement_timeout', ?, true), set_config('jit', 'off', true)", [(string)$timeoutMs])->closeCursor();
 			$value = $work();
 			$this->db->commit();
 

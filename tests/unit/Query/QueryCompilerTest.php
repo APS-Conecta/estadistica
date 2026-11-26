@@ -30,13 +30,20 @@ final class QueryCompilerTest extends TestCase {
 
 	private const CODES = ['02010420', '03500366'];
 
-	/** Meta I's shape: an October-to-September window, two columns, by month. */
-	private const SELECT = 'SELECT r.anio * 100 + r.mes AS g0, sum(c.valor) AS valor, count(DISTINCT r.estab) AS informantes'
-		. ' FROM *PREFIX*estadistica_rem r CROSS JOIN LATERAL (VALUES (8, r.col08), (9, r.col09)) AS c(columna, valor)'
-		. ' WHERE r.serie = ? AND r.anio BETWEEN ? AND ? AND r.anio * 100 + r.mes BETWEEN ? AND ?'
-		. ' AND r.codigo IN (SELECT jsonb_array_elements_text(CAST(? AS jsonb))) AND c.valor IS NOT NULL';
+	/** A row's two chosen cells, summed: NULL when neither is reported. */
+	private const TOTAL = 'sum(CASE WHEN COALESCE(r.col08, r.col09) IS NOT NULL THEN COALESCE(r.col08, 0) + COALESCE(r.col09, 0) END) AS valor';
 
-	private const GROUPED = ' GROUP BY g0 ORDER BY g0 LIMIT 5001';
+	private const WHERE = ' WHERE r.serie = ? AND r.anio BETWEEN ? AND ? AND r.anio * 100 + r.mes BETWEEN ? AND ?'
+		. ' AND r.codigo = ANY(CAST(? AS text[]))';
+
+	/** Meta I's shape: an October-to-September window, two columns, by month, each establishment summed first (#27). */
+	private const INNER = 'SELECT r.anio * 100 + r.mes AS g0, r.estab, ' . self::TOTAL . ' FROM *PREFIX*estadistica_rem r' . self::WHERE;
+
+	/** The establishments' sums, summed and counted by month. */
+	private static function byMonth(string $inner, string $metric = 'sum(s.valor)'): string {
+		return "SELECT s.g0, $metric AS valor, count(*) AS informantes FROM ($inner GROUP BY g0, r.estab) s"
+			. ' WHERE s.valor IS NOT NULL GROUP BY g0 ORDER BY g0 LIMIT 5001';
+	}
 
 	/** @param array<string, mixed> $changes */
 	private static function spec(array $changes = []): QuerySpec {
@@ -63,8 +70,8 @@ final class QueryCompilerTest extends TestCase {
 	public function testTheLocalSeriesIsTheNationalOneForOneEstablishmentOverItsPlanillas(): void {
 		self::assertSame(
 			[
-				'sql' => str_replace('*PREFIX*estadistica_rem r ', QueryCompiler::local() . ' r ', self::SELECT) . ' AND r.estab = ?' . self::GROUPED,
-				'params' => ['A', 2025, 2026, 202510, 202609, '["02010420","03500366"]', self::ESTAB],
+				'sql' => self::byMonth(str_replace('*PREFIX*estadistica_rem r ', QueryCompiler::local() . ' r ', self::INNER) . ' AND r.estab = ?'),
+				'params' => ['A', 2025, 2026, 202510, 202609, '{"02010420","03500366"}', self::ESTAB],
 			],
 			QueryCompiler::compile(self::spec(), self::CODES, ['estab' => self::ESTAB]),
 		);
@@ -72,7 +79,7 @@ final class QueryCompilerTest extends TestCase {
 
 	public function testTheNationalSeriesCountsEveryEstablishment(): void {
 		self::assertSame(
-			['sql' => self::SELECT . self::GROUPED, 'params' => ['A', 2025, 2026, 202510, 202609, '["02010420","03500366"]']],
+			['sql' => self::byMonth(self::INNER), 'params' => ['A', 2025, 2026, 202510, 202609, '{"02010420","03500366"}']],
 			QueryCompiler::compile(self::spec(), self::CODES, []),
 		);
 	}
@@ -80,30 +87,26 @@ final class QueryCompilerTest extends TestCase {
 	public function testThePeerSeriesCountsTheEstablishmentsTheRegisterMatches(): void {
 		self::assertSame(
 			[
-				'sql' => self::SELECT
-					. ' AND r.estab IN (SELECT p.estab FROM *PREFIX*estadistica_establishment p WHERE p.tipo = ? AND p.servicio = ?)'
-					. self::GROUPED,
-				'params' => ['A', 2025, 2026, 202510, 202609, '["02010420","03500366"]', 'Centro de Salud Familiar (CESFAM)', 'Servicio de Salud Uno'],
+				'sql' => self::byMonth(self::INNER
+					. ' AND r.estab IN (SELECT p.estab FROM *PREFIX*estadistica_establishment p WHERE p.tipo = ? AND p.servicio = ?)'),
+				'params' => ['A', 2025, 2026, 202510, 202609, '{"02010420","03500366"}', 'Centro de Salud Familiar (CESFAM)', 'Servicio de Salud Uno'],
 			],
 			QueryCompiler::compile(self::spec(), self::CODES, ['tipo' => 'Centro de Salud Familiar (CESFAM)', 'servicio' => 'Servicio de Salud Uno']),
 		);
 	}
 
-	/** a7: promedio por establecimiento = SUM ÷ count(DISTINCT establecimiento informante). */
+	/** a7: promedio por establecimiento = SUM ÷ the establishments informantes, one summed row each. */
 	public function testPromedioDividesTheSumByTheEstablishmentsThatReported(): void {
 		$sql = QueryCompiler::compile(self::spec(['metrica' => 'promedio_establecimiento']), self::CODES, [])['sql'];
 
-		self::assertSame(
-			str_replace('sum(c.valor) AS valor', 'sum(c.valor) / count(DISTINCT r.estab) AS valor', self::SELECT) . self::GROUPED,
-			$sql,
-		);
+		self::assertSame(self::byMonth(self::INNER, 'sum(s.valor) / count(*)'), $sql);
 	}
 
 	/** a7, año: a whole year is the periodo from its January to its December. */
 	public function testTheYearFilterIsItsTwelveMonths(): void {
 		$spec = self::spec(['periodo' => ['desde' => '2026-01', 'hasta' => '2026-12']]);
 
-		self::assertSame(self::SELECT . self::GROUPED, QueryCompiler::compile($spec, self::CODES, [])['sql']);
+		self::assertSame(self::byMonth(self::INNER), QueryCompiler::compile($spec, self::CODES, [])['sql']);
 		self::assertSame(['A', 2026, 2026, 202601, 202612], array_slice(self::params($spec), 0, 5));
 	}
 
@@ -124,37 +127,45 @@ final class QueryCompilerTest extends TestCase {
 		$byCode = QueryCompiler::compile(self::spec(['filtros' => ['codigos' => ['03500366'], 'columnas' => ['col08', 'col09']]]), ['03500366'], []);
 
 		foreach ([$byHoja, $bySeccion, $byCode] as $compiled) {
-			self::assertSame(self::SELECT . self::GROUPED, $compiled['sql']);
+			self::assertSame(self::byMonth(self::INNER), $compiled['sql']);
 		}
-		self::assertSame('["02010420","03500366","03500400"]', $byHoja['params'][5]);
-		self::assertSame('["02010420","03500366"]', $bySeccion['params'][5]);
-		self::assertSame('["03500366"]', $byCode['params'][5]);
+		self::assertSame('{"02010420","03500366","03500400"}', $byHoja['params'][5]);
+		self::assertSame('{"02010420","03500366"}', $bySeccion['params'][5]);
+		self::assertSame('{"03500366"}', $byCode['params'][5]);
 	}
 
+	/** The bound text[] literal quotes every código, so a quote, a backslash, a comma or a brace stays inside it. */
+	public function testTheCodigosAreOneQuotedArrayLiteral(): void {
+		self::assertSame('{}', self::params(self::spec(), [])[5], 'no código is an empty array');
+		self::assertSame('{"a\\"b","c\\\\d","e,f}"}', self::params(self::spec(), ['a"b', 'c\\d', 'e,f}'])[5]);
+	}
+
+	/** Only by columna are the columns unpivoted, one value per reported cell. */
 	public function testGroupingByColumnaKeepsEachColumnApart(): void {
-		$sql = QueryCompiler::compile(self::spec(['agrupar' => ['codigo', 'columna']]), self::CODES, [])['sql'];
-
-		self::assertStringStartsWith('SELECT r.codigo AS g0, c.columna AS g1, sum(c.valor) AS valor, count(DISTINCT r.estab) AS informantes FROM ', $sql);
-		self::assertStringEndsWith(' GROUP BY g0, g1 ORDER BY g0, g1 LIMIT 5001', $sql);
+		self::assertSame(
+			'SELECT s.g0, s.g1, sum(s.valor) AS valor, count(*) AS informantes FROM (SELECT r.codigo AS g0, c.columna AS g1, r.estab, sum(c.valor) AS valor'
+			. ' FROM *PREFIX*estadistica_rem r CROSS JOIN LATERAL (VALUES (8, r.col08), (9, r.col09)) AS c(columna, valor)'
+			. self::WHERE . ' AND c.valor IS NOT NULL GROUP BY g0, g1, r.estab) s'
+			. ' WHERE s.valor IS NOT NULL GROUP BY g0, g1 ORDER BY g0, g1 LIMIT 5001',
+			QueryCompiler::compile(self::spec(['agrupar' => ['codigo', 'columna']]), self::CODES, [])['sql'],
+		);
 	}
 
+	/** A trait is the establishment's: the register joins its sums, not its rows. */
 	public function testGroupingByATraitJoinsTheRegister(): void {
-		$sql = QueryCompiler::compile(self::spec(['agrupar' => ['servicio']]), self::CODES, [])['sql'];
-
 		self::assertSame(
-			'SELECT e.servicio AS g0, sum(c.valor) AS valor, count(DISTINCT r.estab) AS informantes'
-			. ' FROM *PREFIX*estadistica_rem r CROSS JOIN LATERAL (VALUES (8, r.col08), (9, r.col09)) AS c(columna, valor)'
-			. ' LEFT JOIN *PREFIX*estadistica_establishment e ON e.estab = r.estab'
-			. ' WHERE r.serie = ? AND r.anio BETWEEN ? AND ? AND r.anio * 100 + r.mes BETWEEN ? AND ?'
-			. ' AND r.codigo IN (SELECT jsonb_array_elements_text(CAST(? AS jsonb))) AND c.valor IS NOT NULL'
-			. self::GROUPED,
-			$sql,
+			'SELECT e.servicio AS g0, sum(s.valor) AS valor, count(*) AS informantes'
+			. ' FROM (SELECT r.estab, ' . self::TOTAL . ' FROM *PREFIX*estadistica_rem r' . self::WHERE . ' GROUP BY r.estab) s'
+			. ' LEFT JOIN *PREFIX*estadistica_establishment e ON e.estab = s.estab'
+			. ' WHERE s.valor IS NOT NULL GROUP BY g0 ORDER BY g0 LIMIT 5001',
+			QueryCompiler::compile(self::spec(['agrupar' => ['servicio']]), self::CODES, [])['sql'],
 		);
 	}
 
 	public function testWithoutGroupingTheStatementIsOneTotal(): void {
 		self::assertSame(
-			str_replace('r.anio * 100 + r.mes AS g0, ', '', self::SELECT),
+			'SELECT sum(s.valor) AS valor, count(*) AS informantes'
+			. ' FROM (SELECT r.estab, ' . self::TOTAL . ' FROM *PREFIX*estadistica_rem r' . self::WHERE . ' GROUP BY r.estab) s WHERE s.valor IS NOT NULL',
 			QueryCompiler::compile(self::spec(['agrupar' => []]), self::CODES, [])['sql'],
 		);
 	}
