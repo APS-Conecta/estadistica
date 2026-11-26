@@ -57,47 +57,49 @@
 				Todavía no hay cifras REM cargadas.
 			</p>
 
-			<table v-else class="estadistica-admin__table">
-				<thead>
-					<tr>
-						<th>Año</th>
-						<th>Serie</th>
-						<th>Origen</th>
-						<th>Estado</th>
-						<th>Fecha de corte</th>
-						<th>Filas</th>
-						<th>Sin descripción</th>
-						<th>Último intento</th>
-					</tr>
-				</thead>
-				<tbody>
-					<template v-for="ingest in ingests" :key="`${ingest.anio}-${ingest.serie}`">
+			<div v-else class="estadistica-admin__scroll">
+				<table class="estadistica-admin__table">
+					<thead>
 						<tr>
-							<td>{{ ingest.anio }}</td>
-							<td>{{ ingest.serie }}</td>
-							<td>{{ origin(ingest) }}</td>
-							<td>{{ status(ingest) }}</td>
-							<td>{{ ingest.fechaCorte ?? '—' }}</td>
-							<td>{{ count(ingest.rowCount) }}</td>
-							<td>{{ unmapped(ingest) }}</td>
-							<td>{{ when(ingest.lastAttempt) }}</td>
+							<th>Año</th>
+							<th>Serie</th>
+							<th>Origen</th>
+							<th>Estado</th>
+							<th>Fecha de corte</th>
+							<th>Filas</th>
+							<th>Sin descripción</th>
+							<th>Último intento</th>
 						</tr>
-						<tr v-if="ingest.lastError || ingest.detail || labelsNote(ingest)">
-							<td colspan="8" class="estadistica-admin__detail">
-								<p v-if="ingest.lastError" class="estadistica-admin__error">
-									{{ ingest.lastError }}
-								</p>
-								<p v-if="ingest.detail">
-									{{ ingest.detail }}
-								</p>
-								<p v-if="labelsNote(ingest)">
-									{{ labelsNote(ingest) }}
-								</p>
-							</td>
-						</tr>
-					</template>
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						<template v-for="ingest in ingests" :key="`${ingest.anio}-${ingest.serie}`">
+							<tr>
+								<td>{{ ingest.anio }}</td>
+								<td>{{ ingest.serie }}</td>
+								<td>{{ origin(ingest) }}</td>
+								<td>{{ status(ingest) }}</td>
+								<td>{{ ingest.fechaCorte ?? '—' }}</td>
+								<td>{{ count(ingest.rowCount) }}</td>
+								<td>{{ unmapped(ingest) }}</td>
+								<td>{{ when(ingest.lastAttempt) }}</td>
+							</tr>
+							<tr v-if="ingest.lastError || ingest.detail || labelsNote(ingest)">
+								<td colspan="8" class="estadistica-admin__detail">
+									<p v-if="ingest.lastError" class="estadistica-admin__error">
+										{{ ingest.lastError }}
+									</p>
+									<p v-if="ingest.detail">
+										{{ ingest.detail }}
+									</p>
+									<p v-if="labelsNote(ingest)">
+										{{ labelsNote(ingest) }}
+									</p>
+								</td>
+							</tr>
+						</template>
+					</tbody>
+				</table>
+			</div>
 
 			<h3>Base de Establecimientos</h3>
 			<p class="estadistica-admin__hint">
@@ -128,24 +130,28 @@
 				Carpeta guardada. Sus planillas se leen en la próxima hora.
 			</NcNoteCard>
 
-			<table v-if="planillas.files.length > 0" class="estadistica-admin__table estadistica-admin__planillas">
-				<thead>
-					<tr>
-						<th>Archivo</th>
-						<th>Guardado</th>
-						<th>Estado</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="file in planillas.files" :key="`${file.name}-${file.mtime}`">
-						<td>{{ file.name }}</td>
-						<td>{{ when(file.mtime) }}</td>
-						<td :class="{ 'estadistica-admin__error': file.state === 'rechazado' }">
-							{{ planillaState(file) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
+			<div v-if="planillas.files.length > 0" class="estadistica-admin__scroll">
+				<table class="estadistica-admin__table estadistica-admin__planillas">
+					<thead>
+						<tr>
+							<th>Archivo</th>
+							<th>Guardado</th>
+							<th>Estado</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="file in planillas.files" :key="`${file.name}-${file.mtime}`">
+							<td class="estadistica-admin__label">
+								{{ file.name }}
+							</td>
+							<td>{{ when(file.mtime) }}</td>
+							<td :class="{ 'estadistica-admin__error': file.state === 'rechazado' }">
+								{{ planillaState(file) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
 			<NcButton :disabled="planillaChoosing"
 				class="estadistica-admin__field"
@@ -201,33 +207,35 @@
 						:disabled="pivSaving">
 				</label>
 
-				<table class="estadistica-admin__table">
-					<thead>
-						<tr>
-							<th>Tramo de edad</th>
-							<th v-for="sex in sexes" :key="sex.id">
-								{{ sex.label }}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr v-for="band in bands" :key="band.edad">
-							<th scope="row">
-								{{ band.label }}
-							</th>
-							<td v-for="sex in sexes" :key="sex.id">
-								<input v-model="pivCells[cellKey(band.edad, sex.id)]"
-									type="number"
-									min="0"
-									step="1"
-									class="estadistica-admin__cell"
-									:aria-label="`${sex.label} de ${band.label}`"
-									:placeholder="fonasaOf(band.edad, sex.id)"
-									:disabled="pivSaving">
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="estadistica-admin__scroll">
+					<table class="estadistica-admin__table">
+						<thead>
+							<tr>
+								<th>Tramo de edad</th>
+								<th v-for="sex in sexes" :key="sex.id">
+									{{ sex.label }}
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="band in bands" :key="band.edad">
+								<th scope="row" class="estadistica-admin__label">
+									{{ band.label }}
+								</th>
+								<td v-for="sex in sexes" :key="sex.id">
+									<input v-model="pivCells[cellKey(band.edad, sex.id)]"
+										type="number"
+										min="0"
+										step="1"
+										class="estadistica-admin__cell"
+										:aria-label="`${sex.label} de ${band.label}`"
+										:placeholder="fonasaOf(band.edad, sex.id)"
+										:disabled="pivSaving">
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 
 				<NcButton :disabled="pivSaving"
 					variant="primary"
@@ -289,8 +297,6 @@
 						Guardado.
 					</NcNoteCard>
 
-					<!-- The settings page keeps its text on one line: the names wrap here,
-					     and on a phone the inputs scroll inside the section, never the page. -->
 					<div class="estadistica-admin__scroll">
 						<table class="estadistica-admin__table">
 							<thead>
@@ -304,7 +310,7 @@
 							</thead>
 							<tbody>
 								<tr v-for="meta in metasOfYear.indicadores" :key="meta.codigo">
-									<th scope="row" class="estadistica-admin__goal">
+									<th scope="row" class="estadistica-admin__label estadistica-admin__goal">
 										Meta {{ meta.codigo }}: {{ meta.nombre }}
 									</th>
 									<td>{{ count(meta.metaNacional) }} %</td>
@@ -924,12 +930,17 @@ export default {
 	width: 8em;
 }
 
+/* The settings page keeps a table's text on one line: a table's labels wrap,
+   and on a phone what is left scrolls inside its section, never the page. */
 .estadistica-admin__scroll {
 	overflow-x: auto;
 }
 
+.estadistica-admin__label {
+	white-space: normal;
+}
+
 .estadistica-admin__goal {
 	min-width: 12em;
-	white-space: normal;
 }
 </style>
