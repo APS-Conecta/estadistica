@@ -110,7 +110,7 @@ class RemReaderTest extends TestCase {
 		self::read();
 	}
 
-	public function testTheSummaryProfilesEstablishmentsPerServicio(): void {
+	public function testTheSummaryProfilesEstablishmentsPerServicioByMonth(): void {
 		[$rows, $summary] = self::read(
 			ZipFixture::row(2024, 1, '900001', 'A1', servicio: '91'),
 			ZipFixture::row(2024, 2, '900001', 'A1', servicio: '91'),
@@ -120,7 +120,7 @@ class RemReaderTest extends TestCase {
 
 		self::assertCount(4, $rows);
 		self::assertSame(
-			['rows' => 4, 'lastMonth' => 2, 'cut' => false, 'malformed' => 0, 'otherYear' => 0, 'profile' => ['91' => 2, '92' => 1]],
+			['rows' => 4, 'lastMonth' => 2, 'cut' => false, 'malformed' => 0, 'otherYear' => 0, 'profile' => ['91' => [1 => 2, 2 => 2], '92' => [1 => 1, 2 => 1]]],
 			$summary,
 		);
 	}

@@ -28,7 +28,7 @@ member is cut by its publisher: 615 establishments missing, the last row cut, th
   - a last row the publisher cut;
   - unreadable rows;
   - rows of another year;
-  - a servicio whose reporting establishments fell below 75 % of the nearest complete year.
+  - a servicio whose reporting establishments fell below 75 % of the same months of the nearest complete year.
 - **An incomplete member loads only when no complete copy is stored.** That covers 2025 Serie A, the owner's
   decision. When a complete load is stored, the incomplete member is kept out and the reason shown.
 - **One job, one member per hourly tick.** TIME_SENSITIVE, no parallel runs.

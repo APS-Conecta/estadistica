@@ -185,6 +185,67 @@ class RemImportTest extends IntegrationTestCase {
 		self::assertSame(48, $this->snapshot(2099)['rows']);
 	}
 
+	/**
+	 * Servicio 91: $early establishments report from January, $late only from
+	 * March, each month up to $months.
+	 */
+	private static function staggered(int $anio, int $months, int $early = 5, int $late = 5): string {
+		$member = ZipFixture::header();
+		foreach (ZipFixture::establishments($early + $late) as $i => $estab) {
+			for ($mes = $i < $early ? 1 : 3; $mes <= $months; $mes++) {
+				$member .= ZipFixture::row($anio, $mes, $estab, '02010420', [1 => (string)$mes]);
+			}
+		}
+
+		return $member;
+	}
+
+	/**
+	 * #24: early in a year a member holds only its first months. It is judged
+	 * against the same months of its neighbour (5 establishments by February),
+	 * not the whole year (10), so the republish replaces the stored year.
+	 */
+	public function testAnEarlyYearIsJudgedAgainstTheSameMonthsOfItsNeighbour(): void {
+		$this->import(ZipFixture::zip(['SerieA2099.csv' => self::staggered(2099, 1)]), 2099);
+		$this->import(ZipFixture::zip(['SerieA2098.csv' => self::staggered(2098, 12)]), 2098);
+		self::assertFalse($this->state(2098)->isIncomplete(), 'the neighbour is a complete year');
+
+		$state = $this->import(ZipFixture::zip(['SerieA2099.csv' => self::staggered(2099, 2)]), 2099);
+
+		self::assertNull($state->getLastError());
+		self::assertFalse($state->isIncomplete());
+		self::assertSame('2099-02', $state->getFechaCorte(), 'the republish replaced the stored year');
+		self::assertSame(10, $this->snapshot(2099)['rows'], '5 establishments × 2 months');
+	}
+
+	/** #24: a real gap early in a year is still named, against the neighbour's same months. */
+	public function testARealGapEarlyInAYearIsStillNamed(): void {
+		$this->import(ZipFixture::zip(['SerieA2098.csv' => self::staggered(2098, 12)]), 2098);
+
+		$state = $this->import(ZipFixture::zip(['SerieA2099.csv' => self::staggered(2099, 2, early: 3)]), 2099);
+
+		self::assertTrue($state->isIncomplete());
+		self::assertStringContainsString('Servicio de salud 91: informan 3 establecimientos, frente a 5 en 2098.', (string)$state->getDetail());
+	}
+
+	/**
+	 * A neighbour profiled before per-month counts holds each servicio's total
+	 * only: a whole year is still judged against it, an early year is not.
+	 */
+	public function testANeighbourProfiledWithTotalsOnly(): void {
+		$this->loadComplete2098();
+		$this->db()->executeStatement('UPDATE *PREFIX*estadistica_ingest SET profile = ? WHERE anio = ?', ['{"91":10,"92":10}', 2098]);
+		$establishments = [...ZipFixture::establishments(2), ...ZipFixture::establishments(10, 900011)];
+		$servicioOf = array_combine($establishments, [...array_fill(0, 2, '91'), ...array_fill(0, 10, '92')]);
+
+		$whole = $this->import(ZipFixture::zip(['SerieA2097.csv' => ZipFixture::member(2097, $establishments, months: 12, servicioOf: $servicioOf)]), 2097);
+		$early = $this->import(ZipFixture::zip(['SerieA2099.csv' => ZipFixture::member(2099, $establishments, servicioOf: $servicioOf)]), 2099);
+
+		self::assertStringContainsString('Servicio de salud 91: informan 2 establecimientos, frente a 10 en 2098.', (string)$whole->getDetail());
+		self::assertNull($early->getLastError());
+		self::assertFalse($early->isIncomplete());
+	}
+
 	/** #74 and a4: the fetch that fails halfway through the member. */
 	public function testATransferCutMidMemberLeavesTheLastGoodLoad(): void {
 		$before = $this->loadComplete2098();
