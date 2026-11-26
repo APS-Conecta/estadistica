@@ -30,6 +30,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 - **On a phone, Administración → Estadística's tables scroll inside their section** (#22): the ingest table, the
   planilla table and the population grid were wider than their sections, so the page scrolled sideways. Like the
   metas grid, each now scrolls inside its section, and a planilla's file name and an age band wrap.
+- **`scripts/openapi.sh` runs only the pinned Composer and extractor** (#105): it downloaded whatever
+  `composer-stable.phar` was that day and ran it unchecked, inside CI's smoke too. It now fetches Composer 2.11.3,
+  checks `tools/composer.phar` against its published sha256 on every run and stops on a mismatch, and requires
+  `nextcloud/openapi-extractor` v1.9.1. `openapi.json` regenerates unchanged.
 
 ## [0.4.0] - 2026-11-12
 
