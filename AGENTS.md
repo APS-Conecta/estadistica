@@ -4,6 +4,12 @@ Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for ev
 
 ## Working rules
 
+- **Standards:** the org's code rules are the docs site's [«Estándares de código»](https://aps-conecta.github.io/documentation/desarrollo/estandares-de-codigo.html) page.
+- **Seams:** server behaviour is tested in the integration suite (`tests/integration/`, `make deps` and
+  `make instance-up`, then `make test-integration`) against the throwaway instance's real PostgreSQL, and in the smoke (`scripts/smoke.sh`,
+  `make smoke`) against the same instance; UI behaviour in the browser check (`tools/browser-check.py`,
+  `make test-browser`) in Chromium and Firefox against the instance. A PR names the seam its test lives at; a test
+  at any other seam is a review finding.
 - **Names:** code is English, but a domain term keeps the spelling `CONTEXT.md` gives it (*Pregunta* and
   *Tablero* in new names and UI text, never *question* or *dashboard*). Rename an existing name only inside
   code a change already touches, and never a table, column, route, controller action (an OpenAPI operation
