@@ -27,6 +27,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   source maps and inlined each component's whole `.vue` file, base64, in its bundle. The main bundle falls from
   603,268 to 519,819 bytes and all bundles from 1,465,062 to 1,078,395, and `make bundles` now fails when a bundle
   embeds a CSS source map or the main bundle is over its 720,000-byte budget. A development build never carried them.
+- **On a phone, Administración → Estadística's tables scroll inside their section** (#22): the ingest table, the
+  planilla table and the population grid were wider than their sections, so the page scrolled sideways. Like the
+  metas grid, each now scrolls inside its section, and a planilla's file name and an age band wrap.
 
 ## [0.4.0] - 2026-11-12
 
