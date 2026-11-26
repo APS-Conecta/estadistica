@@ -21,18 +21,18 @@ use Throwable;
  * What REM's figures mean: for each (año, código, col), the hoja, the
  * sección, the prestación and the column, from that year's own DICCIONARIO
  * CODIGOS (acceptance a6). Códigos and columns change from year to year (DEIS
- * FAQ), so a label is never borrowed from another year when the year has a
- * dictionary of its own.
+ * FAQ), so a year's own dictionary always wins. A código it lacks (DEIS's
+ * 2026 one left out 08210001 and 08210002, #26) reads the nearest later
+ * year's label, else the nearest earlier year's, marked «etiqueta de <año>».
  *
  * - **The dictionary travels with the figures.** It is read from the same zip,
  *   in the same attempt, as the serie it labels (RemImporter), whether that zip
  *   came from DEIS or was dropped by an admin. Nothing derived from it ships
  *   (a2).
  * - **2009–2016 ship dictionaries as BIFF .xls, which is not read.** Those
- *   years take each código's label from the nearest later year whose
- *   dictionary has it, marked «etiqueta de <año>». A código no dictionary
- *   explains is «sin descripción», and those are counted per (año, serie) for
- *   the admin section.
+ *   years lack every código, so each takes its label by that rule. A código
+ *   no dictionary explains is «sin descripción», and those are counted per
+ *   (año, serie) for the admin section.
  * - **A dictionary that cannot be read never holds back the figures.** Its
  *   outcome is recorded on its own row, beside the load's. A transfer cut
  *   leaves the dictionary's identity as it was, so the daily check asks for
@@ -96,13 +96,10 @@ class Catalog {
 			return [];
 		}
 
-		$own = $this->hasLabels($anio, $serie);
-		// Only the operator changes, and it is one of two fixed ones; every value is bound.
 		$result = $this->db->executeQuery(
 			'SELECT anio, codigo, hoja, seccion, prestacion, columnas FROM *PREFIX*estadistica_code '
-			. 'WHERE serie = ? AND anio ' . ($own ? '=' : '>') . ' ? '
-			. 'AND codigo IN (SELECT jsonb_array_elements_text(CAST(? AS jsonb)))',
-			[$serie, $anio, json_encode(array_values($codigos), JSON_THROW_ON_ERROR)],
+			. 'WHERE serie = ? AND codigo IN (SELECT jsonb_array_elements_text(CAST(? AS jsonb)))',
+			[$serie, json_encode(array_values($codigos), JSON_THROW_ON_ERROR)],
 		);
 		$candidates = [];
 		while (($row = $result->fetch()) !== false) {
@@ -116,26 +113,24 @@ class Catalog {
 		}
 		$result->closeCursor();
 
-		return self::resolve($anio, $own, $codigos, $candidates);
+		return self::resolve($anio, $codigos, $candidates);
 	}
 
 	/**
-	 * Picks each código's label. With a dictionary of its own, a year reads
-	 * only that one. Without, each código reads the nearest later year that has
-	 * it. Pure, so the rule is unit-tested (CatalogTest).
+	 * Picks each código's label: the year's own, else the nearest later
+	 * year's, else the nearest earlier year's. Pure, so the rule is
+	 * unit-tested (CatalogTest).
 	 *
 	 * @param list<string> $codigos
 	 * @param array<string, list<array{anio: int, hoja: string, seccion: string, prestacion: string, columnas: array<int, string>}>> $candidates
 	 * @return array<string, Label>
 	 */
-	public static function resolve(int $anio, bool $own, array $codigos, array $candidates): array {
+	public static function resolve(int $anio, array $codigos, array $candidates): array {
+		$rank = static fn (array $row): array => [$row['anio'] < $anio, abs($row['anio'] - $anio)];
 		$labels = [];
 		foreach ($codigos as $codigo) {
-			$rows = array_filter(
-				$candidates[$codigo] ?? [],
-				static fn (array $row): bool => $own ? $row['anio'] === $anio : $row['anio'] > $anio,
-			);
-			usort($rows, static fn (array $a, array $b): int => $a['anio'] <=> $b['anio']);
+			$rows = $candidates[$codigo] ?? [];
+			usort($rows, static fn (array $a, array $b): int => $rank($a) <=> $rank($b));
 			$row = $rows[0] ?? null;
 
 			$labels[$codigo] = $row === null
@@ -332,7 +327,8 @@ class Catalog {
 			];
 		}
 
-		// A year reads its own labels, or the nearest later year's of the same serie.
+		// labelsFrom names the dictionary a year's catálogo comes from, its own or the
+		// nearest later year's of the same serie, not where every label comes from.
 		foreach ($status as $i => $row) {
 			if ($row['codes'] > 0) {
 				$status[$i]['labelsFrom'] = $row['anio'];
@@ -532,10 +528,10 @@ class Catalog {
 	 * one DISTINCT over the rows' primary key (≈ 1 s for a year of Serie A),
 	 * paid once per load, in the job.
 	 *
-	 * ponytail: a year that borrows labels is counted against the later
-	 * dictionaries stored when it loads. The upgrade, if a later dictionary
-	 * changing should recount it, is to recount every borrowing year after
-	 * each dictionary load.
+	 * ponytail: a year that borrows labels is counted against the other
+	 * years' dictionaries stored when it loads. The upgrade, if another
+	 * dictionary changing should recount it, is to recount every borrowing
+	 * year after each dictionary load.
 	 */
 	private function count(int $anio, string $serie): void {
 		$result = $this->db->executeQuery(
@@ -551,7 +547,11 @@ class Catalog {
 		);
 	}
 
-	/** The year whose dictionary labels $anio: its own, else the nearest later one's, else none. */
+	/**
+	 * The year whose dictionary gives $anio its catálogo tree and hoja/sección
+	 * scope: its own, else the nearest later one's, else none. Each código's
+	 * label follows resolve().
+	 */
 	private function labelYear(int $anio, string $serie): ?int {
 		return $this->hasLabels($anio, $serie) ? $anio : $this->nearestLater($anio, $serie);
 	}

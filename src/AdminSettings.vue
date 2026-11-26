@@ -732,7 +732,7 @@ export default {
 				return `Diccionario: ${dictionary.error}`
 			}
 			if (dictionary.labelsFrom === null) {
-				return 'No hay diccionario de este año ni de uno posterior: sus códigos se muestran «sin descripción».'
+				return 'No hay diccionario de este año ni de uno posterior: sus códigos usan las etiquetas de un año anterior o se muestran «sin descripción».'
 			}
 			if (dictionary.labelsFrom !== ingest.anio) {
 				return `Este año no trae un diccionario que se pueda leer: sus códigos usan las etiquetas del diccionario de ${dictionary.labelsFrom}.`

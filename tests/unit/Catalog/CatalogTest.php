@@ -43,7 +43,7 @@ class CatalogTest extends TestCase {
 	}
 
 	public function testAYearWithItsOwnDictionaryReadsTheWholeLabelOfEachCodigoAndColumn(): void {
-		$labels = Catalog::resolve(2099, true, ['02010420'], self::candidates([2099]));
+		$labels = Catalog::resolve(2099, ['02010420'], self::candidates([2099]));
 
 		self::assertSame(
 			[
@@ -61,25 +61,26 @@ class CatalogTest extends TestCase {
 		$candidates = self::candidates([2098, 2099]);
 		$candidates['02010420'][1]['prestacion'] = 'Etiqueta de un año más lejano';
 
-		$label = Catalog::resolve(2097, false, ['02010420'], $candidates)['02010420'];
+		$label = Catalog::resolve(2097, ['02010420'], $candidates)['02010420'];
 
 		self::assertSame(2098, $label['de']);
 		self::assertSame('Evaluación › Normal', $label['prestacion'], 'the nearest later year, not the furthest');
 		self::assertSame('etiqueta de 2098', Catalog::describe($label, 2097, 1)['nota']);
 	}
 
-	public function testAYearWithItsOwnDictionaryNeverBorrowsWhatItLacks(): void {
-		$candidates = self::candidates([2099]);
+	/** #26: a year's own label wins, then the nearest later year's, then the nearest earlier year's. */
+	public function testACodigoItsYearsDictionaryLacksTakesTheNearestLaterYearsLabelThenTheNearestEarlierOnes(): void {
+		$candidates = self::candidates([2096, 2097, 2099, 2100]);
+		$nota = static fn (int $anio): ?string => Catalog::describe(Catalog::resolve($anio, ['02010420'], $candidates)['02010420'], $anio, 1)['nota'];
 
-		$label = Catalog::resolve(2098, true, ['02010420'], $candidates)['02010420'];
-
-		self::assertNull($label['de'], 'códigos and columns change by year (DEIS): a later year\'s label may mean something else');
-		self::assertSame(Catalog::NO_LABEL, $label['prestacion']);
+		self::assertNull($nota(2097), 'its own label wins');
+		self::assertSame('etiqueta de 2099', $nota(2098), 'the nearest later year, before an earlier one as near');
+		self::assertSame('etiqueta de 2100', $nota(2102), 'the nearest earlier year, when no later one has it');
 	}
 
 	/** a6: an unknown código is «sin descripción», and it is counted for the admin section. */
 	public function testAnUnknownCodigoIsSinDescripcionAndCounted(): void {
-		$labels = Catalog::resolve(2099, true, ['02010420', '03500366', '09000001'], self::candidates([2099]));
+		$labels = Catalog::resolve(2099, ['02010420', '03500366', '09000001'], self::candidates([2099]));
 
 		self::assertSame(
 			['hoja' => '', 'seccion' => '', 'prestacion' => 'sin descripción', 'columna' => 'sin descripción', 'nota' => null],
@@ -89,7 +90,7 @@ class CatalogTest extends TestCase {
 	}
 
 	public function testAColumnTheDictionaryDoesNotNameIsSinDescripcion(): void {
-		$label = Catalog::resolve(2099, true, ['06900300'], self::candidates([2099]))['06900300'];
+		$label = Catalog::resolve(2099, ['06900300'], self::candidates([2099]))['06900300'];
 
 		self::assertSame('TOTAL › Hombres', Catalog::describe($label, 2099, 2)['columna']);
 		self::assertSame(Catalog::NO_LABEL, Catalog::describe($label, 2099, 3)['columna'], 'this row has no third figure');

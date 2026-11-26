@@ -22,8 +22,9 @@ figure is the sum of the chosen
 prestaciones × columnas.
 
 **Diccionario** — DEIS's DICCIONARIO CODIGOS for one year and serie. It labels each (año, código, columna) with its
-hoja, sección, fila and column header. A year with no readable dictionary borrows the nearest later year's labels,
-and says so. A código no dictionary names shows as «sin descripción», and is counted.
+hoja, sección, fila and column header. A código the year's own dictionary lacks (every código, for a year with no
+readable dictionary) borrows the nearest later year's label, else the nearest earlier year's, and says so. A código no
+dictionary names shows as «sin descripción», and is counted.
 
 **Base de Establecimientos** — DEIS's register of establishments. It gives each code its tipo, dependencia, nivel de
 atención, servicio de salud, región and comuna, which is what a peer group chooses by.

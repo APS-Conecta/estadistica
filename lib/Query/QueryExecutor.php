@@ -116,8 +116,8 @@ class QueryExecutor {
 	/**
 	 * A código's label as the series' readers need it: its hoja, sección and
 	 * prestación, and the chosen columns' headers. It comes from the periodo's
-	 * last year, whose own dictionary or the nearest later one's labels it;
-	 * nota says which.
+	 * last year's own dictionary, else the nearest later or earlier year's
+	 * that has it; nota says which.
 	 *
 	 * @param Label $label
 	 * @param non-empty-list<int> $columnas

@@ -19,6 +19,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
   default end month and the metas view's nacional and pares a month ahead. It is now the last month whose rows reach
   three quarters of the month before's, the completeness check's ratio. The local series is unchanged. No
   migration: a year loaded before this keeps its fecha de corte until it loads again.
+- **A código its year's dictionary lacks takes its label from the nearest other year** (#26): a year's own label
+  wins, else the nearest later year's, else the nearest earlier year's, marked «etiqueta de <año>». A código no
+  dictionary labels stays «sin descripción». No migration: a year loaded before this keeps its unmapped («sin
+  descripción») count until that year loads again.
 
 ## [0.4.0] - 2026-11-12
 
