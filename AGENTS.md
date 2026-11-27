@@ -31,6 +31,7 @@ Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for ev
 - **Never edit** `package-lock.json`, `composer.lock`, the dependency lists
   in `package.json`/`composer.json`, `openapi.json` (generated from `ApiController` by `scripts/openapi.sh`;
   `make smoke` fails on drift), or the aps-common copies `src/aps/`, `vendor/aps/common/src/`, `tests/stubs/OC/Hooks/Emitter.php`.
+  Exception: a dependency bump the package manager makes, which rewrites the list and regenerates the lockfile itself.
 - **Strings:** what a person reads — templates, `RefusedException` messages — is Spanish, written as literals the way the
   surrounding code does; this app uses no `t()` / `$l->t()`, so do not introduce them. Code, comments, commits and PR text English.
 - **One concern per PR**, under 50 lines of hand-written source (rebuilt bundle excluded), and it contains every change
