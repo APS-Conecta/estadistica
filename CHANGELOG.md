@@ -12,7 +12,8 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 - **The build runs on `@nextcloud/webpack-vue-config` 7.1** (#104): its development server no longer pulls uuid 8.3.2,
   so `npm audit` drops GHSA-w5hq-g745-h8pq. `sass-loader` 17 and `minimizer-webpack-plugin` replace `sass-loader` 16
   and `terser-webpack-plugin`, as 7.x requires. GHSA-848j-6mx2-7j84 (elliptic, no fix) stays: 7.x still requires
-  `node-polyfill-webpack-plugin` 4.0.0, whose crypto polyfill brings elliptic. Development only; nothing reaches `js/`.
+  `node-polyfill-webpack-plugin` 4.0.0, whose crypto polyfill brings elliptic. Neither advisory's package reaches
+  `js/`; the two entry bundles shrink by about 2 KB with unchanged behaviour.
 - **A national consulta of a whole hoja answers within the 10 s limit** (#27): every chosen cell was unpivoted
   before counting distinct establishments, so all 50 columns of a hoja over the default window were cancelled. Each
   establishment is now summed first and its sums then summed and counted, which PostgreSQL does in parallel; columns
