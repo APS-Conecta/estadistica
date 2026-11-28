@@ -1,8 +1,5 @@
 <template>
 	<NcContent app-name="estadistica">
-		<!-- ponytail: the view lives in the page, so a reload returns to the Resumen
-		     and a tablero cannot be linked; hash links (#/tableros/<id>) are the
-		     upgrade when one must be sent. -->
 		<NcAppNavigation aria-label="Estadística">
 			<template #list>
 				<NcAppNavigationItem v-for="item in VIEWS"
@@ -54,7 +51,7 @@
 					<QueryBuilder v-if="builderOpened" v-show="view === 'consultar'" :establishment="establishment" />
 					<SavedQuestions v-if="view === 'preguntas'" />
 					<EstadisticaDashboard v-if="view === 'tableros'" />
-					<SanitaryGoals v-if="view === 'metas'" :establishment="establishment" :year="metasYear" />
+					<SanitaryGoals v-if="view === 'metas'" :establishment="establishment" :year="metasYear" @year="followYear" />
 				</template>
 			</div>
 		</NcAppContent>
@@ -103,6 +100,18 @@ const VIEWS = [
 	{ id: 'tableros', nombre: 'Tableros', icon: mdiViewGridOutline },
 ]
 
+/** A view's address: #/<view>, and Metas Sanitarias' year as #/metas/<año>. */
+const addressOf = (view, metasYear) => `#/${view}${metasYear ? `/${metasYear}` : ''}`
+
+/** The view and Metas year an address names; null for an address the app doesn't know. */
+function routeOf(hash) {
+	const [, view, year] = /^#\/(\w+)(?:\/(\d{4}))?$/.exec(hash) ?? []
+	if (!VIEWS.some((item) => item.id === view) || (year && view !== 'metas')) {
+		return null
+	}
+	return { view, metasYear: year ? Number(year) : null }
+}
+
 export default {
 	name: 'App',
 
@@ -145,10 +154,36 @@ export default {
 		},
 	},
 
+	created() {
+		this.route()
+		window.addEventListener('hashchange', this.route)
+	},
+
 	methods: {
+		/** Opens the view the address names; an address the app doesn't know opens the Resumen as #/resumen. */
+		route() {
+			const route = routeOf(window.location.hash)
+			if (!route) {
+				window.history.replaceState(null, '', addressOf('resumen'))
+			}
+			Object.assign(this, route ?? { view: 'resumen', metasYear: null })
+		},
+
+		/** Opens a view as a new history entry, so Back returns to the one before. */
 		show(id, metasYear = null) {
-			this.view = id
-			this.metasYear = metasYear
+			const address = addressOf(id, metasYear)
+			if (window.location.hash !== address) {
+				window.history.pushState(null, '', address)
+			}
+			this.route()
+		},
+
+		/** The address follows the year Metas Sanitarias shows, in the same history entry. */
+		followYear(anio) {
+			if (this.view === 'metas') {
+				this.metasYear = anio
+				window.history.replaceState(null, '', addressOf('metas', anio))
+			}
 		},
 	},
 }

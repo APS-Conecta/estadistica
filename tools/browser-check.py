@@ -47,6 +47,11 @@ API's figures. At Nextcloud's narrowest desktop width every control stays in
 its step, with the answer beside the steps; on a phone the answer follows
 them.
 
+And every view's address (#127), in Chromium and Firefox: each opens its view, and a reload keeps it; Back
+and Forward step between the views opened, a change of the Metas year replacing its entry; a year with no
+Metas opens GET indicadores' own with its notice; an unknown address opens the Resumen as #/resumen; and a
+half-built consulta survives a visit to Tableros without reaching the address.
+
 And Administración → Estadística on a phone (#22): every table fits its
 section or scrolls inside it, and the page does not scroll sideways.
 
@@ -95,6 +100,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("ESTADISTICA_URL", "http://localhost:8092")
+APP = f"{BASE}/index.php/apps/estadistica/"
 CONTAINER = os.environ.get("ESTADISTICA_CONTAINER", "estadistica-dev-nextcloud-1")
 DB_CONTAINER = os.environ.get("ESTADISTICA_DB_CONTAINER", "estadistica-dev-db-1")
 ADMIN, ADMIN_PASSWORD = "admin", "admin"
@@ -200,7 +206,7 @@ FIRST_LOG_IN_MS = 90_000
 
 
 def log_in(page, user, password):
-    page.goto(f"{BASE}/index.php/apps/estadistica/", wait_until="domcontentloaded")
+    page.goto(APP, wait_until="domcontentloaded")
     if "/login" in page.url:
         page.wait_for_selector("#user", timeout=30_000)
         page.fill("#user", user)
@@ -208,7 +214,7 @@ def log_in(page, user, password):
         # A user's first log-in does Nextcloud's first-run work (home folder, app hooks) before the redirect; on a
         # loaded host that took longer than 30 s, so the log-in gets its own budget.
         page.click('button[type="submit"]', timeout=FIRST_LOG_IN_MS)
-        page.wait_for_url(f"{BASE}/index.php/apps/estadistica/**", timeout=FIRST_LOG_IN_MS)
+        page.wait_for_url(f"{APP}**", timeout=FIRST_LOG_IN_MS)
 
 
 # Nextcloud's own noise on a fresh instance, not the app's: the header asks for
@@ -219,6 +225,10 @@ CORE_NOISE = ("/ocs/v2.php/apps/user_status/api/", "Failed to load user status")
 
 # What was let through as CORE_NOISE, said at the end: an ignored line is never silent.
 IGNORED = []
+
+# The refusals a step asks for on purpose, by URL: GET indicadores for a year with no Metas (#127), which the
+# browser logs as a failed resource. Let through as IGNORED is, and said at the end with it.
+ASKED_REFUSALS = []
 
 
 def console_errors(page):
@@ -233,7 +243,7 @@ def console_errors(page):
         text = f"{message.text} [{message.location.get('url', '')}]"
         if message.type != "error":
             return
-        if any(noise in text for noise in CORE_NOISE):
+        if any(noise in text for noise in (*CORE_NOISE, *ASKED_REFUSALS)):
             IGNORED.append(text)
         else:
             found.append(text)
@@ -314,6 +324,73 @@ def walk_the_navigation(page, fetched, browser):
         page.locator("#estadistica-establishment").wait_for(timeout=30_000)
     except PlaywrightTimeout:
         failures.append(f"{browser}: «{SETTINGS}» did not open the admin section (at {page.url})")
+    return failures
+
+
+def addresses(page, where, metas):
+    """Every view's address (#127), given GET indicadores' own year: each opens its view, and a reload keeps it;
+    Back and Forward step between the views opened, and a change of the Metas year replaces its entry; a year with
+    no Metas opens GET indicadores' own with its notice, and the address follows; an unknown address opens the Resumen as
+    #/resumen; and a half-built consulta survives a visit to another view, out of the address."""
+    failures = []
+    shown = {view: selector for _, view, selector in VIEWS}
+    metas_of = lambda anio: (f"#/metas/{anio}", f".estadistica-goals h2:has-text('{anio}')")
+
+    def shows(name, at, selector, how):
+        try:
+            page.locator(selector).first.wait_for(timeout=30_000)
+            title = page.locator(".estadistica-heading h2").inner_text().strip()
+        except PlaywrightTimeout:
+            title = None
+        if (title, page.evaluate("() => location.hash")) != (name, at):
+            failures.append(f"{where}: {how} shows {title!r} at {page.evaluate('() => location.hash')!r}, not {name} at {at}")
+
+    def opens(address):
+        page.goto("about:blank")
+        page.goto(APP + address)
+
+    for name, view, selector in VIEWS:
+        at, selector = metas_of(metas["anio"]) if view == "metas" else (f"#/{view}", selector)
+        opens(at)
+        shows(name, at, selector, f"opening {at}")
+        page.reload()
+        shows(name, at, selector, f"a reload of {at}")
+
+    other = next(anio for anio in metas["anios"] if anio != metas["anio"])
+    opens("#/resumen")
+    for name in ("Consultar", "Tableros", "Metas Sanitarias"):
+        navigation_entry(page, name).click()
+    shows("Metas Sanitarias", *metas_of(metas["anio"]), "Metas Sanitarias from the navigation")
+    page.locator(".estadistica-goals__year input").click()
+    page.get_by_role("option", name=str(other), exact=True).click()
+    shows("Metas Sanitarias", *metas_of(other), f"choosing {other}")
+    for step, name, view in ((page.go_back, "Tableros", "tableros"), (page.go_back, "Consultar", "consultar"),
+                             (page.go_forward, "Tableros", "tableros")):
+        step()
+        shows(name, f"#/{view}", shown[view], f"{step.__name__} to {name}")
+    page.go_forward()
+    shows("Metas Sanitarias", *metas_of(other), "go_forward to Metas Sanitarias")
+
+    # The year before the first with Metas (GET indicadores answers 404), and the year before the window (400).
+    for absent in (min(metas["anios"]) - 1, YEAR - 1):
+        ASKED_REFUSALS.append(f"/api/v1/indicadores?pares=tipo&anio={absent}]")
+        opens(f"#/metas/{absent}")
+        shows("Metas Sanitarias", *metas_of(metas["anio"]), f"opening #/metas/{absent}, a year with no Metas,")
+        if not page.get_by_text(f"No hay Metas Sanitarias de {absent}").is_visible():
+            failures.append(f"{where}: #/metas/{absent} does not say «No hay Metas Sanitarias de {absent}»")
+
+    opens("#/no-existe")
+    shows("Resumen", "#/resumen", shown["resumen"], "opening #/no-existe")
+
+    navigation_entry(page, "Consultar").click()
+    page.get_by_label("Buscar una prestación").fill(CODE)
+    page.get_by_role("option").filter(has_text=f"{PRESTACION} ({CODE}) — {HOJA}").click()
+    navigation_entry(page, "Tableros").click()
+    page.go_back()
+    shows("Consultar", "#/consultar", shown["consultar"], "Back to a half-built consulta")
+    if not page.locator(".estadistica-builder .vs__selected").filter(has_text=CODE).is_visible():
+        failures.append(f"{where}: the half-built consulta lost its prestación on a visit to Tableros")
+    page.screenshot(path=str(SHOTS / f"{where}-direcciones.png"))
     return failures
 
 
@@ -790,6 +867,7 @@ def main():
         february = next(mes for mes in meta_vi["meses"] if mes["mes"] == f"{METAS_YEAR}-02")
         if (february["numerador"], february["denominador"], february["porcentaje"]) != (5, 8, 62.5):
             failures.append(f"the metas view did not answer the seeded {METAS_YEAR} figures for Meta VI: {february}")
+        metas = ocs("GET", "indicadores?pares=", token)
         resumen_answer = ocs("GET", "resumen", token)
         resumen = resumen_api_figures(resumen_answer)
         failures += resumen_against_indicadores(resumen_answer, ocs("GET", f"indicadores?anio={resumen_answer['anio']}&pares=", token))
@@ -830,6 +908,7 @@ def main():
             failures += arrange_the_card(page, f"Navegador {RUN}")
             failures += open_the_pregunta(page, f"Navegador {RUN}", "chromium pregunta")
             failures += walk_the_navigation(page, fetched, "chromium")
+            failures += addresses(page, "chromium", metas)
 
             # #88: a consulta from the search to the answer, then the layout at the narrowest desktop.
             log_in(page, ADMIN, ADMIN_PASSWORD)
@@ -897,6 +976,7 @@ def main():
             fetched = chunks_fetched(page)
             log_in(page, ADMIN, ADMIN_PASSWORD)
             failures += walk_the_navigation(page, fetched, "firefox")
+            failures += addresses(page, "firefox", metas)
             log_in(page, ADMIN, ADMIN_PASSWORD)
             if (asked := ask_in_consultar(page, "firefox")) != expected:
                 failures.append(f"Consultar in Firefox shows {asked}, the API answers {expected}")
@@ -935,7 +1015,7 @@ def main():
             occ("config:app:delete", "estadistica", "deis_code", check=False)
 
     if IGNORED:
-        print(f"note  ignored {len(IGNORED)} console error(s) of Nextcloud's own user status: {IGNORED}")
+        print(f"note  ignored {len(IGNORED)} console error(s) of Nextcloud's own user status or a refusal asked for on purpose: {IGNORED}")
     for failure in failures:
         print(f"FAIL  {failure}")
     if failures:
@@ -947,6 +1027,7 @@ def main():
     print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, light and dark, and «{SETTINGS}» opens the admin section for an admin only")
+    print("ok    every view opens from its address and a reload keeps it, Back and Forward step between views with the Metas year replacing its entry, a year with no Metas falls back to GET indicadores' own year with its notice, an unknown address opens #/resumen, and a half-built consulta stays out of the address, in Chromium and Firefox")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    on a phone every table of Administración → Estadística fits its section or scrolls inside it, and the page does not scroll sideways")
     print("ok    Consultar's answer, a pregunta and a tablero card draw their SVG chart at its container's width, ours in the primary and the country muted, named in the legend and read by keyboard, light and dark, in Chromium and Firefox")

@@ -35,6 +35,10 @@
 			</fieldset>
 		</div>
 
+		<NcNoteCard v-if="absent" type="info">
+			No hay Metas Sanitarias de {{ absent }}.
+		</NcNoteCard>
+
 		<NcNoteCard v-if="failed" type="error">
 			{{ failed }}
 		</NcNoteCard>
@@ -187,15 +191,19 @@ export default {
 	props: {
 		/** The initial state's establishment: whether this install has one. */
 		establishment: { type: Object, required: true },
-		/** The year to open on, as the Resumen offers it; null opens GET indicadores' own. */
+		/** The year to open on, as the address names it; null opens GET indicadores' own. */
 		year: { type: Number, default: null },
 	},
+
+	emits: ['year'],
 
 	data() {
 		return {
 			metas: null,
 			anios: [],
 			anio: this.year,
+			/** The year asked for that has no Metas, while GET indicadores' own shows in its place. */
+			absent: null,
 			pares: ['tipo'],
 			loading: false,
 			missing: false,
@@ -233,6 +241,14 @@ export default {
 		},
 	},
 
+	watch: {
+		year(anio) {
+			if (anio !== this.anio) {
+				this.chooseYear(anio)
+			}
+		},
+	},
+
 	mounted() {
 		this.load()
 	},
@@ -245,6 +261,7 @@ export default {
 
 		chooseYear(anio) {
 			this.anio = anio
+			this.absent = null
 			this.load()
 		},
 
@@ -269,7 +286,15 @@ export default {
 				this.anios = this.metas.anios
 				this.anio = this.metas.anio
 				this.missing = false
+				this.$emit('year', this.anio)
 			} catch (error) {
+				// A year asked for with no Metas (404), or outside the years Metas can have (400), opens GET indicadores' own.
+				if ([400, 404].includes(error?.response?.status) && this.anio !== null) {
+					this.absent = this.anio
+					this.anio = null
+					await this.load()
+					return
+				}
 				if (error?.response?.status === 404) {
 					this.metas = null
 					this.missing = true

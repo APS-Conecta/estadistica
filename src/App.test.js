@@ -38,6 +38,8 @@ const title = (wrapper) => wrapper.find('.estadistica-heading h2').text()
 describe('App', () => {
 	beforeEach(() => {
 		user.isAdmin = false
+		// The address carries the view (#127): each test opens the page at none.
+		window.history.replaceState(null, '', '/')
 		// Nextcloud's page holds the skip links NcContent adds.
 		document.body.innerHTML = '<div id="skip-actions"></div>'
 	})

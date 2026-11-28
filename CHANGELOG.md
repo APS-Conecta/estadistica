@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Every view has an address that a reload keeps, and Back steps between views** (#127): `#/resumen`,
+  `#/metas/<año>`, `#/consultar`, `#/preguntas` and `#/tableros` open their view; a change of the Metas Sanitarias
+  year replaces its history entry. A year with no Metas opens GET indicadores' own year with «No hay Metas Sanitarias
+  de <año>», and an address the app doesn't know opens the Resumen as `#/resumen`. The server is unchanged.
+
 ### Changed
 
 - **CI runs the org's shared style check, and the app keeps to Nextcloud's components and variables** (#108): the
