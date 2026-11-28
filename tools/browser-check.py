@@ -330,7 +330,7 @@ def walk_the_navigation(page, fetched, browser):
 def addresses(page, where, metas):
     """Every view's address (#127), given GET indicadores' own year: each opens its view, and a reload keeps it;
     Back and Forward step between the views opened, and a change of the Metas year replaces its entry; a year with
-    no Metas opens the newest with its notice, and the address follows; an unknown address opens the Resumen as
+    no Metas opens GET indicadores' own with its notice, and the address follows; an unknown address opens the Resumen as
     #/resumen; and a half-built consulta survives a visit to another view, out of the address."""
     failures = []
     shown = {view: selector for _, view, selector in VIEWS}
@@ -1027,7 +1027,7 @@ def main():
     print("ok    the Resumen's and Metas Sanitarias' status badges take the light and the dark theme's own colours, in Chromium and Firefox, and a meta's row opens its month table")
     print("ok    a meta's detail opens on Evolución from its title and on Origen from its figure, its chart at its container's width in the theme's primary, read by keyboard, Escape giving the focus back, light and dark, in Chromium and Firefox")
     print(f"ok    Chromium and Firefox open every view from the navigation, each with its chunk, light and dark, and «{SETTINGS}» opens the admin section for an admin only")
-    print("ok    every view opens from its address and a reload keeps it, Back and Forward step between views with the Metas year replacing its entry, a year with no Metas falls back to the newest with its notice, an unknown address opens #/resumen, and a half-built consulta stays out of the address, in Chromium and Firefox")
+    print("ok    every view opens from its address and a reload keeps it, Back and Forward step between views with the Metas year replacing its entry, a year with no Metas falls back to GET indicadores' own year with its notice, an unknown address opens #/resumen, and a half-built consulta stays out of the address, in Chromium and Firefox")
     print("ok    Consultar finds a prestación by its código and shows the API's figures in Chromium, light and dark, and Firefox; at 1024 px its controls stay in their steps beside the answer, which follows them on a phone")
     print("ok    on a phone every table of Administración → Estadística fits its section or scrolls inside it, and the page does not scroll sideways")
     print("ok    Consultar's answer, a pregunta and a tablero card draw their SVG chart at its container's width, ours in the primary and the country muted, named in the legend and read by keyboard, light and dark, in Chromium and Firefox")

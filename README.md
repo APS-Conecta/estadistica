@@ -17,7 +17,7 @@ Tiene cinco vistas, más una sección de administración:
 - **Tableros**: preguntas guardadas dispuestas como tarjetas; cada tarjeta hace su propia consulta.
 - **Administración → Estadística**: la ventana de años, el estado de cada carga, la carpeta de planillas del establecimiento y el estado de cada una, la población de FONASA, los compromisos de las metas de cada año y una puerta para los archivos que la aplicación no puede descargar. Un administrador puede delegarla a cualquier grupo.
 
-Cada vista tiene su dirección, que `routeOf()` de `src/App.vue` lee: `#/resumen`, `#/metas/<año>`, `#/consultar`, `#/preguntas` y `#/tableros`. Una recarga conserva la vista, y Atrás y Adelante recorren las vistas abiertas; cambiar el año de Metas Sanitarias reemplaza su dirección sin sumar un paso. Un año sin Metas abre el más reciente con «No hay Metas Sanitarias de <año>», y una dirección desconocida abre el Resumen como `#/resumen`.
+Cada vista tiene su dirección, que `routeOf()` de `src/App.vue` lee: `#/resumen`, `#/metas/<año>`, `#/consultar`, `#/preguntas` y `#/tableros`. Una recarga conserva la vista, y Atrás y Adelante recorren las vistas abiertas (`show()` y `route()`); cambiar el año de Metas Sanitarias reemplaza su dirección sin sumar un paso (`followYear()`). Un año sin Metas abre el año que la vista abre por omisión, con «No hay Metas Sanitarias de <año>» (`load()` de `src/components/Goals.vue`), y una dirección desconocida abre el Resumen como `#/resumen` (`route()`).
 
 ## Documentación
 
