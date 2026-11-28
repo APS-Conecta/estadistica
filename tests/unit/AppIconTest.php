@@ -10,9 +10,9 @@ use PHPUnit\Framework\TestCase;
 use SimpleXMLElement;
 
 /**
- * The icon pair is a contract, not decoration (territorio pins the same rules):
- * each file is a single-tint glyph naming its surface, parseable as XML — an
- * SVG that fails to parse is served with a 200 and renders nothing.
+ * The icon pair is a contract, not decoration: each file is one single-tint
+ * Material Design Icons glyph in MDI's 24-unit viewBox, naming its surface and
+ * parseable as XML — an SVG that fails to parse is served with a 200 and renders nothing.
  */
 class AppIconTest extends TestCase {
 	private const APP_DIR = __DIR__ . '/../..';
@@ -32,6 +32,8 @@ class AppIconTest extends TestCase {
 		$xml = @simplexml_load_file($path);
 		self::assertInstanceOf(SimpleXMLElement::class, $xml, "$file must parse as XML");
 		self::assertSame('svg', $xml->getName(), "$file's root element must be the svg itself, not a wrapper");
+		self::assertSame('0 0 24 24', (string)$xml['viewBox'], "$file must keep Material Design Icons' 24-unit viewBox");
+		self::assertCount(1, $xml->path, "$file must be one glyph");
 		$source = (string)file_get_contents($path);
 		self::assertStringContainsString($tint, $source, "$file must be the $tint single-tint glyph");
 		self::assertStringContainsString('Surface:', $source, "$file must name its surface in a comment");
