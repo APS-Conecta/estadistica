@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **CI runs the org's shared style check, and the app keeps to Nextcloud's components and variables** (#108): the
+  Resumen's filter tiles, a card's title and figure and a Metas Sanitarias row are `NcButton`s, and the chart's
+  text, the Resumen's counts and the titles size in rem. The app icon is the Material Design Icons `chart-box`
+  glyph, white and black, in its 24-unit viewBox.
+
 ### Fixed
 
 - **The build runs on `@nextcloud/webpack-vue-config` 7.1** (#104): its development server no longer pulls uuid 8.3.2,

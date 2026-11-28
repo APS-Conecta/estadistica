@@ -19,7 +19,8 @@ Nextcloud 34 app for APS Conecta Gestión: the REM figures DEIS publishes for ev
 - **Gate before opening a PR** — what `ci.yml` and `release.yml` run. This repo uses **npm**, not pnpm:
   `git clone --depth 1 https://github.com/APS-Conecta/aps-common.git ../aps-common` if it is missing — aps-common is
   private, so if the clone fails, skip the steps that need it and list them as not run; never edit a workflow to work around it;
-  `make aps-drift`; `npm ci`; `npm run lint-js`; `npm test`; `make bundles` (builds, then asserts every bundle,
+  `make aps-drift`; `npm ci`; `npm run lint-js`; the org's shared style check at the commit the `style` job of
+  `.github/workflows/ci.yml` pins; `npm test`; `make bundles` (builds, then asserts every bundle,
   its `.LICENSE.txt` and each tab's chunk, that no bundle embeds a CSS source map, and the main bundle against `MAIN_BUDGET` in the `Makefile`; never committed — the release packs them); then
   `make test`;
   `make instance-up && make smoke && make test-browser` (Playwright for Python at the version `ci.yml` pins, with Chromium and Firefox), then `make instance-clean`.

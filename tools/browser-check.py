@@ -27,7 +27,7 @@ open to their month table (#87).
 
 And a meta's detail (#86), in Chromium and Firefox, light and dark: a card's
 title opens it on Evolución, whose chart draws at its container's width with
-11 px text and the newest year in the theme's primary, and reads a month by
+0.75rem text and the newest year in the theme's primary, and reads a month by
 keyboard; the Origen tab shows the ruta; Escape gives the focus back; the
 card's figure opens it on Origen. The newest metas wait for their rutas
 oficiales, so that page alone gets GET resumen with one meta given a figure
@@ -701,11 +701,13 @@ def resumen_detail(browser, name, scheme):
     if selected() != "Evolución":
         failures.append(f"{where}: a card's title opened the detail on {selected()!r}, not Evolución")
     drawn = plot.evaluate("(svg) => { const probe = document.createElement('span'); probe.style.color = 'var(--color-primary-element)';"
-                          " svg.parentElement.append(probe); const primary = getComputedStyle(probe).color; probe.remove();"
-                          " return { font: getComputedStyle(svg.querySelector('text')).fontSize, primary,"
+                          " probe.style.fontSize = '0.75rem'; svg.parentElement.append(probe);"
+                          " const primary = getComputedStyle(probe).color, small = getComputedStyle(probe).fontSize; probe.remove();"
+                          " return { font: getComputedStyle(svg.querySelector('text')).fontSize, small, primary,"
                           " newest: getComputedStyle(svg.querySelector('.estadistica-chart__line--emphasis path')).stroke } }")
-    if drawn["font"] != "11px" or drawn["newest"] != drawn["primary"]:
-        failures.append(f"{where}: the chart's text is {drawn['font']} and its newest year {drawn['newest']}, not 11px in the primary {drawn['primary']}")
+    if drawn["font"] != drawn["small"] or drawn["newest"] != drawn["primary"]:
+        failures.append(f"{where}: the chart's text is {drawn['font']} and its newest year {drawn['newest']},"
+                        f" not 0.75rem ({drawn['small']}) in the primary {drawn['primary']}")
     plot.focus()
     page.keyboard.press("ArrowLeft")
     said = sidebar.locator(".estadistica-chart__readout").inner_text().strip()

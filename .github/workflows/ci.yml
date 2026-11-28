@@ -65,6 +65,13 @@ jobs:
       - name: The build produces the bundles
         run: make bundles
 
+  # The org's shared style check over the whole app: no literal colour, no font size in px and no
+  # plain <button>. Pinned by commit SHA, as its header asks.
+  style:
+    uses: APS-Conecta/.github/.github/workflows/style-check.yml@5d3e0c9c180e5204c978e48b92dd3e4908955a0b # 2026-11-26
+    permissions:
+      contents: read
+
   smoke:
     name: Smoke — the wiring no unit test can see (compose instance)
     runs-on: ubuntu-latest
