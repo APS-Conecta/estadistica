@@ -17,6 +17,8 @@ Tiene cinco vistas, más una sección de administración:
 - **Tableros**: preguntas guardadas dispuestas como tarjetas; cada tarjeta hace su propia consulta.
 - **Administración → Estadística**: la ventana de años, el estado de cada carga, la carpeta de planillas del establecimiento y el estado de cada una, la población de FONASA, los compromisos de las metas de cada año y una puerta para los archivos que la aplicación no puede descargar. Un administrador puede delegarla a cualquier grupo.
 
+Cada vista tiene su dirección, que `routeOf()` de `src/App.vue` lee: `#/resumen`, `#/metas/<año>`, `#/consultar`, `#/preguntas` y `#/tableros`. Una recarga conserva la vista, y Atrás y Adelante recorren las vistas abiertas; cambiar el año de Metas Sanitarias reemplaza su dirección sin sumar un paso. Un año sin Metas abre el más reciente con «No hay Metas Sanitarias de <año>», y una dirección desconocida abre el Resumen como `#/resumen`.
+
 ## Documentación
 
 La documentación vive en el sitio de documentación de la organización:
@@ -77,7 +79,7 @@ Las pruebas y compuertas:
 - `make aps-drift`: las copias vendorizadas de `aps-common` están al día (`make aps-sync` las refresca).
 - `make smoke`: el cableado contra la instancia de desarrollo, incluida la comprobación «openapi.json regenerates without drift».
 - `make test-integration`: la batería de integración contra el PostgreSQL de la instancia de desarrollo (requiere `make deps` antes). Ningún trabajo de CI la ejecuta; correrla antes de cambiar `lib/`.
-- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, y un recorrido por la navegación de la aplicación en Chromium y en Firefox (cada vista, con el tema claro y el oscuro; «Ajustes de Estadística» solo para un administrador; la navegación plegada en un teléfono) sin violaciones de CSP ni errores de consola. Requiere en el host Playwright para Python, en la versión que fija `ci.yml`, con sus navegadores Chromium y Firefox (`python3 -m playwright install chromium firefox`). CI la ejecuta en cada PR y guarda sus capturas como artefacto.
+- `make test-browser`: las cifras de una tarjeta de tablero contra las de la API, y un recorrido por la navegación de la aplicación en Chromium y en Firefox (cada vista, con el tema claro y el oscuro; «Ajustes de Estadística» solo para un administrador; la navegación plegada en un teléfono; la dirección de cada vista, la recarga y Atrás y Adelante) sin violaciones de CSP ni errores de consola. Requiere en el host Playwright para Python, en la versión que fija `ci.yml`, con sus navegadores Chromium y Firefox (`python3 -m playwright install chromium firefox`). CI la ejecuta en cada PR y guarda sus capturas como artefacto.
 - `make bundles`: compila (`npm run build`) y comprueba que existan los dos paquetes de `js/`, sus `.LICENSE.txt` y el fragmento de cada vista, que ningún paquete incruste un mapa de fuentes de CSS y que el paquete principal no pase de `MAIN_BUDGET`, su presupuesto en el `Makefile`. Los paquetes no se confirman; CI y el flujo de release ejecutan lo mismo.
 
 La integración continua (`.github/workflows/ci.yml`) ejecuta `make aps-drift`, la comprobación de estilo compartida de la organización (su trabajo `style`, fijado por commit), `make test`, `npm run lint-js`, `npm test`, la comprobación de los paquetes, y `make smoke` y `make test-browser`, cada una sobre una instancia en frío; el flujo de release (`.github/workflows/release.yml`) compila y empaqueta en cada PR.
