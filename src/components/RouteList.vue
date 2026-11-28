@@ -114,7 +114,7 @@ export default {
 
 .estadistica-route__parte h3 {
 	margin: 0;
-	font-size: 16px;
+	font-size: 1.1rem;
 }
 
 .estadistica-route ul {

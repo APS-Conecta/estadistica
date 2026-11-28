@@ -12,16 +12,16 @@
 			Meta {{ meta.codigo }} {{ anio }}
 		</p>
 		<h3 :id="`resumen-${meta.codigo}-titulo`" class="estadistica-meta__titulo">
-			<button type="button" class="estadistica-meta__abrir" @click="$emit('open', 'evolucion', $event)">
+			<NcButton class="estadistica-meta__abrir" variant="tertiary-no-background" alignment="start" @click="$emit('open', 'evolucion', $event)">
 				{{ meta.nombre }}
-			</button>
+			</NcButton>
 		</h3>
 
 		<template v-if="judged">
 			<p>
-				<button type="button" class="estadistica-cifra estadistica-meta__cifra" @click="$emit('open', 'origen', $event)">
+				<NcButton class="estadistica-cifra estadistica-meta__cifra" variant="tertiary-no-background" alignment="start" @click="$emit('open', 'origen', $event)">
 					<span class="estadistica-meta__porcentaje">{{ percent(meta.porcentaje) }}</span> <span v-if="!meta.manual" class="estadistica-meta__cuenta">{{ figure(meta.numerador) }} de {{ figure(meta.denominador) }}</span>
-				</button>
+				</NcButton>
 			</p>
 			<GoalMeter :value="meta.porcentaje"
 				:target="target"
@@ -54,6 +54,7 @@
 </template>
 
 <script>
+import NcButton from '@nextcloud/vue/components/NcButton'
 import { formatValue } from '../charts.js'
 import { monthName } from '../query.js'
 import { statusOf, targetNameOf, targetOf } from '../status.js'
@@ -63,7 +64,7 @@ import StatusBadge from './StatusBadge.vue'
 export default {
 	name: 'MetaCard',
 
-	components: { GoalMeter, StatusBadge },
+	components: { GoalMeter, NcButton, StatusBadge },
 
 	props: {
 		/** One of GET resumen's metas. */
@@ -152,7 +153,7 @@ export default {
 }
 
 .estadistica-meta__titulo {
-	font-size: 16px;
+	font-size: 1.1rem;
 	line-height: 1.35;
 }
 
@@ -160,7 +161,7 @@ export default {
 	color: var(--color-text-maxcontrast);
 }
 
-.estadistica-meta__cifra {
+.estadistica-meta__cifra :deep(.button-vue__text) {
 	display: inline-flex;
 	flex-wrap: wrap;
 	align-items: baseline;

@@ -66,8 +66,10 @@
 				<li v-for="meta in metas.indicadores" :key="meta.codigo" class="estadistica-goals__meta">
 					<!-- One disclosure per meta: the row says its last figure and status in words. -->
 					<h3 class="estadistica-goals__heading">
-						<button type="button"
-							class="estadistica-goals__row"
+						<NcButton class="estadistica-goals__row"
+							variant="tertiary"
+							alignment="start"
+							wide
 							:aria-expanded="String(open === meta.codigo)"
 							:aria-controls="`metas-${meta.codigo}-meses`"
 							@click="open = open === meta.codigo ? null : meta.codigo">
@@ -80,7 +82,7 @@
 							<span class="estadistica-goals__ultima">{{ percent(lastPercentOf(meta)) }}</span>
 							<span class="estadistica-goals__estado"><StatusBadge :status="indicadorStatus(meta)" /></span>
 							<NcIconSvgWrapper class="estadistica-goals__chevron" :path="mdiChevronRight" />
-						</button>
+						</NcButton>
 					</h3>
 
 					<div v-show="open === meta.codigo" :id="`metas-${meta.codigo}-meses`" class="estadistica-goals__panel">
@@ -164,6 +166,7 @@
 </template>
 
 <script>
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
@@ -179,7 +182,7 @@ import { indicadorStatus, lastPercentOf, targetNameOf, targetOf } from '../statu
 export default {
 	name: 'SanitaryGoals',
 
-	components: { GoalSparkline, NcCheckboxRadioSwitch, NcIconSvgWrapper, NcNoteCard, NcSelect, StatusBadge },
+	components: { GoalSparkline, NcButton, NcCheckboxRadioSwitch, NcIconSvgWrapper, NcNoteCard, NcSelect, StatusBadge },
 
 	props: {
 		/** The initial state's establishment: whether this install has one. */
@@ -389,33 +392,22 @@ export default {
 	font-weight: inherit;
 }
 
-.estadistica-goals__row,
-.estadistica-goals__row:hover {
+.estadistica-goals__heading .estadistica-goals__row {
+	padding: calc(var(--default-grid-baseline) * 3) calc(var(--default-grid-baseline) * 4);
+	border-radius: 0;
+}
+
+/* NcButton's text lays the row out. */
+.estadistica-goals__row :deep(.button-vue__text) {
 	display: grid;
 	grid-template-areas: "codigo nombre spark ultima estado chevron";
 	grid-template-columns: 56px minmax(0, 1fr) auto 72px 18.5rem 20px;
 	align-items: center;
 	gap: calc(var(--default-grid-baseline) * 3);
 	inline-size: 100%;
-	min-height: 0;
-	margin: 0;
-	padding: calc(var(--default-grid-baseline) * 3) calc(var(--default-grid-baseline) * 4);
-	border: none;
-	border-radius: 0;
-	background-color: var(--color-main-background);
-	color: inherit;
-	font: inherit;
+	font-weight: normal;
+	white-space: normal;
 	text-align: start;
-	cursor: pointer;
-}
-
-.estadistica-goals__row:hover {
-	background-color: var(--color-background-hover);
-}
-
-.estadistica-goals__row:focus-visible {
-	outline: 2px solid var(--color-primary-element);
-	outline-offset: -4px;
 }
 
 .estadistica-goals__codigo {
@@ -477,8 +469,7 @@ export default {
 
 /* In a narrow list the status goes under the name, and the decorative sparkline goes. */
 @container (max-width: 920px) {
-	.estadistica-goals__row,
-	.estadistica-goals__row:hover {
+	.estadistica-goals__row :deep(.button-vue__text) {
 		grid-template-areas: "codigo nombre ultima chevron" ". estado estado .";
 		grid-template-columns: 56px minmax(0, 1fr) auto 20px;
 	}

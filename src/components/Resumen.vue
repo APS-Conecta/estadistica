@@ -210,14 +210,15 @@ export default {
 	cursor: pointer;
 }
 
+.estadistica-resumen .estadistica-cifra .button-vue__text,
+.estadistica-resumen .estadistica-meta__abrir .button-vue__text {
+	padding: 0;
+	font-weight: inherit;
+	white-space: normal;
+}
+
 .estadistica-resumen .estadistica-cifra {
 	text-decoration: underline dotted;
 	text-underline-offset: 0.2em;
-}
-
-.estadistica-resumen .estadistica-cifra:focus-visible,
-.estadistica-resumen .estadistica-meta__abrir:focus-visible {
-	outline: 2px solid var(--color-primary-element);
-	outline-offset: 2px;
 }
 </style>

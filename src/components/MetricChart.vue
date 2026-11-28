@@ -5,7 +5,7 @@
 	in the muted text colour, each with a dash of its own (a column: the first
 	solid, the next hollow with its dash), and the legend always names every
 	series. A target is an optional labelled dashed threshold. It draws at its
-	container's width, so its text keeps its 11 px anywhere. A line chart is
+	container's width, so its text keeps its 0.75rem anywhere. A line chart is
 	read by hover, focus and the arrow keys; each column is a keyboard stop
 	that says its value. The readout sits above the plot, where it is
 	announced and never clipped; the table the caller puts beside it holds
@@ -162,7 +162,7 @@ const HEIGHT = 220
 const LEFT = 36
 const TOP = 12
 const BOTTOM = 26
-/** An 11 px character's width, near enough to lay text out by. */
+/** A character's width at the text's 0.75rem, near enough to lay text out by. */
 const CHAR = 6.5
 /** Past this many characters a category is cut on the axis; the readout says it whole. */
 const AXIS_CHARS = 16
@@ -450,7 +450,7 @@ export default {
 
 .estadistica-chart__grid text,
 .estadistica-chart__label {
-	font-size: 11px;
+	font-size: 0.75rem;
 	font-variant-numeric: tabular-nums;
 }
 
