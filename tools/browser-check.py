@@ -226,6 +226,10 @@ CORE_NOISE = ("/ocs/v2.php/apps/user_status/api/", "Failed to load user status")
 # What was let through as CORE_NOISE, said at the end: an ignored line is never silent.
 IGNORED = []
 
+# The refusals a step asks for on purpose, by URL: GET indicadores for a year with no Metas (#127), which the
+# browser logs as a failed resource. Let through as IGNORED is, and said at the end with it.
+ASKED_REFUSALS = []
+
 
 def console_errors(page):
     """Everything logged as an error, with where it came from; stacks, not just messages (territorio's).
@@ -239,7 +243,7 @@ def console_errors(page):
         text = f"{message.text} [{message.location.get('url', '')}]"
         if message.type != "error":
             return
-        if any(noise in text for noise in CORE_NOISE):
+        if any(noise in text for noise in (*CORE_NOISE, *ASKED_REFUSALS)):
             IGNORED.append(text)
         else:
             found.append(text)
@@ -369,6 +373,7 @@ def addresses(page, where, metas):
 
     # The year before the first with Metas (GET indicadores answers 404), and the year before the window (400).
     for absent in (min(metas["anios"]) - 1, YEAR - 1):
+        ASKED_REFUSALS.append(f"/api/v1/indicadores?pares=tipo&anio={absent}]")
         opens(f"#/metas/{absent}")
         shows("Metas Sanitarias", *metas_of(metas["anio"]), f"opening #/metas/{absent}, a year with no Metas,")
         if not page.get_by_text(f"No hay Metas Sanitarias de {absent}").is_visible():
@@ -1010,7 +1015,7 @@ def main():
             occ("config:app:delete", "estadistica", "deis_code", check=False)
 
     if IGNORED:
-        print(f"note  ignored {len(IGNORED)} console error(s) of Nextcloud's own user status: {IGNORED}")
+        print(f"note  ignored {len(IGNORED)} console error(s) of Nextcloud's own user status or a refusal asked for on purpose: {IGNORED}")
     for failure in failures:
         print(f"FAIL  {failure}")
     if failures:
